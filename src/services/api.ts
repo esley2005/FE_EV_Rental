@@ -1,0 +1,113 @@
+// Service layer để call API - tập trung tất cả API calls ở đây
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
+
+// Generic API response type
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+  total?: number;
+}
+
+// Generic fetch wrapper với error handling
+async function apiCall<T>(
+  endpoint: string, 
+  options: RequestInit = {}
+): Promise<ApiResponse<T>> {
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || `HTTP error! status: ${response.status}`);
+    }
+
+    return data;
+  } catch (error) {
+    console.error(`API call failed for ${endpoint}:`, error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    };
+  }
+}
+
+// Cars API
+export const carsApi = {
+  // Lấy tất cả xe
+  getAll: () => apiCall<Car[]>('/api/cars'),
+
+  // Lấy xe theo ID
+  getById: (id: string) => apiCall<Car>(`/api/cars/${id}`),
+
+  // Tạo xe mới
+  create: (carData: Partial<Car>) => 
+    apiCall<Car>('/api/cars', {
+      method: 'POST',
+      body: JSON.stringify(carData),
+    }),
+
+  // Cập nhật xe
+  update: (id: string, carData: Partial<Car>) =>
+    apiCall<Car>(`/api/cars/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(carData),
+    }),
+
+  // Xóa xe
+  delete: (id: string) =>
+    apiCall(`/api/cars/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
+// Booking API
+export interface BookingData {
+  carId: string;
+  fullName: string;
+  phone: string;
+  email?: string;
+  startDate: string;
+  endDate: string;
+  pickupLocation: string;
+  notes?: string;
+}
+
+export interface Booking extends BookingData {
+  id: string;
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
+  totalDays: number;
+  createdAt: string;
+}
+
+export const bookingsApi = {
+  // Tạo booking mới
+  create: (bookingData: BookingData) =>
+    apiCall<Booking>('/api/bookings', {
+      method: 'POST',
+      body: JSON.stringify(bookingData),
+    }),
+
+  // Lấy danh sách bookings
+  getAll: (filters?: { status?: string; carId?: string }) => {
+    const params = new URLSearchParams();
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.carId) params.append('carId', filters.carId);
+    
+    const query = params.toString();
+    return apiCall<Booking[]>(`/api/bookings${query ? `?${query}` : ''}`);
+  },
+};
+
+// Export types
+export type { ApiResponse, Car, Booking, BookingData };
+
