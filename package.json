@@ -13,7 +13,7 @@
     "antd": "^5.27.4",
     "next": "15.5.4",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0" 
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -25,5 +25,18 @@
     "eslint-config-next": "15.5.4",
     "tailwindcss": "^4",
     "typescript": "^5"
-  }
+  },
+  "description": "This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/esley2005/FE_EV_Rental.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/esley2005/FE_EV_Rental/issues"
+  },
+  "homepage": "https://github.com/esley2005/FE_EV_Rental#readme"
 }
