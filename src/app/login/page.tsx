@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { demoAccounts } from "@/data/demoAccounts";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,12 +21,26 @@ export default function LoginPage() {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Đơn giản - chỉ thông báo và chuyển về trang chủ
-    alert("Đăng nhập thành công! (Demo)");
-    router.push("/");
-  };
+const handleSubmit = (e: React.FormEvent) => {
+  e.preventDefault();
+
+  const user = demoAccounts[formData.email as keyof typeof demoAccounts];
+
+  if (user && user.password === formData.password) {
+    alert(`Đăng nhập thành công với vai trò: ${user.role}`);
+
+    // Chuyển hướng theo role
+    if (user.role === "admin") {
+      router.push("/admin");
+    } else if (user.role === "staff") {
+      router.push("/staff");
+    } else {
+      router.push("/");
+    }
+  } else {
+    alert("Sai email hoặc mật khẩu!");
+  }
+};
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
