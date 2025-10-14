@@ -4,10 +4,13 @@ import Link from "next/link";
 export default function Header() {
   return (
     <header className="flex justify-between items-center px-8 py-6 bg-white shadow-md">
-      <div className="flex items-center gap-3">
+      {/* ✅ Logo - bấm để quay về trang chủ */}
+      <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition">
         <Image src="/logo_ev.png" alt="EV Rent" width={60} height={60} />
         <span className="text-2xl font-bold text-blue-700">EV Rent</span>
-      </div>
+      </Link>
+
+      {/* Menu điều hướng */}
       <nav className="flex gap-4">
         <Link
           href="/login"
