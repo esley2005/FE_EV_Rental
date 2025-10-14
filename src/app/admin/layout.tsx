@@ -17,7 +17,6 @@ import { Layout, Menu, Dropdown, Space, Avatar, Breadcrumb } from "antd";
 
 // Các component nội dung
 import CarList from "@/components/CarList";
-import LocationList from "@/components/LocationList";
 import HistoryList from "@/components/HistoryList";
 import DispatchList from "@/components/DispatchList";
 
