@@ -8,7 +8,7 @@ const geistSans = Geist({
 });
 
 export const metadata = {
-  title: "EcoRide - Thuê xe điện thông minh",
+  title: "EV Rental - Thuê xe điện thông minh",
   description: "Dịch vụ thuê xe điện hiện đại, thân thiện môi trường",
 };
 

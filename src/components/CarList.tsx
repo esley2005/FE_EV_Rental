@@ -70,7 +70,7 @@ const CarList: React.FC = () => {
     {
       title: "Hành động",
       key: "action",
-      render: (_: any, record: CarRecord) => (
+      render: (_: unknown, record: CarRecord) => (
         <div style={{ display: "flex", gap: "8px" }}>
           <Button type="primary" onClick={() => openModal(record)}>
             Sửa

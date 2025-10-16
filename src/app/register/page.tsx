@@ -2,218 +2,187 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
+import { motion } from "framer-motion";
+import { MailOutlined, LockOutlined } from "@ant-design/icons";
+import { Input, Button, Checkbox, message } from "antd";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
     phone: "",
     password: "",
     confirmPassword: "",
-    agreeToTerms: false
+    agreeToTerms: false,
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     setFormData({
       ...formData,
-      [name]: type === "checkbox" ? checked : value
+      [name]: type === "checkbox" ? checked : value,
     });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Kiểm tra đơn giản
     if (formData.password !== formData.confirmPassword) {
-      alert("Mật khẩu xác nhận không khớp!");
+      message.error("Mật khẩu xác nhận không khớp!");
       return;
     }
     if (!formData.agreeToTerms) {
-      alert("Vui lòng đồng ý với điều khoản sử dụng!");
+      message.error("Vui lòng đồng ý với điều khoản sử dụng!");
       return;
     }
-    
-    // Đơn giản - chỉ thông báo và chuyển về trang đăng nhập
-    alert("Đăng ký thành công! (Demo)");
-    router.push("/login");
+
+    setLoading(true);
+    // Demo delay to mimic API
+    setTimeout(() => {
+      setLoading(false);
+      message.success("Đăng ký thành công! Vui lòng đăng nhập.");
+      router.push("/login");
+    }, 900);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Header />
-      <nav className="mb-6">
-          <ol className="flex items-center space-x-2 text-sm text-gray-500">
-            <li><Link href="/" className="hover:text-blue-600">Trang chủ</Link></li>
-    
-      
-          
-          </ol>
-        </nav>
-      <main className="flex-1 flex items-center justify-center px-4 py-12">
-        <div className="max-w-md w-full">
-          <div className="bg-white rounded-lg shadow-lg p-8">
-            {/* Header */}
-            <div className="text-center mb-8">
-              <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-white text-2xl">👤</span>
-              </div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">Đăng ký</h1>
-              <p className="text-gray-600">Tạo tài khoản để thuê xe điện</p>
+    <div className="min-h-screen bg-gradient-to-br from-blue-700 via-blue-800 to-gray-900 flex flex-col items-center justify-center px-2">
+      <motion.div
+        initial={{ opacity: 0, y: -30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8 }}
+        className="mb-4 text-center text-white"
+      >
+        <Link href="/" aria-label="Về trang chủ" className="inline-block">
+          <div className="mx-auto w-16 h-16 relative cursor-pointer">
+            <Image src="/logo_ev.png" alt="EV RENTAL" fill sizes="64px" style={{ objectFit: 'contain' }} />
+          </div>
+          <p className="text-gray-200 mt-1 text-sm">Hệ thống quản trị thuê xe thông minh</p>
+        </Link>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 40 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, delay: 0.2 }}
+        className="w-full max-w-md"
+      >
+        <div className="bg-white rounded-2xl shadow-2xl p-6" style={{ borderRadius: 12 }}>
+          <h2 className="text-center text-xl font-semibold mb-3 text-gray-800">Đăng ký</h2>
+
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div className="h-10 flex items-center">
+              <Input
+                name="fullName"
+                size="large"
+                placeholder="Họ và tên"
+                value={formData.fullName}
+                onChange={handleChange}
+                required
+                style={{ height: 40 }}
+                className="rounded-md"
+              />
             </div>
 
+            <div className="h-10 flex items-center">
+              <Input
+                name="email"
+                type="email"
+                size="large"
+                prefix={<MailOutlined />}
+                placeholder="Email"
+                value={formData.email}
+                onChange={handleChange}
+                required
+                style={{ height: 40 }}
+                className="rounded-md"
+              />
+            </div>
 
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Họ và tên *
-                </label>
-                <input
-                  type="text"
-                  name="fullName"
-                  required
-                  value={formData.fullName}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Nhập họ và tên"
-                />
-              </div>
+            <div className="h-10 flex items-center">
+              <Input
+                name="phone"
+                size="large"
+                placeholder="Số điện thoại"
+                value={formData.phone}
+                onChange={handleChange}
+                style={{ height: 40 }}
+                className="rounded-md"
+              />
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email *
-                </label>
-                <input
-                  type="email"
-                  name="email"
-                  required
-                  value={formData.email}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Nhập email của bạn"
-                />
-              </div>
+            <div className="h-10 flex items-center">
+              <Input.Password
+                name="password"
+                size="large"
+                prefix={<LockOutlined />}
+                placeholder="Mật khẩu"
+                value={formData.password}
+                onChange={handleChange}
+                required
+                style={{ height: 40 }}
+                className="rounded-md"
+              />
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Số điện thoại *
-                </label>
-                <input
-                  type="tel"
-                  name="phone"
-                  required
-                  value={formData.phone}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Nhập số điện thoại"
-                />
-              </div>
+            <div className="h-10 flex items-center">
+              <Input.Password
+                name="confirmPassword"
+                size="large"
+                prefix={<LockOutlined />}
+                placeholder="Xác nhận mật khẩu"
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                required
+                style={{ height: 40 }}
+                className="rounded-md"
+              />
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Mật khẩu *
-                </label>
-                <input
-                  type="password"
-                  name="password"
-                  required
-                  value={formData.password}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Nhập mật khẩu (ít nhất 6 ký tự)"
-                />
-              </div>
+            <div className="h-10 flex items-center">
+              <Checkbox
+                checked={formData.agreeToTerms}
+                onChange={(e) => setFormData({ ...formData, agreeToTerms: e.target.checked })}
+              >
+                Tôi đồng ý với các điều khoản
+              </Checkbox>
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Xác nhận mật khẩu *
-                </label>
-                <input
-                  type="password"
-                  name="confirmPassword"
-                  required
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Nhập lại mật khẩu"
-                />
-              </div>
-
-              <div className="flex items-start">
-                <input
-                  type="checkbox"
-                  name="agreeToTerms"
-                  checked={formData.agreeToTerms}
-                  onChange={handleChange}
-                  className="mt-1 rounded border-gray-300 text-green-600 focus:ring-green-500"
-                />
-                <label className="ml-2 text-sm text-gray-600">
-                  Tôi đồng ý với{" "}
-                  <Link href="/terms" className="text-green-600 hover:text-green-700">
-                    Điều khoản sử dụng
-                  </Link>{" "}
-                  và{" "}
-                  <Link href="/privacy" className="text-green-600 hover:text-green-700">
-                    Chính sách bảo mật
-                  </Link>
-                </label>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-green-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors"
+            <div className="h-10 flex items-center">
+              <Button
+                type="primary"
+                htmlType="submit"
+                size="large"
+                block
+                loading={loading}
+                style={{ height: 40 }}
+                className="bg-blue-600 hover:bg-blue-700 font-semibold"
               >
                 Đăng ký
-              </button>
-            </form>
-
-            {/* Divider */}
-            {/* <div className="mt-6 pt-6 border-t border-gray-200">
-              <div className="text-center">
-                <p className="text-gray-600 mb-4">Hoặc đăng ký với</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <button className="flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                    <span className="mr-2">📱</span>
-                    <span className="text-sm">Google</span>
-                  </button>
-                  <button className="flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                    <span className="mr-2">📘</span>
-                    <span className="text-sm">Facebook</span>
-                  </button>
-                </div>
-              </div>
-            </div> */}
-
-            {/* Login Link */}
-            <div className="mt-6 text-center">
-              <p className="text-gray-600">
-                Đã có tài khoản?{" "}
-                <Link href="/login" className="text-green-600 hover:text-green-700 font-semibold">
-                  Đăng nhập ngay
-                </Link>
-              </p>
+              </Button>
             </div>
+          </form>
+
+          <div className="text-center mt-6 text-gray-600 text-sm">
+            Đã có tài khoản?{' '}
+            <Link href="/login" className="text-blue-600 hover:text-blue-700 font-semibold">
+              Đăng nhập
+            </Link>
           </div>
-
-          {/* Benefits */}
-          {/* <div className="mt-6 bg-green-50 rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-green-800 mb-2">🎉 Lợi ích khi đăng ký:</h3>
-            <ul className="text-xs text-green-700 space-y-1">
-              <li>• Thuê xe nhanh chóng, tiện lợi</li>
-              <li>• Theo dõi lịch sử thuê xe</li>
-              <li>• Nhận ưu đãi và khuyến mãi đặc biệt</li>
-              <li>• Hỗ trợ khách hàng 24/7</li>
-            </ul>
-          </div> */}
         </div>
-      </main>
+      </motion.div>
 
-      <Footer />
+      <motion.footer
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1 }}
+        className="mt-4 text-gray-300 text-sm"
+      >
+        EV Rent (GROUP 5 SWP391)
+      </motion.footer>
     </div>
   );
 }

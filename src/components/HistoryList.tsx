@@ -76,7 +76,7 @@ const HistoryList: React.FC = () => {
     {
       title: "Hành động",
       key: "action",
-      render: (_: any, record: HistoryRecord) => (
+      render: (_: unknown, record: HistoryRecord) => (
         <div style={{ display: "flex", gap: "8px" }}>
           <Button type="primary" onClick={() => openModal(record)}>
             Sửa

@@ -103,7 +103,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         style={{ background: "#fff", borderRight: "1px solid #e8e8e8" }}
       >
         <div className="p-4 text-center font-bold text-blue-600 text-lg">
-          {collapsed ? "EV" : "EcoRide Staff"}
+          {collapsed ? "EV" : "EV STAFF"}
         </div>
 
         {/* Khi click submenu, đổi selectedSubMenu */}
@@ -181,7 +181,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
         {/* ⚙️ FOOTER */}
         <Footer style={{ textAlign: "center", background: "#f0f2f5" }}>
-          EcoRide Staff Portal ©{new Date().getFullYear()} Created by Duy
+          EV Rental Staff Portal ©{new Date().getFullYear()} Created by Duy
         </Footer>
       </Layout>
     </Layout>

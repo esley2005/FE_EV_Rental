@@ -1,9 +1,9 @@
 export const demoAccounts = {
-  "admin@ecoride.vn": {
+  "admin@evrental.local": {
     password: "admin123",
     role: "admin"
   },
-  "staff@ecoride.vn": {
+  "staff@evrental.local": {
     password: "staff123",
     role: "staff"
   }

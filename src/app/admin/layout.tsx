@@ -12,10 +12,13 @@ import {
   LogoutOutlined,
   DownOutlined,
   BarChartOutlined,
+  ClockCircleOutlined,
+  LineChartOutlined,
+  FileTextOutlined,
 } from "@ant-design/icons";
 import { Layout, Menu, Dropdown, Space, Avatar, Breadcrumb } from "antd";
 
-// Các component nội dung
+// Các component nội dung mẫu
 import CarList from "@/components/CarList";
 import HistoryList from "@/components/HistoryList";
 import DispatchList from "@/components/DispatchList";
@@ -35,13 +38,26 @@ const mainMenu = [
 const subMenus: Record<string, { key: string; label: string; icon: React.ReactNode }[]> = {
   cars: [
     { key: "1", label: "Danh sách xe", icon: <CarOutlined /> },
-  
     { key: "2", label: "Lịch sử giao nhận", icon: <HistoryOutlined /> },
     { key: "3", label: "Điều phối xe", icon: <SwapOutlined /> },
   ],
-  customers: [{ key: "1", label: "Quản lý khách hàng", icon: <UserOutlined /> }],
-  staff: [{ key: "1", label: "Danh sách nhân viên", icon: <TeamOutlined /> }],
-  reports: [{ key: "1", label: "Báo cáo doanh thu", icon: <BarChartOutlined /> }],
+
+  customers: [
+    { key: "1", label: "Hồ sơ khách hàng", icon: <UserOutlined /> },
+    { key: "2", label: "Khiếu nại", icon: <FileTextOutlined /> },
+    { key: "3", label: "Danh sách khách hàng có rủi ro", icon: <TeamOutlined /> },
+  ],
+
+  staff: [
+    { key: "1", label: "Danh sách nhân viên tại các điểm", icon: <TeamOutlined /> },
+  
+  ],
+
+  reports: [
+    { key: "1", label: "Doanh thu", icon: <LineChartOutlined /> },
+    { key: "2", label: "Tỷ lệ sử dụng xe", icon: <ClockCircleOutlined /> },
+  ],
+
   settings: [{ key: "1", label: "Cấu hình hệ thống", icon: <SettingOutlined /> }],
 };
 
@@ -58,17 +74,50 @@ export default function AdminLayout() {
   const [selectedModule, setSelectedModule] = useState("cars");
   const [selectedSubMenu, setSelectedSubMenu] = useState("1");
 
-  // Chọn component hiển thị theo submenu
+  // Hiển thị nội dung theo module và submenu
   const renderContent = () => {
     if (selectedModule === "cars") {
       switch (selectedSubMenu) {
         case "1":
           return <CarList />;
-
         case "2":
           return <HistoryList />;
         case "3":
           return <DispatchList />;
+        default:
+          return <p>Chưa có nội dung.</p>;
+      }
+    }
+
+    if (selectedModule === "customers") {
+      switch (selectedSubMenu) {
+        case "1":
+          return 
+        case "2":
+          return <p>Trang Khiếu nại khách hàng</p>;
+        case "3":
+          return <p>Danh sách khách hàng có rủi ro</p>;
+        default:
+          return <p>Chưa có nội dung.</p>;
+      }
+    }
+
+    if (selectedModule === "staff") {
+      switch (selectedSubMenu) {
+        case "1":
+          return <p>Danh sách nhân viên tại các điểm</p>;
+
+        default:
+          return <p>Chưa có nội dung.</p>;
+      }
+    }
+
+    if (selectedModule === "reports") {
+      switch (selectedSubMenu) {
+        case "1":
+          return <p>Báo cáo doanh thu theo điểm thuê</p>;
+        case "2":
+          return <p>Phân tích tỷ lệ sử dụng xe và giờ cao điểm</p>;
         default:
           return <p>Chưa có nội dung.</p>;
       }
@@ -93,7 +142,7 @@ export default function AdminLayout() {
         style={{ background: "#fff", borderRight: "1px solid #e8e8e8" }}
       >
         <div className="p-4 text-center font-bold text-blue-600 text-lg">
-          {collapsed ? "EV" : "EcoRide Admin"}
+          {collapsed ? "EV" : "EV ADMIN"}
         </div>
         <Menu
           mode="inline"
@@ -166,7 +215,7 @@ export default function AdminLayout() {
 
         {/* Footer */}
         <Footer style={{ textAlign: "center", background: "#f0f2f5" }}>
-          EcoRide Admin ©{new Date().getFullYear()}
+          EV Rental Admin ©{new Date().getFullYear()}
         </Footer>
       </Layout>
     </Layout>
