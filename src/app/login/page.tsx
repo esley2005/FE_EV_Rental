@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { LockOutlined, MailOutlined } from "@ant-design/icons";
 import { Card, Input, Button, Checkbox, message } from "antd";
@@ -13,7 +12,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({ email: "", password: "" });
-
+  
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -46,12 +45,8 @@ export default function LoginPage() {
         transition={{ duration: 0.8 }}
         className="mb-8 text-center text-white"
       >
-        <Link href="/" aria-label="Về trang chủ" className="inline-block">
-          <div className="mx-auto w-20 h-20 relative cursor-pointer">
-            <Image src="/logo_ev.png" alt="EV RENTAL" fill sizes="80px" style={{ objectFit: 'contain' }} />
-          </div>
-          <p className="text-gray-200 mt-2 text-sm">Hệ thống quản trị thuê xe thông minh</p>
-        </Link>
+        <h1 className="text-4xl font-bold tracking-wide">EV RENTAL</h1>
+        <p className="text-gray-200 mt-2 text-sm">Hệ thống quản trị thuê xe thông minh</p>
       </motion.div>
 
       {/* Form Card */}
