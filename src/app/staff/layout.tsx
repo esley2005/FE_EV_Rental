@@ -10,7 +10,10 @@ import {
   DownOutlined,
   LogoutOutlined,
 } from "@ant-design/icons";
-import { Layout, Menu, Dropdown, Breadcrumb, Space, Avatar } from "antd";
+import { Layout, Menu, Dropdown, Breadcrumb, Space, Avatar, Modal, message } from "antd";
+import CarStatusList from "@/components/CarStatusList";
+import DeliveryForm from "@/components/DeliveryForm";
+import ReturnForm from "@/components/ReturnForm";
 
 const { Header, Sider, Content, Footer } = Layout;
 
@@ -91,6 +94,31 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
   // Mục con hiện tại (submenu bên trái)
   const [selectedSubMenu, setSelectedSubMenu] = useState("1");
+
+  // State cho hành động bàn giao / nhận xe
+  const [showDelivery, setShowDelivery] = useState(false);
+  const [showReturn, setShowReturn] = useState(false);
+  const [selectedCar, setSelectedCar] = useState<{ carId: string; carName: string } | null>(null);
+
+  const handleOpenDelivery = (car: { carId: string; carName: string }) => {
+    setSelectedCar(car);
+    setShowDelivery(true);
+  };
+
+  const handleOpenReturn = (car: { carId: string; carName: string }) => {
+    setSelectedCar(car);
+    setShowReturn(true);
+  };
+
+  const handleDeliverySubmit = async () => {
+    message.success("Bàn giao thành công");
+    setShowDelivery(false);
+  };
+
+  const handleReturnSubmit = async () => {
+    message.success("Nhận xe thành công");
+    setShowReturn(false);
+  };
 
   return (
     <Layout style={{ minHeight: "100vh", background: "#E3EFFF" }}>
@@ -175,7 +203,53 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               minHeight: 400,
             }}
           >
-            {children}
+            {selectedModule === "tasks" ? (
+              selectedSubMenu === "1" || selectedSubMenu === "2" ? (
+                <CarStatusList
+                  onDeliver={(car) => handleOpenDelivery(car)}
+                  onReturn={(car) => handleOpenReturn(car)}
+                />
+              ) : selectedSubMenu === "3" ? (
+                <div>
+                  <p>Chọn xe ở danh sách để thực hiện thủ tục bàn giao.</p>
+                  <CarStatusList onDeliver={(car) => handleOpenDelivery(car)} />
+                </div>
+              ) : selectedSubMenu === "4" ? (
+                <div>
+                  <p>Chọn xe để ký xác nhận giao / nhận.</p>
+                  <CarStatusList
+                    onDeliver={(car) => handleOpenDelivery(car)}
+                    onReturn={(car) => handleOpenReturn(car)}
+                  />
+                </div>
+              ) : null
+            ) : (
+              children
+            )}
+
+            <Modal
+              title={selectedCar ? `Bàn giao xe - ${selectedCar.carName}` : "Bàn giao xe"}
+              open={showDelivery}
+              onCancel={() => setShowDelivery(false)}
+              footer={null}
+              destroyOnClose
+            >
+              {selectedCar && (
+                <DeliveryForm carId={selectedCar.carId} customerId="KH-001" onSubmit={handleDeliverySubmit} />
+              )}
+            </Modal>
+
+            <Modal
+              title={selectedCar ? `Nhận xe - ${selectedCar.carName}` : "Nhận xe"}
+              open={showReturn}
+              onCancel={() => setShowReturn(false)}
+              footer={null}
+              destroyOnClose
+            >
+              {selectedCar && (
+                <ReturnForm carId={selectedCar.carId} customerId="KH-001" onSubmit={handleReturnSubmit} />
+              )}
+            </Modal>
           </div>
         </Content>
 
