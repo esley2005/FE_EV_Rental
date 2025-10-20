@@ -1,6 +1,34 @@
 // Service layer để call API - tập trung tất cả API calls ở đây
+import type { Car } from "@/types/car";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
+
+// Auth storage helpers
+export type AuthUser = { userId: string; role: string; fullName: string };
+type AuthData = { token: string; user: AuthUser };
+
+const AUTH_STORAGE_KEY = 'evr_auth';
+
+export function setAuthData(auth: AuthData) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(auth));
+}
+
+export function getAuthData(): AuthData | null {
+  if (typeof window === 'undefined') return null;
+  const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as AuthData;
+  } catch {
+    return null;
+  }
+}
+
+export function clearAuthData() {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(AUTH_STORAGE_KEY);
+}
 
 // Generic API response type
 interface ApiResponse<T> {
@@ -12,14 +40,16 @@ interface ApiResponse<T> {
 }
 
 // Generic fetch wrapper với error handling
-async function apiCall<T>(
+export async function apiCall<T>(
   endpoint: string, 
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   try {
+    const auth = getAuthData();
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       headers: {
         'Content-Type': 'application/json',
+        ...(auth?.token ? { Authorization: `Bearer ${auth.token}` } : {}),
         ...options.headers,
       },
       ...options,
