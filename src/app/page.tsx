@@ -9,7 +9,7 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-200 flex flex-col font-sans">
       <Header />
       
-      <main className="flex flex-1 flex-col items-center justify-center gap-10 px-4">
+      <main className="flex flex-1 flex-col items-center justify-center gap-10 px-4 pt-20">
         <HeroSection />
         
         {/* Danh sách xe */}

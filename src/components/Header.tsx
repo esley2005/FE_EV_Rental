@@ -8,10 +8,11 @@ export default function Header() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="w-full bg-white/90 backdrop-blur-sm border-b border-gray-100 shadow-sm">
-      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-        {/* Left: mobile menu button and logo */}
+    <header className="fixed top-0 left-0 w-full z-50 bg-white shadow-md">
+      <div className="max-w-6xl mx-auto px-4 py-2 flex items-center justify-between">
+        {/* === Left: Logo + Menu Mobile === */}
         <div className="flex items-center gap-4">
+          {/* Nút mở menu mobile */}
           <button
             aria-label="Mở menu"
             onClick={() => setOpen((v) => !v)}
@@ -28,13 +29,16 @@ export default function Header() {
             )}
           </button>
 
+          {/* Logo */}
           <Link href="/" className="flex items-center gap-3 hover:opacity-90">
             <Image src="/logo_ev.png" alt="EV Rental" width={56} height={56} priority />
-            <span className="hidden md:inline-block text-lg font-semibold text-gray-800">EV Rental</span>
+            <span className="hidden md:inline-block text-lg font-semibold text-gray-800">
+              EV Rental
+            </span>
           </Link>
         </div>
 
-        {/* Desktop nav */}
+        {/* === Desktop Navigation === */}
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-700">
           <Link href="/" className="hover:text-[#FF4D00] transition-colors">Trang chủ</Link>
           <Link href="/about" className="hover:text-[#FF4D00] transition-colors">Giới thiệu</Link>
@@ -50,7 +54,7 @@ export default function Header() {
           <Link href="/contact" className="hover:text-[#FF4D00] transition-colors">Liên hệ</Link>
         </nav>
 
-        {/* Right: actions */}
+        {/* === Nút hành động bên phải === */}
         <div className="hidden md:flex items-center gap-3">
           <Link
             href="/login"
@@ -68,7 +72,7 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Mobile drawer */}
+      {/* === Mobile Navigation (Dropdown) === */}
       <div className={`md:hidden transition-max-height duration-200 overflow-hidden ${open ? "max-h-64" : "max-h-0"}`}>
         <div className="px-4 pb-4 space-y-2">
           <Link href="/" className="block px-3 py-2 rounded hover:bg-gray-100">Trang chủ</Link>

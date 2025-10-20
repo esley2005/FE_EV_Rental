@@ -25,7 +25,7 @@ export default function ContactPage() {
       <Header />
 
       {/* Tiêu đề */}
-      <main className="w-full px-4 md:px-8 py-10 bg-white">
+      <main className="w-full px-4 md:px-8 py-10 bg-white pt-28">
         <div className="text-center space-y-3 mb-10">
           <h1 className="text-4xl font-bold text-black">Liên hệ với EV Rental</h1>
           <p className="text-gray-700 text-lg">
