@@ -1,4 +1,10 @@
 // app/contact/page.tsx
+
+
+//đây là trang giao diện liên hệ với EV Rental 
+
+
+
 "use client";
 import { useState } from "react";
 
