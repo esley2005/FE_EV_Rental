@@ -14,6 +14,7 @@ import { Layout, Menu, Dropdown, Breadcrumb, Space, Avatar, Modal, message } fro
 import CarStatusList from "@/components/CarStatusList";
 import DeliveryForm from "@/components/DeliveryForm";
 import ReturnForm from "@/components/ReturnForm";
+import DocumentVerification from "@/components/DocumentVerification";
 
 const { Header, Sider, Content, Footer } = Layout;
 
@@ -223,6 +224,8 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
                   />
                 </div>
               ) : null
+            ) : selectedModule === "customers" ? (
+              <DocumentVerification mode={selectedSubMenu === "1" ? "check-documents" : "verify-system"} />
             ) : (
               children
             )}
