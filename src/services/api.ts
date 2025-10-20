@@ -1,8 +1,35 @@
 // Service layer để call API - tập trung tất cả API calls ở đây
 import { authUtils } from '@/utils/auth';
-import { Car } from '@/types/car';
+import type { Car } from '@/types/car';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5027';
+
+// Auth storage helpers
+export type AuthUser = { userId: string; role: string; fullName: string };
+type AuthData = { token: string; user: AuthUser };
+
+const AUTH_STORAGE_KEY = 'evr_auth';
+
+export function setAuthData(auth: AuthData) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(auth));
+}
+
+export function getAuthData(): AuthData | null {
+  if (typeof window === 'undefined') return null;
+  const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as AuthData;
+  } catch {
+    return null;
+  }
+}
+
+export function clearAuthData() {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(AUTH_STORAGE_KEY);
+}
 
 // Generic API response type
 interface ApiResponse<T> {
@@ -14,7 +41,7 @@ interface ApiResponse<T> {
 }
 
 // Generic fetch wrapper với error handling và authentication
-async function apiCall<T>(
+export async function apiCall<T>(
   endpoint: string, 
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
