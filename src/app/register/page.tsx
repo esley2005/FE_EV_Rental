@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { MailOutlined, LockOutlined } from "@ant-design/icons";
 import { Input, Button, Checkbox, message } from "antd";
+import { authApi } from "@/services/api";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -28,7 +29,7 @@ export default function RegisterPage() {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.password !== formData.confirmPassword) {
       message.error("Mật khẩu xác nhận không khớp!");
@@ -40,12 +41,40 @@ export default function RegisterPage() {
     }
 
     setLoading(true);
-    // Demo delay to mimic API
-    setTimeout(() => {
+    try {
+      console.log("Sending registration data:", {
+        email: formData.email,
+        fullName: formData.fullName,
+      });
+
+      const response = await authApi.register({
+        email: formData.email,
+        password: formData.password,
+        fullName: formData.fullName,
+      });
+
+      console.log("Registration response:", response);
+
+      // Kiểm tra nếu có error
+      if (response.error) {
+        message.error(response.error);
+        return;
+      }
+
+      // Kiểm tra success hoặc có data
+      if (response.success || response.data) {
+        message.success("Đăng ký thành công! Vui lòng kiểm tra email để nhận mã OTP.");
+        // Chuyển sang trang verify-email với email
+        router.push(`/verify-email?email=${encodeURIComponent(formData.email)}`);
+      } else {
+        message.error("Đăng ký thất bại!");
+      }
+    } catch (error) {
+      message.error("Có lỗi xảy ra khi đăng ký!");
+      console.error("Registration error:", error);
+    } finally {
       setLoading(false);
-      message.success("Đăng ký thành công! Vui lòng đăng nhập.");
-      router.push("/login");
-    }, 900);
+    }
   };
 
   return (
@@ -102,7 +131,7 @@ export default function RegisterPage() {
               />
             </div>
 
-            <div className="h-10 flex items-center">
+            {/* <div className="h-10 flex items-center">
               <Input
                 name="phone"
                 size="large"
@@ -112,7 +141,7 @@ export default function RegisterPage() {
                 style={{ height: 40 }}
                 className="rounded-md"
               />
-            </div>
+            </div> */}
 
             <div className="h-10 flex items-center">
               <Input.Password

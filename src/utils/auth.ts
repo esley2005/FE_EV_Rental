@@ -28,10 +28,10 @@ export const authUtils = {
     }
   },
 
-  // Kiểm tra role
+  // Kiểm tra role (case-insensitive)
   hasRole: (role: string): boolean => {
     const user = authUtils.getCurrentUser();
-    return user?.role === role;
+    return user?.role?.toLowerCase() === role.toLowerCase();
   },
 
   // Kiểm tra có phải admin không

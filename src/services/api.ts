@@ -49,7 +49,10 @@ export async function apiCall<T>(
     // Lấy token từ authUtils
     const token = authUtils.getToken();
     
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const url = `${API_BASE_URL}${endpoint}`;
+    console.log(`[API] Calling ${options.method || 'GET'} ${url}`);
+    
+    const response = await fetch(url, {
       headers: {
         'Content-Type': 'application/json',
         ...(token && { 'Authorization': `Bearer ${token}` }),
@@ -58,6 +61,8 @@ export async function apiCall<T>(
       ...options,
     });
 
+    console.log(`[API] Response status: ${response.status} ${response.statusText}`);
+
     // Nếu response là 401, có thể token đã hết hạn
     if (response.status === 401) {
       // Sử dụng authUtils để logout
@@ -65,13 +70,39 @@ export async function apiCall<T>(
       throw new Error('Unauthorized - Please login again');
     }
 
-    const data = await response.json();
+    // Lấy text trước để kiểm tra
+    const text = await response.text();
+    console.log(`[API] Response text (first 200 chars):`, text.substring(0, 200));
 
-    if (!response.ok) {
-      throw new Error(data.error || `HTTP error! status: ${response.status}`);
+    // Parse JSON
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      // Nếu không phải JSON nhưng response OK (200-299), coi như success
+      if (response.ok) {
+        console.log('[API] Plain text response (success):', text);
+        return {
+          success: true,
+          data: text as any,
+          message: text
+        };
+      }
+      // Nếu không OK và không phải JSON, throw error
+      console.error('[API] Failed to parse JSON:', text);
+      throw new Error(`Server error: ${text.substring(0, 100)}`);
     }
 
-    return data;
+    if (!response.ok) {
+      throw new Error(data.error || data.message || `HTTP error! status: ${response.status}`);
+    }
+
+    // Wrap response để đảm bảo có field success
+    return {
+      success: true,
+      data: data,
+      message: data.message || data.Message
+    };
   } catch (error) {
     console.error(`API call failed for ${endpoint}:`, error);
     return {
@@ -179,6 +210,12 @@ export const authApi = {
     apiCall<AuthResponse>('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify(userData),
+    }),
+
+  // Xác nhận email/OTP
+  confirmEmail: (token: string) =>
+    apiCall<{ message: string }>(`/api/auth/confirm-email?token=${token}`, {
+      method: 'GET',
     }),
 
   // Đăng xuất

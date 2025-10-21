@@ -23,23 +23,39 @@ export default function LoginPage() {
     try {
       const response = await authApi.login(formData);
       
+      console.log("Login response:", response);
+
+      if (response.error) {
+        message.error(response.error);
+        return;
+      }
+      
       if (response.success && response.data) {
-        // Lưu token và user info vào localStorage
-        localStorage.setItem('token', response.data.token);
-        localStorage.setItem('user', JSON.stringify(response.data.user));
+        // Backend trả về: { Token, UserId, Role, FullName }
+        const { Token, UserId, Role, FullName } = response.data as any;
         
-        message.success(`Đăng nhập thành công (${response.data.user.role})!`);
+        // Lưu token và user info vào localStorage
+        localStorage.setItem('token', Token);
+        localStorage.setItem('user', JSON.stringify({
+          id: UserId,
+          role: Role,
+          fullName: FullName,
+          email: formData.email
+        }));
+        
+        message.success(`Đăng nhập thành công! Xin chào ${FullName}`);
         
         // Redirect dựa trên role
-        if (response.data.user.role === "admin") {
+        const role = Role?.toLowerCase();
+        if (role === "admin") {
           router.push("/admin");
-        } else if (response.data.user.role === "staff") {
+        } else if (role === "staff") {
           router.push("/staff");
         } else {
           router.push("/");
         }
       } else {
-        message.error(response.error || "Đăng nhập thất bại!");
+        message.error("Đăng nhập thất bại!");
       }
     } catch (error) {
       console.error('Login error:', error);
