@@ -1,34 +1,65 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import axios from "axios";
 import { Input, Button, Space } from "antd";
 import { SearchOutlined, EnvironmentOutlined } from "@ant-design/icons";
 import CarCard from "@/components/CarCard";
-import { cars } from "@/data/cars";
+import { Car } from "@/types/car";
 
 export default function MenuPage() {
+  const [cars, setCars] = useState<Car[]>([]);
+  const [filtered, setFiltered] = useState<Car[]>([]);
   const [query, setQuery] = useState("");
-  const [filtered, setFiltered] = useState(cars);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
+  // === Gọi API xe ===
+  useEffect(() => {
+    const fetchCars = async () => {
+      try {
+        const res = await axios.get("https://localhost:7200/api/Car");
+        const data: Car[] = res.data?.$values ?? res.data ?? [];
+        setCars(data);
+        setFiltered(data);
+      } catch (err) {
+        console.error("❌ Lỗi tải danh sách xe:", err);
+        setError("Không thể tải danh sách xe.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCars();
+  }, []);
+
+  // === Tìm kiếm theo tên / loại xe ===
   const onSearch = (value: string) => {
     setQuery(value);
     const q = value.trim().toLowerCase();
     if (!q) return setFiltered(cars);
-    setFiltered(cars.filter((c) => c.name.toLowerCase().includes(q) || c.type.toLowerCase().includes(q)));
+    setFiltered(
+      cars.filter(
+        (c) =>
+          c.name.toLowerCase().includes(q) ||
+          c.sizeType.toLowerCase().includes(q)
+      )
+    );
   };
 
+  // === Lọc nhanh theo loại xe ===
   const quickFilter = (type: string) => {
     if (!type) return setFiltered(cars);
-    setFiltered(cars.filter((c) => c.type.toLowerCase() === type.toLowerCase()));
+    setFiltered(cars.filter((c) => c.sizeType.toLowerCase() === type.toLowerCase()));
   };
 
+  // === Giao diện hiển thị ===
   return (
-    <div>
-      <div className="bg-white rounded-lg shadow p-4 mb-6">
+    <div className="p-4 max-w-7xl mx-auto">
+      <div className="bg-white rounded-xl shadow p-4 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex-1">
             <Input.Search
-              placeholder="Tìm kiếm theo tên hoặc loại xe (ô tô điện)"
+              placeholder="Tìm kiếm theo tên hoặc loại xe (Sedan, SUV,...)"
               allowClear
               enterButton={<SearchOutlined />}
               size="large"
@@ -38,8 +69,11 @@ export default function MenuPage() {
             />
           </div>
 
-          <Space>
-            <Button icon={<EnvironmentOutlined />} onClick={() => alert('Tìm kiếm bằng bản đồ (chưa triển khai)')}>
+          <Space wrap>
+            <Button
+              icon={<EnvironmentOutlined />}
+              onClick={() => alert("Tìm kiếm bằng bản đồ (chưa triển khai)")}
+            >
               Tìm theo bản đồ
             </Button>
             <Button onClick={() => quickFilter("")}>Tất cả</Button>
@@ -50,11 +84,19 @@ export default function MenuPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-        {filtered.map((car) => (
-          <CarCard key={car.id} car={car} />
-        ))}
-      </div>
+      {loading ? (
+        <p className="text-center mt-10 text-gray-600">Đang tải dữ liệu...</p>
+      ) : error ? (
+        <p className="text-center mt-10 text-red-500">{error}</p>
+      ) : filtered.length === 0 ? (
+        <p className="text-center mt-10 text-gray-500">Không có xe nào phù hợp.</p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+          {filtered.map((car) => (
+            <CarCard key={car.id} car={car} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -65,13 +65,7 @@ export default function Header() {
           <Link href="/" className="hover:text-[#FF4D00] transition-colors">Trang chủ</Link>
           <Link href="/about" className="hover:text-[#FF4D00] transition-colors">Giới thiệu</Link>
 
-          <div className="relative group">
-            <button className="hover:text-[#FF4D00] transition-colors">Dịch vụ ▾</button>
-            <div className="absolute left-0 hidden group-hover:block bg-white text-black mt-2 rounded shadow-lg py-2 min-w-[160px]">
-              <Link href="/services/rental" className="block px-4 py-2 hover:bg-gray-100">Thuê xe</Link>
-              <Link href="/services/maintenance" className="block px-4 py-2 hover:bg-gray-100">Bảo dưỡng</Link>
-            </div>
-          </div>
+          
 
           <Link href="/contact" className="hover:text-[#FF4D00] transition-colors">Liên hệ</Link>
         </nav>
@@ -96,7 +90,8 @@ export default function Header() {
 
               {/* Dropdown Menu */}
               {userMenuOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 border border-gray-200">
+                <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl py-3 border border-gray-200">
+
                   <div className="px-4 py-2 border-b border-gray-100">
                     <p className="text-sm font-semibold text-gray-800">{user.fullName}</p>
                     <p className="text-xs text-gray-500">{user.email}</p>
@@ -106,33 +101,21 @@ export default function Header() {
                       </p>
                     )}
                   </div>
-                  
-                  {/* DEBUG: Hiển thị để test */}
-                  <div className="px-4 py-1 text-xs text-gray-400">
-                    Role: {user.role || 'undefined'} | Type: {typeof user.role}
-                  </div>
 
-                  {/* Nút Admin - check tất cả các trường hợp */}
-                  {(user.role === 'Admin' || user.role === 'admin' || user.role === 'ADMIN') && (
+
+
+                  {/* Nút Admin - */}
+                  {(user.role === 'Admin') && (
                     <Link
                       href="/admin"
-                      className="block px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 border-b border-gray-100"
+                      className="block px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-md mx-2 my-1 text-center"
                       onClick={() => setUserMenuOpen(false)}
                     >
-                      🎛️ Trang Admin
+                      Trang Admin
                     </Link>
                   )}
-                  
-                  {/* Nút Staff */}
-                  {(user.role === 'Staff' || user.role === 'staff' || user.role === 'STAFF') && (
-                    <Link
-                      href="/staff"
-                      className="block px-4 py-2 text-sm font-semibold text-green-600 hover:bg-green-50 border-b border-gray-100"
-                      onClick={() => setUserMenuOpen(false)}
-                    >
-                      📋 Trang Staff
-                    </Link>
-                  )}
+
+
 
                   <Link
                     href="/profile"
@@ -187,13 +170,8 @@ export default function Header() {
         <div className="px-4 pb-4 space-y-2">
           <Link href="/" className="block px-3 py-2 rounded hover:bg-gray-100">Trang chủ</Link>
           <Link href="/about" className="block px-3 py-2 rounded hover:bg-gray-100">Giới thiệu</Link>
-          <details className="group">
-            <summary className="px-3 py-2 rounded hover:bg-gray-100 cursor-pointer">Dịch vụ</summary>
-            <div className="pl-4 mt-1 space-y-1">
-              <Link href="/services/rental" className="block px-3 py-2 rounded hover:bg-gray-100">Thuê xe</Link>
-              <Link href="/services/maintenance" className="block px-3 py-2 rounded hover:bg-gray-100">Bảo dưỡng</Link>
-            </div>
-          </details>
+          
+
           <Link href="/contact" className="block px-3 py-2 rounded hover:bg-gray-100">Liên hệ</Link>
 
           {user ? (
