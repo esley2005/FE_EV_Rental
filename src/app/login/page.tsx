@@ -54,11 +54,11 @@ export default function LoginPage() {
         // Redirect dựa trên role
         const roleLC = role?.toLowerCase();
         if (roleLC === "admin") {
-          router.push("/menu");
+          router.push("/");
         } else if (roleLC === "staff") {
           router.push("/staff");
         } else {
-          router.push("/menu");
+          router.push("/");
         }
       } else {
         message.error("Đăng nhập thất bại!");
