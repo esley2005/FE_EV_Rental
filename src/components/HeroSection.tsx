@@ -11,7 +11,7 @@ export default function HeroSection() {
       </p>
       <Link href="/menu" className="inline-block">
         <button className="px-8 py-3 bg-blue-600 text-white rounded-full font-semibold text-lg shadow hover:bg-blue-700 transition">
-          Xem thông tin xe
+          Xem Thêm Xe
         </button>
       </Link>
     </div>
