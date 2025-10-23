@@ -31,25 +31,31 @@ export default function LoginPage() {
       }
       
       if (response.success && response.data) {
-        // Backend trả về: { Token, UserId, Role, FullName }
-        const { Token, UserId, Role, FullName } = response.data as any;
+        // Backend có thể trả về PascalCase hoặc camelCase
+        const data = response.data as any;
+        const token = data.Token || data.token;
+        const userId = data.UserId || data.userId;
+        const role = data.Role || data.role;
+        const fullName = data.FullName || data.fullName;
+        
+        console.log('[Login] Parsed data:', { token, userId, role, fullName });
         
         // Lưu token và user info vào localStorage
-        localStorage.setItem('token', Token);
+        localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify({
-          id: UserId,
-          role: Role,
-          fullName: FullName,
+          id: userId,
+          role: role,
+          fullName: fullName,
           email: formData.email
         }));
         
-        message.success(`Đăng nhập thành công! Xin chào ${FullName}`);
+        message.success(`Đăng nhập thành công! Xin chào ${fullName}`);
         
         // Redirect dựa trên role
-        const role = Role?.toLowerCase();
-        if (role === "admin") {
+        const roleLC = role?.toLowerCase();
+        if (roleLC === "admin") {
           router.push("/admin");
-        } else if (role === "staff") {
+        } else if (roleLC === "staff") {
           router.push("/staff");
         } else {
           router.push("/");

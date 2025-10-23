@@ -1,23 +1,27 @@
-// truyền dữ liệu từ data test lên component
 export interface Car {
-  id: string;
+  id: number;
+  model: string;
   name: string;
-  image: string;
-  type: string;
-  range: string;
-  seats: string;
-  storage: string;
-  price: string;
-  href: string;
-  // Thông tin chi tiết
-  description: string;
-  features: string[];
-  specifications: {
-    engine: string;
-    battery: string;
-    chargingTime: string;
-    topSpeed: string;
-    acceleration: string;
-  };
-  images: string[];
+  seats: number;
+  sizeType: string;
+  trunkCapacity: number;
+  batteryType: string;
+  batteryDuration: number;
+  rentPricePerDay: number;
+  rentPricePerHour: number;
+  rentPricePerDayWithDriver: number;
+  rentPricePerHourWithDriver: number;
+  imageUrl: string;
+  status: number;
+  createdAt: string; // ISO date string (e.g., "2025-10-16T13:50:12.04")
+  updatedAt: string | null;
+  isActive: boolean;
+  isDeleted: boolean;
+  carRentalLocations: any | null; // replace `any` with a specific type if you have one
+  rentalOrders: any | null;       // same here
+}
+
+export interface CarResponse {
+  $id: string;
+  $values: Car[];
 }

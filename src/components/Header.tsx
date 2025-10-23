@@ -100,7 +100,40 @@ export default function Header() {
                   <div className="px-4 py-2 border-b border-gray-100">
                     <p className="text-sm font-semibold text-gray-800">{user.fullName}</p>
                     <p className="text-xs text-gray-500">{user.email}</p>
+                    {user.role && (
+                      <p className="text-xs text-blue-600 font-medium mt-1">
+                        {user.role}
+                      </p>
+                    )}
                   </div>
+                  
+                  {/* DEBUG: Hiển thị để test */}
+                  <div className="px-4 py-1 text-xs text-gray-400">
+                    Role: {user.role || 'undefined'} | Type: {typeof user.role}
+                  </div>
+
+                  {/* Nút Admin - check tất cả các trường hợp */}
+                  {(user.role === 'Admin' || user.role === 'admin' || user.role === 'ADMIN') && (
+                    <Link
+                      href="/admin"
+                      className="block px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 border-b border-gray-100"
+                      onClick={() => setUserMenuOpen(false)}
+                    >
+                      🎛️ Trang Admin
+                    </Link>
+                  )}
+                  
+                  {/* Nút Staff */}
+                  {(user.role === 'Staff' || user.role === 'staff' || user.role === 'STAFF') && (
+                    <Link
+                      href="/staff"
+                      className="block px-4 py-2 text-sm font-semibold text-green-600 hover:bg-green-50 border-b border-gray-100"
+                      onClick={() => setUserMenuOpen(false)}
+                    >
+                      📋 Trang Staff
+                    </Link>
+                  )}
+
                   <Link
                     href="/profile"
                     className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"

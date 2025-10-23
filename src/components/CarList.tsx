@@ -1,132 +1,37 @@
 "use client";
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import { Car } from "@/types/car";
+import CarCard from "./CarCard";
 
-import React, { useState } from "react";
-import { Table, Button, Modal, Form, Input } from "antd";
+export default function CarList() {
+  const [cars, setCars] = useState<Car[]>([]);
+  const [loading, setLoading] = useState(true);
 
-interface CarRecord {
-  key: string;
-  car: string;
-  status: string;
-  location: string;
-}
-
-const CarList: React.FC = () => {
-  const [dataSource, setDataSource] = useState<CarRecord[]>([]);
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [editingRecord, setEditingRecord] = useState<CarRecord | null>(null);
-
-  const [form] = Form.useForm();
-
-  // Mở modal để thêm hoặc sửa
-  const openModal = (record?: CarRecord) => {
-    if (record) {
-      setEditingRecord(record);
-      form.setFieldsValue(record);
-    } else {
-      setEditingRecord(null);
-      form.resetFields();
-    }
-    setIsModalVisible(true);
-  };
-
-  // Xử lý khi nhấn OK trong modal
-  const handleOk = () => {
-    form
-      .validateFields()
-      .then((values) => {
-        if (editingRecord) {
-          // Sửa record
-          setDataSource((prev) =>
-            prev.map((item) =>
-              item.key === editingRecord.key ? { ...editingRecord, ...values } : item
-            )
-          );
-        } else {
-          // Thêm record mới
-          const newKey = String(dataSource.length + 1);
-          setDataSource([...dataSource, { key: newKey, ...values }]);
-        }
-        setIsModalVisible(false);
+  useEffect(() => {
+    axios
+      .get("https://localhost:7200/api/Car") // 🔗 thay URL nếu backend khác
+      .then((res) => {
+        // Một số ASP.NET API trả về { "$id": "...", "$values": [...] }
+        const data = res.data.$values || res.data;
+        setCars(data);
       })
-      .catch((info) => {
-        console.log("Validate Failed:", info);
-      });
-  };
+      .catch((err) => {
+        console.error("❌ Lỗi tải danh sách xe:", err);
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
-  const handleCancel = () => {
-    setIsModalVisible(false);
-  };
+  if (loading) return <p className="text-center mt-10">Đang tải dữ liệu...</p>;
 
-  // Xóa record
-  const handleDelete = (key: string) => {
-    setDataSource(dataSource.filter((item) => item.key !== key));
-  };
-
-  // Columns của table
-  const columns = [
-    { title: "Tên xe", dataIndex: "car", key: "car" },
-    { title: "Trạng thái", dataIndex: "status", key: "status" },
-    { title: "Điểm thuê", dataIndex: "location", key: "location" },
-    {
-      title: "Hành động",
-      key: "action",
-      render: (_: unknown, record: CarRecord) => (
-        <div style={{ display: "flex", gap: "8px" }}>
-          <Button type="primary" onClick={() => openModal(record)}>
-            Sửa
-          </Button>
-          <Button danger onClick={() => handleDelete(record.key)}>
-            Xóa
-          </Button>
-        </div>
-      ),
-    },
-  ];
+  if (cars.length === 0)
+    return <p className="text-center mt-10 text-gray-500">Không có xe nào.</p>;
 
   return (
-    <div>
-      <Button type="primary" style={{ marginBottom: 16 }} onClick={() => openModal()}>
-        Thêm xe
-      </Button>
-
-      <Table<CarRecord>
-        dataSource={dataSource}
-        columns={columns}
-        rowKey="key"
-      />
-
-      <Modal
-        title={editingRecord ? "Sửa thông tin xe" : "Thêm xe mới"}
-        open={isModalVisible}
-        onOk={handleOk}
-        onCancel={handleCancel}
-      >
-        <Form form={form} layout="vertical" name="carForm">
-          <Form.Item
-            name="car"
-            label="Tên xe"
-            rules={[{ required: true, message: "Vui lòng nhập tên xe!" }]}
-          >
-            <Input />
-          </Form.Item>
-          <Form.Item
-            name="status"
-            label="Trạng thái"
-            rules={[{ required: true, message: "Vui lòng nhập trạng thái!" }]}
-          >
-            <Input />
-          </Form.Item>
-          <Form.Item
-            name="location"
-            label="Điểm thuê"
-            rules={[{ required: true, message: "Vui lòng nhập điểm thuê!" }]}
-          >
-            <Input />
-          </Form.Item>
-        </Form>
-      </Modal>
+    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 p-4">
+      {cars.map((car) => (
+        <CarCard key={car.id} car={car} />
+      ))}
     </div>
   );
-};
-
-export default CarList;
+}
