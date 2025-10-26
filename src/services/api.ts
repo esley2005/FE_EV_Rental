@@ -2,7 +2,7 @@
 import { authUtils } from '@/utils/auth';
 import type { Car } from '@/types/car';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5027';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://localhost:7200/api';
 
 // Auth storage helpers
 export type AuthUser = { userId: string; role: string; fullName: string };
@@ -72,36 +72,63 @@ export async function apiCall<T>(
 
     // Lấy text trước để kiểm tra
     const text = await response.text();
-    console.log(`[API] Response text (first 200 chars):`, text.substring(0, 200));
+    console.log(`[API] Response text (first 500 chars):`, text.substring(0, 500));
+    console.log(`[API] Response full text length:`, text.length);
+
+    // Kiểm tra nếu response rỗng
+    if (!text || text.trim() === '') {
+      if (response.ok) {
+        console.log('[API] Empty response but status OK');
+        return {
+          success: true,
+          message: 'Success'
+        };
+      } else {
+        throw new Error(`HTTP error! status: ${response.status} - Empty response`);
+      }
+    }
 
     // Parse JSON
     let data;
     try {
       data = JSON.parse(text);
+      console.log('[API] Parsed JSON data:', data);
     } catch (e) {
+      console.warn('[API] Response is not JSON, text content:', text.substring(0, 300));
+      
       // Nếu không phải JSON nhưng response OK (200-299), coi như success
       if (response.ok) {
-        console.log('[API] Plain text response (success):', text);
+        console.log('[API] Plain text response (success)');
         return {
           success: true,
           data: text as any,
           message: text
         };
       }
-      // Nếu không OK và không phải JSON, throw error
-      console.error('[API] Failed to parse JSON:', text);
-      throw new Error(`Server error: ${text.substring(0, 100)}`);
+      
+      // Nếu không OK và không phải JSON (có thể là HTML error page)
+      console.error('[API] Failed to parse JSON for non-OK response');
+      
+      // Kiểm tra nếu là HTML error page
+      if (text.includes('<!DOCTYPE') || text.includes('<html')) {
+        throw new Error(`Server returned HTML error page (Status ${response.status}). Check if API URL is correct.`);
+      }
+      
+      throw new Error(`Server error (Status ${response.status}): ${text.substring(0, 150)}`);
     }
 
+    // Kiểm tra response status sau khi parse JSON
     if (!response.ok) {
-      throw new Error(data.error || data.message || `HTTP error! status: ${response.status}`);
+      const errorMsg = data?.error || data?.message || data?.Message || `HTTP error! status: ${response.status}`;
+      console.error('[API] Error response:', errorMsg, data);
+      throw new Error(errorMsg);
     }
 
     // Wrap response để đảm bảo có field success
     return {
       success: true,
       data: data,
-      message: data.message || data.Message
+      message: data.message || data.Message || 'Success'
     };
   } catch (error) {
     console.error(`API call failed for ${endpoint}:`, error);
@@ -115,28 +142,28 @@ export async function apiCall<T>(
 // Cars API
 export const carsApi = {
   // Lấy tất cả xe
-  getAll: () => apiCall<Car[]>('/api/cars'),
+  getAll: () => apiCall<Car[]>('/cars'),
 
   // Lấy xe theo ID
-  getById: (id: string) => apiCall<Car>(`/api/cars/${id}`),
+  getById: (id: string) => apiCall<Car>(`/cars/${id}`),
 
   // Tạo xe mới
   create: (carData: Partial<Car>) => 
-    apiCall<Car>('/api/cars', {
+    apiCall<Car>('/cars', {
       method: 'POST',
       body: JSON.stringify(carData),
     }),
 
   // Cập nhật xe
   update: (id: string, carData: Partial<Car>) =>
-    apiCall<Car>(`/api/cars/${id}`, {
+    apiCall<Car>(`/cars/${id}`, {
       method: 'PUT',
       body: JSON.stringify(carData),
     }),
 
   // Xóa xe
   delete: (id: string) =>
-    apiCall(`/api/cars/${id}`, {
+    apiCall(`/cars/${id}`, {
       method: 'DELETE',
     }),
 };
@@ -163,7 +190,7 @@ export interface Booking extends BookingData {
 export const bookingsApi = {
   // Tạo booking mới
   create: (bookingData: BookingData) =>
-    apiCall<Booking>('/api/bookings', {
+    apiCall<Booking>('/bookings', {
       method: 'POST',
       body: JSON.stringify(bookingData),
     }),
@@ -175,8 +202,28 @@ export const bookingsApi = {
     if (filters?.carId) params.append('carId', filters.carId);
     
     const query = params.toString();
-    return apiCall<Booking[]>(`/api/bookings${query ? `?${query}` : ''}`);
+    return apiCall<Booking[]>(`/bookings${query ? `?${query}` : ''}`);
   },
+
+  // Lấy đơn hàng của user hiện tại
+  getMyBookings: (filters?: { status?: string }) => {
+    const params = new URLSearchParams();
+    if (filters?.status) params.append('status', filters.status);
+    
+    const query = params.toString();
+    return apiCall<Booking[]>(`/bookings/my-bookings${query ? `?${query}` : ''}`);
+  },
+
+  // Lấy chi tiết booking theo ID
+  getById: (id: string) =>
+    apiCall<Booking>(`/bookings/${id}`),
+
+  // Hủy booking
+  cancel: (id: string, reason?: string) =>
+    apiCall<Booking>(`/bookings/${id}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
 };
 
 // Auth API
@@ -190,6 +237,10 @@ export interface User {
   email: string;
   fullName: string;
   role: string;
+  phone?: string;
+  address?: string;
+  dateOfBirth?: string;
+  avatar?: string;
 }
 
 export interface AuthResponse {
@@ -197,25 +248,81 @@ export interface AuthResponse {
   user: User;
 }
 
+export interface ForgotPasswordData {
+  email: string;
+}
+
+export interface ResetPasswordData {
+  email: string;
+  otp: string;
+  newPassword: string;
+}
+
+export interface UpdateProfileData {
+  fullName?: string;
+  phone?: string;
+  address?: string;
+  dateOfBirth?: string;
+}
+
+export interface ChangePasswordData {
+  oldPassword: string;
+  newPassword: string;
+}
+
 export const authApi = {
   // Đăng nhập
   login: (loginData: LoginData) =>
-    apiCall<AuthResponse>('/api/auth/login', {
+    apiCall<AuthResponse>('/auth/login', {
       method: 'POST',
       body: JSON.stringify(loginData),
     }),
 
   // Đăng ký
   register: (userData: Partial<User> & { password: string }) =>
-    apiCall<AuthResponse>('/api/auth/register', {
+    apiCall<AuthResponse>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(userData),
     }),
 
   // Xác nhận email/OTP
   confirmEmail: (token: string) =>
-    apiCall<{ message: string }>(`/api/auth/confirm-email?token=${token}`, {
+    apiCall<{ message: string }>(`/auth/confirm-email?token=${token}`, {
       method: 'GET',
+    }),
+
+  // Quên mật khẩu - gửi OTP
+  forgotPassword: (data: ForgotPasswordData) =>
+    apiCall<{ message: string }>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Đặt lại mật khẩu
+  resetPassword: (data: ResetPasswordData) =>
+    apiCall<{ message: string }>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Lấy thông tin user hiện tại
+  getProfile: () =>
+    apiCall<User>('/user/profile', {
+      method: 'GET',
+    }),
+
+  // Cập nhật thông tin user
+  updateProfile: (data: UpdateProfileData) =>
+    apiCall<User>('/user/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  // Đổi mật khẩu
+  changePassword: (data: ChangePasswordData) =>
+    apiCall<{ message: string }>('/user/change-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
     }),
 
   // Đăng xuất
@@ -245,29 +352,29 @@ export interface RentalOrder extends RentalOrderData {
 export const rentalOrderApi = {
   // Tạo đơn hàng mới
   create: (orderData: RentalOrderData) =>
-    apiCall<RentalOrder>('/api/RentalOrder', {
+    apiCall<RentalOrder>('/RentalOrder', {
       method: 'POST',
       body: JSON.stringify(orderData),
     }),
 
   // Lấy đơn hàng theo ID
   getById: (id: number) =>
-    apiCall<RentalOrder>(`/api/RentalOrder/${id}`),
+    apiCall<RentalOrder>(`/RentalOrder/${id}`),
 
   // Cập nhật trạng thái đơn hàng
   updateStatus: (id: number, status: number) =>
-    apiCall<RentalOrder>(`/api/RentalOrder/${id}/status`, {
+    apiCall<RentalOrder>(`/RentalOrder/${id}/status`, {
       method: 'PUT',
       body: JSON.stringify({ status }),
     }),
 
   // Lấy đơn hàng của user
   getByUserId: (userId: number) =>
-    apiCall<RentalOrder[]>(`/api/RentalOrder/user/${userId}`),
+    apiCall<RentalOrder[]>(`/RentalOrder/user/${userId}`),
 
   // Xóa đơn hàng
   delete: (id: number) =>
-    apiCall(`/api/RentalOrder/${id}`, {
+    apiCall(`/RentalOrder/${id}`, {
       method: 'DELETE',
     }),
 };

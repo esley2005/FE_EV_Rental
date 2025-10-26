@@ -5,13 +5,14 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { MailOutlined, LockOutlined } from "@ant-design/icons";
-import { Input, Button, Checkbox, message } from "antd";
+import { MailOutlined, LockOutlined, CheckCircleOutlined, CloseCircleOutlined, WarningOutlined } from "@ant-design/icons";
+import { Input, Button, Checkbox, notification as antdNotification } from "antd";
 import { authApi } from "@/services/api";
 
 export default function RegisterPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [api, contextHolder] = antdNotification.useNotification();
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -32,11 +33,21 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.password !== formData.confirmPassword) {
-      message.error("Mật khẩu xác nhận không khớp!");
+        api.error({
+        message: 'Mật khẩu không khớp',
+        description: 'Mật khẩu xác nhận không khớp với mật khẩu đã nhập!',
+        placement: 'topRight',
+        icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+      });
       return;
     }
     if (!formData.agreeToTerms) {
-      message.error("Vui lòng đồng ý với điều khoản sử dụng!");
+      api.warning({
+        message: 'Chưa đồng ý điều khoản',
+        description: 'Vui lòng đồng ý với điều khoản sử dụng để tiếp tục!',
+        placement: 'topRight',
+        icon: <WarningOutlined style={{ color: '#faad14' }} />,
+      });
       return;
     }
 
@@ -57,20 +68,43 @@ export default function RegisterPage() {
 
       // Kiểm tra nếu có error
       if (response.error) {
-        message.error(response.error);
+        api.error({
+          message: 'Đăng ký thất bại',
+          description: response.error,
+          placement: 'topRight',
+          icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+        });
         return;
       }
 
       // Kiểm tra success hoặc có data
       if (response.success || response.data) {
-        message.success("Đăng ký thành công! Vui lòng kiểm tra email để nhận mã OTP.");
+        api.success({
+          message: 'Đăng ký thành công!',
+          description: 'Vui lòng kiểm tra email để nhận mã OTP xác thực tài khoản.',
+          placement: 'topRight',
+          icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+          duration: 4,
+        });
         // Chuyển sang trang verify-email với email
-        router.push(`/verify-email?email=${encodeURIComponent(formData.email)}`);
+        setTimeout(() => {
+          router.push(`/verify-email?email=${encodeURIComponent(formData.email)}`);
+        }, 1500);
       } else {
-        message.error("Đăng ký thất bại!");
+        api.error({
+          message: 'Đăng ký thất bại',
+          description: 'Vui lòng kiểm tra lại thông tin và thử lại!',
+          placement: 'topRight',
+          icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+        });
       }
     } catch (error) {
-      message.error("Có lỗi xảy ra khi đăng ký!");
+      api.error({
+        message: 'Có lỗi xảy ra',
+        description: 'Không thể kết nối đến máy chủ. Vui lòng thử lại!',
+        placement: 'topRight',
+        icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+      });
       console.error("Registration error:", error);
     } finally {
       setLoading(false);
@@ -78,14 +112,16 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-700 via-blue-800 to-gray-900 flex flex-col items-center justify-center px-2">
-      <motion.div
-        initial={{ opacity: 0, y: -30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8 }}
-        className="mb-4 text-center text-white"
-      >
-        <Link href="/" aria-label="Về trang chủ" className="inline-block">
+    <>
+      {contextHolder}
+      <div className="min-h-screen bg-gradient-to-br from-blue-700 via-blue-800 to-gray-900 flex flex-col items-center justify-center px-2">
+        <motion.div
+          initial={{ opacity: 0, y: -30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+          className="mb-4 text-center text-white"
+        >
+          <Link href="/" aria-label="Về trang chủ" className="inline-block">
           <div className="mx-auto w-16 h-16 relative cursor-pointer">
             <Image src="/logo_ev.png" alt="EV RENTAL" fill sizes="64px" style={{ objectFit: 'contain' }} />
           </div>
@@ -212,6 +248,7 @@ export default function RegisterPage() {
       >
         EV Rent (GROUP 5 SWP391)
       </motion.footer>
-    </div>
+      </div>
+    </>
   );
 }

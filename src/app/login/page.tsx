@@ -3,13 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LockOutlined, MailOutlined } from "@ant-design/icons";
-import { Card, Input, Button, Checkbox, message } from "antd";
+import { LockOutlined, MailOutlined, CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
+import { Card, Input, Button, Checkbox, notification as antdNotification } from "antd";
 import { authApi } from "@/services/api";
 
 export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [api, contextHolder] = antdNotification.useNotification();
   const [formData, setFormData] = useState({ email: "", password: "" });
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -26,7 +27,12 @@ export default function LoginPage() {
       console.log("Login response:", response);
 
       if (response.error) {
-        message.error(response.error);
+        api.error({
+          message: 'Đăng nhập thất bại',
+          description: response.error,
+          placement: 'topRight',
+          icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+        });
         return;
       }
       
@@ -49,38 +55,58 @@ export default function LoginPage() {
           email: formData.email
         }));
         
-        message.success(`Đăng nhập thành công! Xin chào ${fullName}`);
+        api.success({
+          message: 'Đăng nhập thành công!',
+          description: `Xin chào ${fullName}. Chào mừng bạn quay trở lại!`,
+          placement: 'topRight',
+          icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+          duration: 3,
+        });
         
         // Redirect dựa trên role
         const roleLC = role?.toLowerCase();
-        if (roleLC === "admin") {
-          router.push("/");
-        } else if (roleLC === "staff") {
-          router.push("/staff");
-        } else {
-          router.push("/");
-        }
+        setTimeout(() => {
+          if (roleLC === "admin") {
+            router.push("/");
+          } else if (roleLC === "staff") {
+            router.push("/staff");
+          } else {
+            router.push("/");
+          }
+        }, 1000);
       } else {
-        message.error("Đăng nhập thất bại!");
+        api.error({
+          message: 'Đăng nhập thất bại',
+          description: 'Vui lòng kiểm tra lại email và mật khẩu!',
+          placement: 'topRight',
+          icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+        });
       }
     } catch (error) {
       console.error('Login error:', error);
-      message.error("Có lỗi xảy ra khi đăng nhập!");
+      api.error({
+        message: 'Có lỗi xảy ra',
+        description: 'Không thể kết nối đến máy chủ. Vui lòng thử lại!',
+        placement: 'topRight',
+        icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+      });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-700 via-blue-800 to-gray-900 flex flex-col items-center justify-center px-4">
-      {/* Logo */}
-      <div className="mb-8 text-center text-white">
-        <h1 className="text-4xl font-bold tracking-wide">EV RENTAL</h1>
-        <p className="text-gray-200 mt-2 text-sm">Hệ thống quản trị thuê xe thông minh</p>
-      </div>
+    <>
+      {contextHolder}
+      <div className="min-h-screen bg-gradient-to-br from-blue-700 via-blue-800 to-gray-900 flex flex-col items-center justify-center px-4">
+        {/* Logo */}
+        <div className="mb-8 text-center text-white">
+          <h1 className="text-4xl font-bold tracking-wide">EV RENTAL</h1>
+          <p className="text-gray-200 mt-2 text-sm">Hệ thống quản trị thuê xe thông minh</p>
+        </div>
 
-      {/* Form Card */}
-      <div>
+        {/* Form Card */}
+        <div>
         <Card
           className="w-full max-w-md shadow-2xl rounded-2xl"
           styles={{ body: { padding: "2rem" } }}
@@ -137,12 +163,13 @@ export default function LoginPage() {
             </Link>
           </div>
         </Card>
-      </div>
+        </div>
 
-      {/* Footer */}
-      <footer className="mt-10 text-gray-300 text-sm">
-        EV Rent (GROUP 5 SWP391)
-      </footer>
-    </div>
+        {/* Footer */}
+        <footer className="mt-10 text-gray-300 text-sm">
+          EV Rent (GROUP 5 SWP391)
+        </footer>
+      </div>
+    </>
   );
 }
