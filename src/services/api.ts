@@ -63,11 +63,35 @@ export async function apiCall<T>(
 
     console.log(`[API] Response status: ${response.status} ${response.statusText}`);
 
+    // Xử lý 204 No Content (DELETE, PUT thành công nhưng không có body)
+    if (response.status === 204) {
+      console.log('[API] 204 No Content - operation successful');
+      return {
+        success: true,
+        message: 'Operation completed successfully'
+      };
+    }
+
+    // Xử lý 404 Not Found
+    if (response.status === 404) {
+      console.error(`[API] ❌ 404 Not Found: ${url}`);
+      return {
+        success: false,
+        error: `Endpoint not found: ${endpoint}`
+      };
+    }
+
     // Nếu response là 401, có thể token đã hết hạn
     if (response.status === 401) {
-      // Sử dụng authUtils để logout
-      authUtils.logout();
-      throw new Error('Unauthorized - Please login again');
+      // Chỉ logout nếu user đã đăng nhập
+      if (authUtils.isAuthenticated()) {
+        console.warn('[API] Token expired, logging out...');
+        authUtils.logout();
+      }
+      return {
+        success: false,
+        error: 'Unauthorized - Please login again'
+      };
     }
 
     // Lấy text trước để kiểm tra
@@ -78,13 +102,17 @@ export async function apiCall<T>(
     // Kiểm tra nếu response rỗng
     if (!text || text.trim() === '') {
       if (response.ok) {
-        console.log('[API] Empty response but status OK');
+        console.log('[API] Empty response but status OK - treating as success');
         return {
           success: true,
-          message: 'Success'
+          message: 'Operation completed successfully'
         };
       } else {
-        throw new Error(`HTTP error! status: ${response.status} - Empty response`);
+        console.error(`[API] Empty response with error status: ${response.status}`);
+        return {
+          success: false,
+          error: `HTTP error! status: ${response.status} - Empty response`
+        };
       }
     }
 
@@ -119,9 +147,26 @@ export async function apiCall<T>(
 
     // Kiểm tra response status sau khi parse JSON
     if (!response.ok) {
-      const errorMsg = data?.error || data?.message || data?.Message || `HTTP error! status: ${response.status}`;
+      // Xử lý validation errors (400)
+      if (response.status === 400 && data?.errors) {
+        console.error('[API] ❌ Validation Errors:', data.errors);
+        const validationErrors = Object.entries(data.errors)
+          .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+          .join(' | ');
+        console.error('[API] Validation details:', validationErrors);
+        
+        return {
+          success: false,
+          error: `Validation error: ${validationErrors}`
+        };
+      }
+      
+      const errorMsg = data?.error || data?.message || data?.Message || data?.title || `HTTP error! status: ${response.status}`;
       console.error('[API] Error response:', errorMsg, data);
-      throw new Error(errorMsg);
+      return {
+        success: false,
+        error: errorMsg
+      };
     }
 
     // Wrap response để đảm bảo có field success
@@ -142,28 +187,28 @@ export async function apiCall<T>(
 // Cars API
 export const carsApi = {
   // Lấy tất cả xe
-  getAll: () => apiCall<Car[]>('/cars'),
+  getAll: () => apiCall<Car[]>('/Car'),
 
   // Lấy xe theo ID
-  getById: (id: string) => apiCall<Car>(`/cars/${id}`),
+  getById: (id: string) => apiCall<Car>(`/Car/${id}`),
 
   // Tạo xe mới
   create: (carData: Partial<Car>) => 
-    apiCall<Car>('/cars', {
+    apiCall<Car>('/Car', {
       method: 'POST',
       body: JSON.stringify(carData),
     }),
 
   // Cập nhật xe
-  update: (id: string, carData: Partial<Car>) =>
-    apiCall<Car>(`/cars/${id}`, {
+  update: (id: number | string, carData: Partial<Car>) =>
+    apiCall<Car>(`/Car/${id}`, {
       method: 'PUT',
       body: JSON.stringify(carData),
     }),
 
   // Xóa xe
-  delete: (id: string) =>
-    apiCall(`/cars/${id}`, {
+  delete: (id: number | string) =>
+    apiCall(`/Car/${id}`, {
       method: 'DELETE',
     }),
 };

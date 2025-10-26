@@ -15,6 +15,7 @@ import CarStatusList from "@/components/CarStatusList";
 import DeliveryForm from "@/components/DeliveryForm";
 import ReturnForm from "@/components/ReturnForm";
 import DocumentVerification from "@/components/DocumentVerification";
+import CarManagement from "@/components/admin/CarManagement";
 
 const { Header, Sider, Content, Footer } = Layout;
 
@@ -59,8 +60,9 @@ const subMenus: Record<string, { key: string; label: string; icon: React.ReactNo
 
   // d. QUẢN LÝ XE TẠI ĐIỂM
   vehicles: [
-    { key: "1", label: "Trạng thái pin & kỹ thuật", icon: <TeamOutlined /> },   // Theo dõi pin, tình trạng xe
-    { key: "2", label: "Báo cáo sự cố / hỏng hóc", icon: <FileOutlined /> },    // Gửi báo cáo cho admin
+    { key: "1", label: "Quản lý xe", icon: <TeamOutlined /> },                   // Thêm/sửa xe
+    { key: "2", label: "Trạng thái pin & kỹ thuật", icon: <TeamOutlined /> },   // Theo dõi pin, tình trạng xe
+    { key: "3", label: "Báo cáo sự cố / hỏng hóc", icon: <FileOutlined /> },    // Gửi báo cáo cho admin
   ],
 
   // e. TÀI LIỆU
@@ -226,6 +228,14 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               ) : null
             ) : selectedModule === "customers" ? (
               <DocumentVerification mode={selectedSubMenu === "1" ? "check-documents" : "verify-system"} />
+            ) : selectedModule === "vehicles" ? (
+              selectedSubMenu === "1" ? (
+                <CarManagement />
+              ) : selectedSubMenu === "2" ? (
+                <p>Trang theo dõi trạng thái pin & kỹ thuật</p>
+              ) : (
+                <p>Trang báo cáo sự cố / hỏng hóc</p>
+              )
             ) : (
               children
             )}

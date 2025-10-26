@@ -22,6 +22,7 @@ import { Layout, Menu, Dropdown, Space, Avatar, Breadcrumb } from "antd";
 import CarList from "@/components/CarList";
 import HistoryList from "@/components/HistoryList";
 import DispatchList from "@/components/DispatchList";
+import CarManagement from "@/components/admin/CarManagement";
 
 const { Header, Sider, Content, Footer } = Layout;
 
@@ -79,7 +80,7 @@ export default function AdminLayout() {
     if (selectedModule === "cars") {
       switch (selectedSubMenu) {
         case "1":
-          return <CarList />;
+          return <CarManagement />;
         case "2":
           return <HistoryList />;
         case "3":

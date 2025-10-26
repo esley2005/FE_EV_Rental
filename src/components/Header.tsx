@@ -63,10 +63,8 @@ export default function Header() {
         {/* === Desktop Navigation === */}
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-700">
           <Link href="/" className="hover:text-[#FF4D00] transition-colors">Trang chủ</Link>
+          <Link href="/cars/all" className="hover:text-[#FF4D00] transition-colors">Danh sách xe</Link>
           <Link href="/about" className="hover:text-[#FF4D00] transition-colors">Giới thiệu</Link>
-
-          
-
           <Link href="/contact" className="hover:text-[#FF4D00] transition-colors">Liên hệ</Link>
         </nav>
 
@@ -169,9 +167,8 @@ export default function Header() {
       <div className={`md:hidden transition-max-height duration-200 overflow-hidden ${open ? "max-h-96" : "max-h-0"}`}>
         <div className="px-4 pb-4 space-y-2">
           <Link href="/" className="block px-3 py-2 rounded hover:bg-gray-100">Trang chủ</Link>
+          <Link href="/cars/all" className="block px-3 py-2 rounded hover:bg-gray-100">Danh sách xe</Link>
           <Link href="/about" className="block px-3 py-2 rounded hover:bg-gray-100">Giới thiệu</Link>
-          
-
           <Link href="/contact" className="block px-3 py-2 rounded hover:bg-gray-100">Liên hệ</Link>
 
           {user ? (

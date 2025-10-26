@@ -1,24 +1,160 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🚗 EV Rental - Electric Vehicle Rental System
 
-## Getting Started
+Hệ thống cho thuê xe điện hiện đại với Next.js 15, TypeScript, và Ant Design.
 
-First, run the development server:
+## 🚀 Tính năng
+
+### Khách hàng (Customer)
+- 🔍 Xem danh sách xe điện có sẵn
+- 📱 Xem chi tiết thông tin xe (pin, số ghế, giá thuê...)
+- 🎫 Đặt xe online
+- 👤 Quản lý thông tin cá nhân
+- 📋 Xem lịch sử đơn hàng
+
+### Nhân viên (Staff)
+- 🚙 Quản lý xe tại điểm (CRUD)
+- 📸 Upload ảnh xe lên Cloudinary
+- 📊 Xem thống kê
+- ✅ Xử lý giao/nhận xe
+
+### Quản trị viên (Admin)
+- 👥 Quản lý toàn bộ hệ thống
+- 🏢 Quản lý đội xe & điểm thuê
+- 📈 Dashboard và báo cáo tổng quan
+- ⚙️ Cấu hình hệ thống
+
+## 🛠️ Công nghệ sử dụng
+
+- **Frontend**: Next.js 15, React 19, TypeScript
+- **UI Framework**: Ant Design 5.x
+- **Styling**: Tailwind CSS
+- **Backend API**: ASP.NET Core (C#)
+- **Image Storage**: Cloudinary CDN
+- **Authentication**: JWT
+
+## 📦 Cài đặt
+
+### 1. Clone project
+
+```bash
+git clone <repository-url>
+cd FE_EV_Rental
+```
+
+### 2. Install dependencies
+
+```bash
+npm install
+```
+
+### 3. Cấu hình Environment Variables
+
+Tạo file `.env.local` trong thư mục root:
+
+```bash
+# Backend API URL
+NEXT_PUBLIC_API_URL=https://localhost:7200/api
+
+# Cloudinary Configuration
+NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=your-cloud-name
+NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET=your-upload-preset
+```
+
+📖 **Chi tiết cấu hình Cloudinary**: Xem file [CLOUDINARY_SETUP.md](./CLOUDINARY_SETUP.md)
+
+### 4. Run development server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Mở [http://localhost:3000](http://localhost:3000) để xem kết quả.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 👥 Demo Accounts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+# Admin
+Email: admin@evr.com
+Password: Admin@123
+
+# Staff
+Email: staff@evr.com
+Password: Staff@123
+
+# Customer
+Email: customer@evr.com
+Password: Customer@123
+```
+
+## 📁 Cấu trúc Project
+
+```
+FE_EV_Rental/
+├── src/
+│   ├── app/                 # Next.js App Router
+│   │   ├── (auth)/         # Auth pages (login, register, forgot-password)
+│   │   ├── admin/          # Admin dashboard
+│   │   ├── staff/          # Staff dashboard
+│   │   ├── cars/           # Car listing & detail pages
+│   │   ├── profile/        # User profile management
+│   │   └── my-bookings/    # User booking history
+│   ├── components/         # Reusable React components
+│   │   ├── admin/          # Admin-specific components
+│   │   ├── CarCard.tsx     # Car display card
+│   │   ├── Header.tsx      # Navigation header
+│   │   └── ...
+│   ├── services/           # API service layer
+│   │   └── api.ts          # Centralized API calls
+│   ├── types/              # TypeScript type definitions
+│   ├── utils/              # Utility functions
+│   └── hooks/              # Custom React hooks
+├── public/                 # Static assets
+├── CLOUDINARY_SETUP.md    # Cloudinary configuration guide
+└── README.md              # This file
+```
+
+## 🎨 Features Highlight
+
+### 🖼️ Image Upload với Cloudinary
+- Auto resize & optimize
+- CDN global delivery
+- Image transformations
+- Free tier: 25GB storage
+
+### 🔐 Authentication & Authorization
+- JWT-based authentication
+- Role-based access control (Admin, Staff, Customer)
+- Protected routes
+- Auto token refresh
+
+### 📱 Responsive Design
+- Mobile-first approach
+- Tailwind CSS utilities
+- Ant Design responsive components
+
+### 🚀 Performance
+- Next.js 15 App Router
+- Server-side rendering (SSR)
+- Static site generation (SSG)
+- Image optimization
+
+## 🐛 Troubleshooting
+
+### API Connection Issues
+```bash
+# Kiểm tra backend đang chạy
+# Mở: https://localhost:7200/swagger
+
+# Kiểm tra CORS settings trong backend
+# Kiểm tra .env.local có đúng API URL không
+```
+
+### Cloudinary Upload Fails
+📖 Xem chi tiết trong [CLOUDINARY_SETUP.md](./CLOUDINARY_SETUP.md)
+
+## 📞 Support
+
+Nếu gặp vấn đề, vui lòng tạo issue hoặc liên hệ team.
 
 ## Learn More
 
