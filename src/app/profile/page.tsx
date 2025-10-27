@@ -48,12 +48,15 @@ export default function ProfilePage() {
         // Kiểm tra đăng nhập
         const token = localStorage.getItem('token');
         if (!token) {
-          api.warning({
-            message: 'Chưa đăng nhập',
-            description: 'Vui lòng đăng nhập để xem thông tin tài khoản!',
-            placement: 'topRight',
-            icon: <WarningOutlined style={{ color: '#faad14' }} />,
-          });
+          // Trigger notification after render
+          setTimeout(() => {
+            api.warning({
+              message: 'Chưa đăng nhập',
+              description: 'Vui lòng đăng nhập để xem thông tin tài khoản!',
+              placement: 'topRight',
+              icon: <WarningOutlined style={{ color: '#faad14' }} />,
+            });
+          }, 0);
           router.push('/login');
           return;
         }
@@ -95,7 +98,7 @@ export default function ProfilePage() {
   }, [router, api, profileForm]);
 
   // Cập nhật thông tin cá nhân
-  const handleUpdateProfile = async (values: any) => {
+  const handleUpdateProfile = async (values: { fullName: string; phone?: string; address?: string; dateOfBirth?: dayjs.Dayjs }) => {
     setLoading(true);
     try {
       const updateData: UpdateProfileData = {
@@ -192,10 +195,9 @@ export default function ProfilePage() {
   }
 
   return (
-    <>
+    <div className="py-8 px-4">
       {contextHolder}
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
-        <div className="max-w-4xl mx-auto">
+      <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="mb-6">
             <Button 
@@ -393,9 +395,8 @@ export default function ProfilePage() {
               ]}
             />
           </Card>
-        </div>
       </div>
-    </>
+    </div>
   );
 }
 

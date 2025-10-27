@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import axios from "axios";
 import { Input, Button, Space } from "antd";
 import { SearchOutlined, EnvironmentOutlined } from "@ant-design/icons";
 import CarCard from "@/components/CarCard";
 import { Car } from "@/types/car";
+import { carsApi } from "@/services/api";
 
 export default function MenuPage() {
   const [cars, setCars] = useState<Car[]>([]);
@@ -15,22 +15,33 @@ export default function MenuPage() {
   const [error, setError] = useState<string | null>(null);
 
   // === Gọi API xe ===
-  useEffect(() => {
-    const fetchCars = async () => {
-      try {
-        const res = await axios.get("https://localhost:7200/api/Car");
-        const data: Car[] = res.data?.$values ?? res.data ?? [];
-        setCars(data);
-        setFiltered(data);
-      } catch (err) {
-        console.error("❌ Lỗi tải danh sách xe:", err);
+  // SỬA NHƯ THẾ NÀY:
+useEffect(() => {
+  const fetchCars = async () => {
+    try {
+      const response = await carsApi.getAll();
+      
+      if (response.success && response.data) {
+        // Lọc xe active và chưa xóa
+        const carsData = response.data;
+        const activeCars = Array.isArray(carsData) 
+          ? carsData.filter((car: Car) => car.isActive && !car.isDeleted)
+          : [];
+        
+        setCars(activeCars);
+        setFiltered(activeCars);
+      } else {
         setError("Không thể tải danh sách xe.");
-      } finally {
-        setLoading(false);
       }
-    };
-    fetchCars();
-  }, []);
+    } catch (err) {
+      console.error("❌ Lỗi tải danh sách xe:", err);
+      setError("Không thể tải danh sách xe.");
+    } finally {
+      setLoading(false);
+    }
+  };
+  fetchCars();
+}, []);
 
   // === Tìm kiếm theo tên / loại xe ===
   const onSearch = (value: string) => {
