@@ -139,10 +139,18 @@ export async function apiCall<T>(
       
       // Kiểm tra nếu là HTML error page
       if (text.includes('<!DOCTYPE') || text.includes('<html')) {
-        throw new Error(`Server returned HTML error page (Status ${response.status}). Check if API URL is correct.`);
+        console.error('[API] Server returned HTML error page - API server might be down or URL incorrect');
+        return {
+          success: false,
+          error: `API server không khả dụng. Vui lòng kiểm tra lại kết nối hoặc liên hệ quản trị viên. (Status: ${response.status})`
+        };
       }
       
-      throw new Error(`Server error (Status ${response.status}): ${text.substring(0, 150)}`);
+      // Trả về error thay vì throw để tránh crash app
+      return {
+        success: false,
+        error: `Lỗi server (Status ${response.status}): ${text.substring(0, 150)}`
+      };
     }
 
     // Kiểm tra response status sau khi parse JSON
