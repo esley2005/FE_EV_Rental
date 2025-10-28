@@ -15,8 +15,16 @@ export const authUtils = {
   // Lấy thông tin user hiện tại
   getCurrentUser: () => {
     if (typeof window === 'undefined') return null;
+
     const userStr = localStorage.getItem('user');
-    return userStr ? JSON.parse(userStr) : null;
+    if (!userStr || userStr === 'undefined' || userStr === 'null') return null;
+
+    try {
+      return JSON.parse(userStr);
+    } catch (err) {
+      console.error('❌ Lỗi parse user từ localStorage:', err, userStr);
+      return null;
+    }
   },
 
   // Đăng xuất
@@ -35,17 +43,11 @@ export const authUtils = {
   },
 
   // Kiểm tra có phải admin không
-  isAdmin: (): boolean => {
-    return authUtils.hasRole('admin');
-  },
+  isAdmin: (): boolean => authUtils.hasRole('admin'),
 
   // Kiểm tra có phải staff không
-  isStaff: (): boolean => {
-    return authUtils.hasRole('staff');
-  },
+  isStaff: (): boolean => authUtils.hasRole('staff'),
 
   // Kiểm tra có phải customer không
-  isCustomer: (): boolean => {
-    return authUtils.hasRole('customer');
-  }
+  isCustomer: (): boolean => authUtils.hasRole('customer'),
 };
