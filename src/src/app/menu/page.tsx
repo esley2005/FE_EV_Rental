@@ -59,7 +59,6 @@ useEffect(() => {
 
   // === Lọc nhanh theo loại xe ===
   const quickFilter = (type: string) => {
-    setQuery(""); // Clear search query when filtering
     if (!type) return setFiltered(cars);
     setFiltered(cars.filter((c) => c.sizeType.toLowerCase() === type.toLowerCase()));
   };
@@ -100,13 +99,11 @@ useEffect(() => {
         <p className="text-center mt-10 text-gray-600">Đang tải dữ liệu...</p>
       ) : error ? (
         <p className="text-center mt-10 text-red-500">{error}</p>
-      ) : cars.length === 0 ? (
-        <p className="text-center mt-10 text-gray-500">Không có xe nào trong hệ thống.</p>
-      ) : filtered.length === 0 && query.trim() !== "" ? (
-        <p className="text-center mt-10 text-gray-500">Không tìm thấy xe nào phù hợp với "{query}".</p>
+      ) : filtered.length === 0 ? (
+        <p className="text-center mt-10 text-gray-500">Không có xe nào phù hợp.</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-          {(filtered.length === 0 ? cars : filtered).map((car) => (
+          {filtered.map((car) => (
             <CarCard key={car.id} car={car} />
           ))}
         </div>
