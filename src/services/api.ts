@@ -4,6 +4,19 @@ import type { Car } from '@/types/car';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://localhost:7200/api';
 
+// Lightweight logger: only logs in development to avoid eslint no-console in prod
+const logger = {
+  log: (...args: any[]) => {
+    if (process.env.NODE_ENV !== 'production') console.log(...args);
+  },
+  warn: (...args: any[]) => {
+    if (process.env.NODE_ENV !== 'production') console.warn(...args);
+  },
+  error: (...args: any[]) => {
+    if (process.env.NODE_ENV !== 'production') console.error(...args);
+  },
+};
+
 // Auth storage helpers
 export type AuthUser = { userId: string; role: string; fullName: string };
 type AuthData = { token: string; user: AuthUser };
@@ -50,22 +63,35 @@ export async function apiCall<T>(
     const token = authUtils.getToken();
     
     const url = `${API_BASE_URL}${endpoint}`;
-    console.log(`[API] Calling ${options.method || 'GET'} ${url}`);
+  logger.log(`[API] Calling ${options.method || 'GET'} ${url}`);
     
+    // Build headers conditionally to avoid triggering unnecessary CORS preflight (405 on OPTIONS)
+    const headers: Record<string, string> = {
+      ...(options.headers as Record<string, string> | undefined),
+    };
+
+    // Only set Content-Type when we actually send a body (POST/PUT/PATCH) and it's not FormData
+    const hasBody = typeof options.body !== 'undefined' && options.body !== null;
+    const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+    if (hasBody && !isFormData && !headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    // Add Authorization only if token exists
+    if (token && !headers['Authorization']) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
-        ...options.headers,
-      },
       ...options,
+      headers,
     });
 
-    console.log(`[API] Response status: ${response.status} ${response.statusText}`);
+  logger.log(`[API] Response status: ${response.status} ${response.statusText}`);
 
     // Xử lý 204 No Content (DELETE, PUT thành công nhưng không có body)
     if (response.status === 204) {
-      console.log('[API] 204 No Content - operation successful');
+  logger.log('[API] 204 No Content - operation successful');
       return {
         success: true,
         message: 'Operation completed successfully'
@@ -74,7 +100,7 @@ export async function apiCall<T>(
 
     // Xử lý 404 Not Found
     if (response.status === 404) {
-      console.error(`[API] ❌ 404 Not Found: ${url}`);
+  logger.error(`[API] ❌ 404 Not Found: ${url}`);
       return {
         success: false,
         error: `Endpoint not found: ${endpoint}`
@@ -85,7 +111,7 @@ export async function apiCall<T>(
     if (response.status === 401) {
       // Chỉ logout nếu user đã đăng nhập
       if (authUtils.isAuthenticated()) {
-        console.warn('[API] Token expired, logging out...');
+  logger.warn('[API] Token expired, logging out...');
         authUtils.logout();
       }
       return {
@@ -96,19 +122,19 @@ export async function apiCall<T>(
 
     // Lấy text trước để kiểm tra
     const text = await response.text();
-    console.log(`[API] Response text (first 500 chars):`, text.substring(0, 500));
-    console.log(`[API] Response full text length:`, text.length);
+  logger.log(`[API] Response text (first 500 chars):`, text.substring(0, 500));
+  logger.log(`[API] Response full text length:`, text.length);
 
     // Kiểm tra nếu response rỗng
     if (!text || text.trim() === '') {
       if (response.ok) {
-        console.log('[API] Empty response but status OK - treating as success');
+  logger.log('[API] Empty response but status OK - treating as success');
         return {
           success: true,
           message: 'Operation completed successfully'
         };
       } else {
-        console.error(`[API] Empty response with error status: ${response.status}`);
+  logger.error(`[API] Empty response with error status: ${response.status}`);
         return {
           success: false,
           error: `HTTP error! status: ${response.status} - Empty response`
@@ -120,13 +146,13 @@ export async function apiCall<T>(
     let data;
     try {
       data = JSON.parse(text);
-      console.log('[API] Parsed JSON data:', data);
+  logger.log('[API] Parsed JSON data:', data);
     } catch (e) {
-      console.warn('[API] Response is not JSON, text content:', text.substring(0, 300));
+  logger.warn('[API] Response is not JSON, text content:', text.substring(0, 300));
       
       // Nếu không phải JSON nhưng response OK (200-299), coi như success
       if (response.ok) {
-        console.log('[API] Plain text response (success)');
+  logger.log('[API] Plain text response (success)');
         return {
           success: true,
           data: text as any,
@@ -135,10 +161,11 @@ export async function apiCall<T>(
       }
       
       // Nếu không OK và không phải JSON (có thể là HTML error page)
-      console.error('[API] Failed to parse JSON for non-OK response');
+  logger.error('[API] Failed to parse JSON for non-OK response');
       
       // Kiểm tra nếu là HTML error page
       if (text.includes('<!DOCTYPE') || text.includes('<html')) {
+<<<<<<< Updated upstream
         console.error('[API] Server returned HTML error page - API server might be down or URL incorrect');
         return {
           success: false,
@@ -147,6 +174,15 @@ export async function apiCall<T>(
       }
       
       // Trả về error thay vì throw để tránh crash app
+=======
+        return {
+          success: false,
+          error: `API server không khả dụng hoặc trả về HTML (Status ${response.status}). Vui lòng kiểm tra cấu hình API.`
+        };
+      }
+      
+      // Trả về lỗi có kiểm soát thay vì throw để tránh crash UI
+>>>>>>> Stashed changes
       return {
         success: false,
         error: `Lỗi server (Status ${response.status}): ${text.substring(0, 150)}`
@@ -157,11 +193,11 @@ export async function apiCall<T>(
     if (!response.ok) {
       // Xử lý validation errors (400)
       if (response.status === 400 && data?.errors) {
-        console.error('[API] ❌ Validation Errors:', data.errors);
+  logger.error('[API] ❌ Validation Errors:', data.errors);
         const validationErrors = Object.entries(data.errors)
           .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
           .join(' | ');
-        console.error('[API] Validation details:', validationErrors);
+  logger.error('[API] Validation details:', validationErrors);
         
         return {
           success: false,
@@ -170,7 +206,7 @@ export async function apiCall<T>(
       }
       
       const errorMsg = data?.error || data?.message || data?.Message || data?.title || `HTTP error! status: ${response.status}`;
-      console.error('[API] Error response:', errorMsg, data);
+  logger.error('[API] Error response:', errorMsg, data);
       return {
         success: false,
         error: errorMsg
@@ -184,7 +220,7 @@ export async function apiCall<T>(
       message: data.message || data.Message || 'Success'
     };
   } catch (error) {
-    console.error(`API call failed for ${endpoint}:`, error);
+  logger.error(`API call failed for ${endpoint}:`, error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error occurred'
@@ -196,6 +232,10 @@ export async function apiCall<T>(
 export const carsApi = {
   // Lấy tất cả xe
   getAll: () => apiCall<Car[]>('/Car'),
+
+  // Lấy danh sách xe thuê nhiều nhất
+  getTopRented: (topCount: number = 6) =>
+    apiCall<Car[]>(`/Car/TopRented?topCount=${encodeURIComponent(topCount)}`),
 
   // Lấy xe theo ID
   getById: (id: string) => apiCall<Car>(`/Car/${id}`),

@@ -78,6 +78,7 @@ useEffect(() => {
               onChange={(e) => setQuery(e.target.value)}
               onSearch={onSearch}
             />
+<<<<<<< Updated upstream
           </div>
 
           <Space wrap>
@@ -109,5 +110,43 @@ useEffect(() => {
         </div>
       )}
     </div>
+=======
+
+            <Space wrap>
+              <Button
+                icon={<EnvironmentOutlined />}
+                onClick={() =>
+                  (window.location.href = "/searchmap")
+                }
+              >
+                Tìm theo bản đồ
+              </Button>
+              <Button onClick={() => quickFilter("")}>Tất cả</Button>
+              <Button onClick={() => quickFilter("Minicar")}>Minicar</Button>
+              <Button onClick={() => quickFilter("SUV")}>SUV</Button>
+              <Button onClick={() => quickFilter("Sedan")}>Sedan</Button>
+            </Space>
+          </div>
+
+          {loading ? (
+            <p className="text-center text-gray-500 mt-10">
+              Đang tải danh sách xe...
+            </p>
+          ) : error ? (
+            <p className="text-center text-red-500 mt-10">{error}</p>
+          ) : filtered.length === 0 ? (
+            <p className="text-center text-gray-500 mt-10">
+              Không có xe nào phù hợp.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+              {filtered.map((car) => (
+                <CarCard key={car.id} car={car} />
+              ))}
+            </div>
+          )}
+        </section>
+    </>
+>>>>>>> Stashed changes
   );
 }

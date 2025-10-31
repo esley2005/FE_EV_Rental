@@ -223,40 +223,39 @@ export default function CarManagement() {
   const handleSubmit = async (values: any) => {
     setLoading(true);
     try {
-      // Prepare data với các field bắt buộc
-      const carData: any = {
-        model: values.model,
-        name: values.name,
-        seats: values.seats,
-        sizeType: values.sizeType,
-        trunkCapacity: values.trunkCapacity,
-        batteryType: values.batteryType,
-        batteryDuration: values.batteryDuration,
-        rentPricePerDay: values.rentPricePerDay,
-        rentPricePerHour: values.rentPricePerHour,
-        rentPricePerDayWithDriver: values.rentPricePerDayWithDriver,
-        rentPricePerHourWithDriver: values.rentPricePerHourWithDriver,
-        imageUrl: values.imageUrl,
-        status: values.status,
-        isActive: values.isActive !== undefined ? values.isActive : true,
-        isDeleted: false,
-        // Backend yêu cầu phải có các relationship fields (required) - dùng array rỗng
-        carRentalLocations: [],
-        rentalOrders: [],
+      // Map sang PascalCase để tương thích backend .NET (tránh lỗi 'rentPricePerDay is required')
+      const carDataPascal: any = {
+        // Khi update có thể cần Id
+        ...(editingCar ? { Id: editingCar.id } : {}),
+        Model: values.model,
+        Name: values.name,
+        Seats: values.seats,
+        SizeType: values.sizeType,
+        TrunkCapacity: values.trunkCapacity,
+        BatteryType: values.batteryType,
+        BatteryDuration: values.batteryDuration,
+        RentPricePerDay: values.rentPricePerDay,
+        RentPricePerHour: values.rentPricePerHour,
+        RentPricePerDayWithDriver: values.rentPricePerDayWithDriver,
+        RentPricePerHourWithDriver: values.rentPricePerHourWithDriver,
+        ImageUrl: values.imageUrl,
+        Status: values.status,
+        IsActive: values.isActive !== undefined ? values.isActive : true,
+        IsDeleted: false,
+        // Quan hệ: gửi mảng rỗng nếu không có
+        CarRentalLocations: [],
+        RentalOrders: [],
+        CreatedAt: editingCar ? editingCar.createdAt : new Date().toISOString(),
+        UpdatedAt: editingCar ? new Date().toISOString() : null,
       };
 
       let response;
       if (editingCar) {
-        // Khi update, giữ nguyên id và createdAt
-        response = await carsApi.update(editingCar.id, {
-          id: editingCar.id,
-          ...carData,
-          createdAt: editingCar.createdAt,
-          updatedAt: new Date().toISOString(),
-        });
+        // Update với payload PascalCase (ép kiểu any để vượt qua excess property check)
+        response = await carsApi.update(editingCar.id, carDataPascal as any);
       } else {
-        // Khi tạo mới
-        response = await carsApi.create(carData);
+        // Tạo mới
+        response = await carsApi.create(carDataPascal as any);
       }
 
       if (response.success) {

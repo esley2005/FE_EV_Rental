@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   CarOutlined,
   EnvironmentOutlined,
@@ -16,7 +18,8 @@ import {
   LineChartOutlined,
   FileTextOutlined,
 } from "@ant-design/icons";
-import { Layout, Menu, Dropdown, Space, Avatar, Breadcrumb } from "antd";
+import { Layout, Menu, Dropdown, Space, Avatar, Breadcrumb, message, Result, Button } from "antd";
+import { authUtils } from "@/utils/auth";
 
 // Các component nội dung mẫu
 import CarList from "@/components/CarList";
@@ -74,6 +77,26 @@ export default function AdminLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [selectedModule, setSelectedModule] = useState("cars");
   const [selectedSubMenu, setSelectedSubMenu] = useState("1");
+  const [allowed, setAllowed] = useState(false);
+  const [denied, setDenied] = useState(false);
+  const router = useRouter();
+
+  // Chỉ cho phép user có role admin truy cập
+  useEffect(() => {
+    // Kiểm tra đăng nhập và role admin (dựa trên localStorage: token + user.role)
+    const isAuthed = authUtils.isAuthenticated();
+    const isAdmin = authUtils.isAdmin();
+
+    if (!isAuthed || !isAdmin) {
+      // Không redirect ngay để hiển thị cảnh báo trên trang
+      message.warning("Bạn không có quyền truy cập trang này.");
+      setDenied(true);
+      setAllowed(false);
+      return;
+    }
+    setAllowed(true);
+    setDenied(false);
+  }, [router]);
 
   // Hiển thị nội dung theo module và submenu
   const renderContent = () => {
@@ -93,7 +116,7 @@ export default function AdminLayout() {
     if (selectedModule === "customers") {
       switch (selectedSubMenu) {
         case "1":
-          return 
+          return <p>Hồ sơ khách hàng</p>;
         case "2":
           return <p>Trang Khiếu nại khách hàng</p>;
         case "3":
@@ -132,6 +155,43 @@ export default function AdminLayout() {
     );
   };
 
+  if (denied) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#E3EFFF] p-6">
+        <Result
+          status="403"
+          title="403"
+          subTitle={
+            <div className="text-lg md:text-xl font-large">
+              Bạn không có quyền truy cập trang này. Vui lòng đăng nhập bằng tài khoản Admin hoặc quay lại trang chủ.
+            </div>
+          }
+          extra={
+            <Space>
+              <Button
+                type="primary"
+                size="large"
+                className="font-semibold"
+                onClick={() => router.push("/")}
+              >
+                Về trang chủ
+              </Button>
+              <Button
+                size="large"
+                className="font-semibold"
+                onClick={() => router.push("/login")}
+              >
+                Đăng nhập
+              </Button>
+            </Space>
+          }
+        />
+      </div>
+    );
+  }
+
+  if (!allowed) return null;
+
   return (
     <Layout style={{ minHeight: "100vh", background: "#E3EFFF" }}>
       {/* Sidebar trái */}
@@ -142,9 +202,9 @@ export default function AdminLayout() {
         width={230}
         style={{ background: "#fff", borderRight: "1px solid #e8e8e8" }}
       >
-        <div className="p-4 text-center font-bold text-blue-600 text-lg">
+        <Link href="/" className="block p-4 text-center font-bold text-blue-600 text-lg hover:opacity-90">
           {collapsed ? "EV" : "EV ADMIN"}
-        </div>
+        </Link>
         <Menu
           mode="inline"
           theme="light"
@@ -181,7 +241,21 @@ export default function AdminLayout() {
           />
 
           {/* Dropdown admin */}
-          <Dropdown menu={userMenu} trigger={["click"]}>
+          <Dropdown
+            trigger={["click"]}
+            menu={{
+              items: userMenu.items,
+              onClick: ({ key }) => {
+                if (key === "2") {
+                  // Đăng xuất
+                  authUtils.logout();
+                  router.push("/");
+                } else if (key === "1") {
+                  router.push("/profile");
+                }
+              },
+            }}
+          >
             <Space style={{ color: "white", cursor: "pointer" }}>
               <Avatar size="small" style={{ backgroundColor: "#fff", color: "#1447E6" }}>
                 A

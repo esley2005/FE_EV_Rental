@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { MailOutlined, LockOutlined, CheckCircleOutlined, CloseCircleOutlined, WarningOutlined } from "@ant-design/icons";
+import { MailOutlined, LockOutlined, CheckCircleOutlined, CloseCircleOutlined, WarningOutlined, UserOutlined } from "@ant-design/icons";
 import { Input, Button, Checkbox, notification as antdNotification } from "antd";
 import { authApi } from "@/services/api";
 
@@ -122,8 +122,8 @@ export default function RegisterPage() {
           className="mb-4 text-center text-white"
         >
           <Link href="/" aria-label="Về trang chủ" className="inline-block">
-          <div className="mx-auto w-16 h-16 relative cursor-pointer">
-            <Image src="/logo_ev.png" alt="EV RENTAL" fill sizes="64px" style={{ objectFit: 'contain' }} />
+          <div className="mx-auto relative cursor-pointer" style={{ width: 70, height: 70 }}>
+            <Image src="/logo_ev.png" alt="EV RENTAL" fill sizes="70px" style={{ objectFit: 'contain' }} />
           </div>
           <p className="text-gray-200 mt-1 text-sm">Hệ thống quản trị thuê xe thông minh</p>
         </Link>
@@ -143,6 +143,7 @@ export default function RegisterPage() {
               <Input
                 name="fullName"
                 size="large"
+                prefix={<UserOutlined />}
                 placeholder="Họ và tên"
                 value={formData.fullName}
                 onChange={handleChange}

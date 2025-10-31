@@ -40,17 +40,17 @@ export default function ContactPage() {
             <h2 className="text-2xl font-semibold text-black">Thông tin liên hệ</h2>
 
             <div className="space-y-3 text-gray-800">
-              <p><strong>Địa chỉ:</strong> 123 Đường Nguyễn Văn Cừ, Quận 5, TP. Hồ Chí Minh</p>
+              <p><strong>Địa chỉ:</strong>Lô E2a-7, Đường D1, Khu Công nghệ cao, Phường Tăng Nhơn Phú, TPHCM</p>
               <p>
                 <strong>Điện thoại:</strong>{" "}
-                <a href="tel:0901234567" className="text-blue-600 hover:underline">
-                  090 123 4567
+                <a href="tel:0333035321" className="text-blue-600 hover:underline">
+                  0333035321
                 </a>
               </p>
               <p>
                 <strong>Email:</strong>{" "}
-                <a href="mailto:contact@evrental.vn" className="text-blue-600 hover:underline">
-                  contact@evrental.vn
+                <a href="mailto:huynhtuyetmai2005@gmail.com" className="text-blue-600 hover:underline">
+                  huynhtuyetmai2005@gmail.com
                 </a>
               </p>
               <p><strong>Giờ làm việc:</strong> 8:00 – 20:00 (Thứ 2 – Chủ nhật)</p>
@@ -58,7 +58,7 @@ export default function ContactPage() {
 
             <div className="rounded-lg overflow-hidden shadow-md mt-6">
               <iframe
-                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3919.455334739747!2d106.68218837480455!3d10.77601975918862!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x31752f43e640f21d%3A0x1e45a82baf2f77c!2zTmfDom4gVmFuIMSQLCBDw7RuZyBTxqFuLCBRdeG6rW4gNSwgVGjDoG5oIHBo4buRIFThu6sgSG_Fhu68Yw!5e0!3m2!1svi!2s!4v1702908400000"
+                src="https://www.google.com/maps?q=FPT%20University%20Ho%20Chi%20Minh%20City%20-%20Khu%20Cong%20nghe%20cao%20TP.HCM&output=embed"
                 width="100%"
                 height="300"
                 style={{ border: 0 }}

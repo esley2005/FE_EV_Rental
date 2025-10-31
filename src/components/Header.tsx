@@ -53,7 +53,7 @@ export default function Header() {
 
           {/* Logo */}
           <Link href="/" className="flex items-center gap-3 hover:opacity-90">
-            <Image src="/logo_ev.png" alt="EV Rental" width={56} height={56} priority />
+            <Image src="/logo_ev.png" alt="EV Rental" width={70} height={70} priority />
             <span className="hidden md:inline-block text-lg font-semibold text-gray-800">
               EV Rental
             </span>
