@@ -1,5 +1,5 @@
 // app/contact/page.tsx
-
+//Trang Liên Hệ 
 "use client";
 
 import Footer from "@/components/Footer";

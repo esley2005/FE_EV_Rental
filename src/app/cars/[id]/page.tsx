@@ -10,7 +10,8 @@ import Footer from "@/components/Footer";
 import BookingModal from "@/components/BookingModal";
 import { carsApi } from "@/services/api";
 import type { Car } from "@/types/car";
-
+//1
+// params.id chính là số ID của xe trong đường dẫn (VD: /cars/5 → id = "5")
 interface CarDetailPageProps {
   params: Promise<{ id: string }>;
 }
@@ -19,10 +20,20 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   const resolvedParams = React.use(params);
   const router = useRouter();
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+//2
+// car: xe hiện tại
+// otherCars: các xe khác để hiển thị bên dưới
+// loading: hiển thị vòng xoay loading khi chờ API
+
   const [car, setCar] = useState<Car | null>(null);
   const [otherCars, setOtherCars] = useState<Car[]>([]);
   const [loading, setLoading] = useState(true);
-
+//3
+//  → Gọi API /api/Car để lấy tất cả xe
+// → Lọc ra những xe còn hoạt động (isActive && !isDeleted)
+// → Tìm xe có ID đúng với URL
+// → Nếu có → hiển thị
+// → Nếu không → notFound() (404)
   useEffect(() => {
     const loadCar = async () => {
       try {
@@ -61,6 +72,9 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     loadCar();
   }, [resolvedParams.id]);
 
+//4 
+//Hiện thị khi đang load 
+//Dùng spinner từ thư viện Ant Design
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -77,11 +91,20 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     notFound();
     return null;
   }
-
+// → Định dạng tiền VND:
+// 1500000 → 1.500.000 ₫
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
   };
 
+//5
+// Ảnh
+// Tên, Model
+// Thông số (loại, số chỗ, dung tích cốp, pin, v.v.)
+// Giá thuê (ngày, giờ, có tài xế)
+// Nút "Thuê xe ngay"
+// Nút Gọi tư vấn / Chat hỗ trợ
+// Phần "Xe khác" (hiển thị 3 xe ngẫu nhiên khác)
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header />
@@ -326,6 +349,9 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
       </main>
 
       <Footer />
+{/* 6 */}
+{/* → Khi bấm “Thuê xe ngay” sẽ mở BookingModal
+→ BookingModal sẽ thực hiện việc gửi request thuê xe đến backend (thường là /api/RentalOrder/Create hoặc tương tự). */}
 
       <BookingModal
         car={car}
@@ -336,3 +362,14 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   );
 }
 
+// [User mở /cars/5]
+//         ↓
+// Next.js gọi → CarDetailPage
+//         ↓
+// useEffect → gọi carsApi.getAll()
+//         ↓
+// carsApi dùng axiosClient → gọi API thật
+//         ↓
+// Backend ASP.NET trả JSON (Swagger định nghĩa)
+//         ↓
+// FE hiển thị dữ liệu (ảnh, giá, thông số, …)

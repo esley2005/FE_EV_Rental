@@ -7,6 +7,10 @@ import { MailOutlined, LockOutlined, SafetyOutlined, CheckCircleOutlined, CloseC
 import { Card, Input, Button, notification as antdNotification, Steps } from "antd";
 import { authApi } from "@/services/api";
 
+
+// → Dùng để lưu trạng thái của form và dữ liệu người dùng nhập.
+// → useState là hook trong React để cập nhật UI khi dữ liệu thay đổi.
+
 export default function ForgotPasswordPage() {
   const router = useRouter();
   const [api, contextHolder] = antdNotification.useNotification();
@@ -16,6 +20,7 @@ export default function ForgotPasswordPage() {
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
 
   // Bước 1: Gửi OTP qua email
   const handleSendOTP = async (e: React.FormEvent) => {
