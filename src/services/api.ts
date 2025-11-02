@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 // Service layer để call API - tập trung tất cả API calls ở đây
 import { authUtils } from '@/utils/auth';
 import type { Car } from '@/types/car';
@@ -5,19 +6,26 @@ import type { Car } from '@/types/car';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://localhost:7200/api';
 
 // Lightweight logger: only logs in development to avoid eslint no-console in prod
-/* eslint-disable no-console */
 const logger = {
   log: (...args: any[]) => {
-    if (process.env.NODE_ENV !== 'production') console.log(...args);
+    if (process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.log(...args);
+    }
   },
   warn: (...args: any[]) => {
-    if (process.env.NODE_ENV !== 'production') console.warn(...args);
+    if (process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.warn(...args);
+    }
   },
   error: (...args: any[]) => {
-    if (process.env.NODE_ENV !== 'production') console.error(...args);
+    if (process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.error(...args);
+    }
   },
 };
-/* eslint-enable no-console */
 
 // Auth storage helpers
 export type AuthUser = { userId: string; role: string; fullName: string };

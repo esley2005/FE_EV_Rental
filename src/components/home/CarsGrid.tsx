@@ -1,4 +1,5 @@
-// CarsGrid component - chỉ lo layout grid
+// CarsGrid component - horizontal scroll layout
+"use client";
 import CarCard from '@/components/CarCard';
 import { Car } from '@/types/car';
 
@@ -17,10 +18,26 @@ export default function CarsGrid({ cars, className = '' }: CarsGridProps) {
   }
 
   return (
-    <div className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 ${className}`}>
-      {cars.map((car) => (
-        <CarCard key={car.id} car={car} />
-      ))}
+    <div className={`relative ${className}`}>
+      {/* Horizontal scroll container */}
+      <div 
+        className="overflow-x-auto overflow-y-hidden pb-4 scrollbar-thin"
+        style={{ 
+          scrollBehavior: 'smooth',
+          WebkitOverflowScrolling: 'touch' // Smooth scrolling on iOS
+        }}
+      >
+        <div className="flex gap-3 sm:gap-4 min-w-max px-2 sm:px-0">
+          {cars.map((car) => (
+            <div 
+              key={car.id} 
+              className="flex-shrink-0 w-[280px] sm:w-[290px]"
+            >
+              <CarCard car={car} />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

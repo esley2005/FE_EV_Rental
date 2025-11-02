@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { authUtils } from "@/utils/auth";
+import NotificationDropdown from "./NotificationDropdown";
 
 export default function Header() {
   const [open, setOpen] = useState(false);
@@ -69,10 +70,15 @@ export default function Header() {
         </nav>
 
         {/* === Nút hành động bên phải === */}
+        {/* Desktop */}
         <div className="hidden md:flex items-center gap-3">
           {user ? (
-            // User đã đăng nhập
-            <div className="relative user-menu-container">
+            <>
+              {/* Notification Dropdown */}
+              <NotificationDropdown userId={user.id} />
+
+              {/* User Profile Menu */}
+              <div className="relative user-menu-container">
               <button
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
                 className="flex items-center gap-2 px-4 py-2 rounded-full border border-gray-300 hover:bg-gray-50 transition"
@@ -141,7 +147,8 @@ export default function Header() {
                   </button>
                 </div>
               )}
-            </div>
+              </div>
+            </>
           ) : (
             // User chưa đăng nhập
             <>
@@ -160,6 +167,11 @@ export default function Header() {
               </Link>
             </>
           )}
+        </div>
+
+        {/* Mobile */}
+        <div className="md:hidden flex items-center gap-2">
+          {user && <NotificationDropdown userId={user.id} />}
         </div>
       </div>
 

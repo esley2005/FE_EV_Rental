@@ -40,33 +40,64 @@ export default function AllCarsPage() {
   const [searchInput, setSearchInput] = useState("");
 
   useEffect(() => {
-    // Lấy params từ URL
+    // Lấy params từ URL và cập nhật state
     const page = searchParams.get('page');
     const search = searchParams.get('search');
     
-    if (page) setPageIndex(parseInt(page) - 1);
+    if (page) {
+      setPageIndex(parseInt(page) - 1);
+    } else {
+      setPageIndex(0);
+    }
+    
     if (search) {
       setKeyword(search);
       setSearchInput(search);
+    } else {
+      setKeyword("");
+      setSearchInput("");
     }
-    
-    loadCars();
   }, [searchParams]);
+
+  useEffect(() => {
+    // Tải lại danh sách xe khi pageIndex hoặc keyword thay đổi
+    loadCars();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageIndex, keyword]);
 
   const loadCars = async () => {
     setLoading(true);
     try {
-      const response = await carsApi.getPaged(pageIndex, pageSize, keyword || undefined);
+      const response = await carsApi.getAll();
 
       if (response.success && response.data) {
-        const data = response.data as any;
+        // Backend C# có thể trả về { "$values": [...] } hoặc array trực tiếp
+        const allCars = (response.data as any)?.$values || response.data || [];
         
-        // Backend C# có thể trả về pagination object
-        const items = data.items?.$values || data.items || [];
-        const activeCars = items.filter((car: Car) => car.isActive && !car.isDeleted);
+        // Lọc xe active và chưa xóa
+        let activeCars = Array.isArray(allCars) 
+          ? allCars.filter((car: Car) => car.isActive && !car.isDeleted)
+          : [];
+
+        // Tìm kiếm theo keyword nếu có
+        if (keyword && keyword.trim()) {
+          const searchTerm = keyword.toLowerCase().trim();
+          activeCars = activeCars.filter((car: Car) => 
+            car.name?.toLowerCase().includes(searchTerm) ||
+            car.model?.toLowerCase().includes(searchTerm) ||
+            car.sizeType?.toLowerCase().includes(searchTerm)
+          );
+        }
+
+        // Lưu tổng số xe (trước khi phân trang)
+        setTotalCount(activeCars.length);
+
+        // Phân trang phía client
+        const startIndex = pageIndex * pageSize;
+        const endIndex = startIndex + pageSize;
+        const paginatedCars = activeCars.slice(startIndex, endIndex);
         
-        setCars(activeCars);
-        setTotalCount(data.totalCount || activeCars.length);
+        setCars(paginatedCars);
       } else {
         api.error({
           message: 'Lỗi tải dữ liệu',

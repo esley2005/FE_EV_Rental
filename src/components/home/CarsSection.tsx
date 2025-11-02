@@ -14,24 +14,26 @@ export default function CarsSection() {
   };
 
   return (
-    <section className="w-full max-w-6xl mb-16">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-3xl font-bold text-gray-800">
-          Xe điện cho thuê
-        </h2>
-        <Link 
-          href="/cars/all"
-          className="text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-2"
-        >
-          Xem tất cả →
-        </Link>
+    <section className="w-full mb-16">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-3xl font-bold text-gray-800">
+            Xe điện cho thuê
+          </h2>
+          <Link 
+            href="/cars/all"
+            className="text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-2"
+          >
+            Xem tất cả →
+          </Link>
+        </div>
       </div>
       
-      <div id="cars">
+      <div id="cars" className="px-4 sm:px-6 lg:px-8 ">
         {loading ? (
           <Loading size="md" text="Đang tải danh sách xe..." className="py-12" />
         ) : error ? (
-          <div className="space-y-4">
+          <div className="space-y-4 max-w-7xl mx-auto">
             <Notice 
               type={isDemo ? 'warning' : 'error'} 
               message={error}
