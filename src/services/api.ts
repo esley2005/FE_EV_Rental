@@ -139,12 +139,6 @@ export async function apiCall<T>(
       
       // Kiểm tra nếu là HTML error page
       if (text.includes('<!DOCTYPE') || text.includes('<html')) {
-<<<<<<< Updated upstream
-        throw new Error(`Server returned HTML error page (Status ${response.status}). Check if API URL is correct.`);
-      }
-      
-      throw new Error(`Server error (Status ${response.status}): ${text.substring(0, 150)}`);
-=======
         return {
           success: false,
           error: `API server không khả dụng hoặc trả về HTML (Status ${response.status}). Vui lòng kiểm tra cấu hình API.`
@@ -156,7 +150,6 @@ export async function apiCall<T>(
         success: false,
         error: `Lỗi server (Status ${response.status}): ${text.substring(0, 150)}`
       };
->>>>>>> Stashed changes
     }
 
     // Kiểm tra response status sau khi parse JSON
@@ -202,6 +195,10 @@ export async function apiCall<T>(
 export const carsApi = {
   // Lấy tất cả xe
   getAll: () => apiCall<Car[]>('/Car'),
+
+  // Lấy danh sách xe thuê nhiều nhất
+  getTopRented: (topCount: number = 6) =>
+    apiCall<Car[]>(`/Car/TopRented?topCount=${encodeURIComponent(topCount)}`),
 
   // Lấy xe theo ID
   getById: (id: string) => apiCall<Car>(`/Car/${id}`),

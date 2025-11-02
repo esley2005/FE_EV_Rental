@@ -3,47 +3,59 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Header from "@/components/Header";
 import HeroSection from "@/components/HeroSection";
-<<<<<<< Updated upstream
 import CarCard from "@/components/CarCard";
 import Footer from "@/components/Footer";
-import { Car } from "@/types/car";
 import { carsApi } from "@/services/api";
-=======
-import CarCardComp from "@/components/CarCard";
-import Footer from "@/components/Footer";
-import { carsApi } from "@/services/api";
-import { useEffect, useState } from "react";
-import { Car } from "@/types/car";
->>>>>>> Stashed changes
+import type { Car } from "@/types/car";
 
 export default function Home() {
   const [cars, setCars] = useState<Car[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadCars = async () => {
+    const loadTopRented = async () => {
       try {
-        const response = await carsApi.getAll();
-        
+        const response = await carsApi.getTopRented(3);
+
         if (response.success && response.data) {
-          // Backend C# có thể trả về { "$values": [...] } hoặc array trực tiếp
           const carsData = (response.data as any)?.$values || response.data;
-          
-          // Lọc xe active và chưa xóa
-          const activeCars = Array.isArray(carsData) 
-            ? carsData.filter((car: Car) => car.isActive && !car.isDeleted)
+          const topCars = Array.isArray(carsData)
+            ? (carsData as Car[]).filter((car) => car.isActive && !car.isDeleted)
             : [];
-          
-          setCars(activeCars);
+
+          if (topCars.length > 0) {
+            setCars(topCars);
+            return;
+          }
+        }
+
+        // Fallback: lấy tất cả và hiển thị 3 xe đầu
+        const allRes = await carsApi.getAll();
+        if (allRes.success && allRes.data) {
+          const allData = (allRes.data as any)?.$values || allRes.data;
+          const active = Array.isArray(allData)
+            ? (allData as Car[]).filter((car) => car.isActive && !car.isDeleted)
+            : [];
+          setCars(active.slice(0, 3));
         }
       } catch (err) {
-        console.error("❌ Lỗi tải danh sách xe:", err);
+        console.error("❌ Lỗi tải top xe thuê nhiều:", err);
+        try {
+          const allRes = await carsApi.getAll();
+          if (allRes.success && allRes.data) {
+            const allData = (allRes.data as any)?.$values || allRes.data;
+            const active = Array.isArray(allData)
+              ? (allData as Car[]).filter((car) => car.isActive && !car.isDeleted)
+              : [];
+            setCars(active.slice(0, 3));
+          }
+        } catch {}
       } finally {
         setLoading(false);
       }
     };
 
-    loadCars();
+    loadTopRented();
   }, []);
 
   return (
@@ -54,11 +66,9 @@ export default function Home() {
 
         <section className="w-full max-w-6xl mb-16">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-3xl font-bold text-gray-800">
-              Xe điện cho thuê
-            </h2>
+            <h2 className="text-3xl font-bold text-gray-800">Xe điện được thuê nhiều</h2>
             <Link 
-              href="/cars/all"
+              href="/menu"
               className="text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-2"
             >
               Xem tất cả →
@@ -78,7 +88,7 @@ export default function Home() {
                 Không có xe nào.
               </p>
             ) : (
-              cars.slice(0, 6).map((car) => <CarCard key={car.id} car={car} />)
+              cars.map((car) => <CarCard key={car.id} car={car} />)
             )}
           </div>
         </section>
