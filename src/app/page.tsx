@@ -3,10 +3,18 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Header from "@/components/Header";
 import HeroSection from "@/components/HeroSection";
+<<<<<<< Updated upstream
 import CarCard from "@/components/CarCard";
 import Footer from "@/components/Footer";
 import { Car } from "@/types/car";
 import { carsApi } from "@/services/api";
+=======
+import CarCardComp from "@/components/CarCard";
+import Footer from "@/components/Footer";
+import { carsApi } from "@/services/api";
+import { useEffect, useState } from "react";
+import { Car } from "@/types/car";
+>>>>>>> Stashed changes
 
 export default function Home() {
   const [cars, setCars] = useState<Car[]>([]);
@@ -41,7 +49,6 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-200 flex flex-col font-sans">
       <Header />
-
       <main className="flex-1 flex flex-col items-center justify-center gap-10 px-4 pt-20">
         <HeroSection />
 

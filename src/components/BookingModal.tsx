@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { Car } from "@/types/car";
 
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(amount);
+
 interface BookingModalProps {
   car: Car;
   isOpen: boolean;
@@ -60,8 +63,8 @@ export default function BookingModal({ car, isOpen, onClose }: BookingModalProps
               </div>
               <div>
                 <h3 className="font-bold text-lg">{car.name}</h3>
-                <p className="text-gray-600">{car.type} • {car.seats} • {car.range}</p>
-                <p className="text-blue-600 font-semibold text-lg">{car.price}</p>
+                <p className="text-gray-600">{car.sizeType} • {car.seats} chỗ • {car.batteryDuration} km</p>
+                <p className="text-blue-600 font-semibold text-lg">{formatCurrency(car.rentPricePerDay)}/ngày</p>
               </div>
             </div>
           </div>
