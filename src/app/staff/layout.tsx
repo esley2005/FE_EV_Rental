@@ -1,6 +1,6 @@
-"use client"; // ✅ Chạy phía client (Next.js 13+ yêu cầu khi dùng useState, useEffect)
+"use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   PieChartOutlined,
   DesktopOutlined,
@@ -10,109 +10,114 @@ import {
   DownOutlined,
   LogoutOutlined,
 } from "@ant-design/icons";
-import { Layout, Menu, Dropdown, Breadcrumb, Space, Avatar, Modal, message } from "antd";
+import {
+  Layout,
+  Menu,
+  Dropdown,
+  Breadcrumb,
+  Space,
+  Avatar,
+  Modal,
+  message,
+} from "antd";
 import CarStatusList from "@/components/CarStatusList";
 import DeliveryForm from "@/components/DeliveryForm";
 import ReturnForm from "@/components/ReturnForm";
 import DocumentVerification from "@/components/DocumentVerification";
 import CarManagement from "@/components/admin/CarManagement";
+import { authUtils } from "@/utils/auth";
+import { useRouter } from "next/navigation"; // ✅ Đúng cho App Router
 
 const { Header, Sider, Content, Footer } = Layout;
 
 /* =========================================================
  🧱 PHẦN 1: MENU CHÍNH (HEADER MENU)
- → Tương ứng 4 chức năng chính của Nhân viên tại điểm thuê
  ========================================================= */
-
 const mainMenu = [
-  { key: "tasks", label: "Giao / Nhận xe", icon: <PieChartOutlined /> },  // a. Quản lý giao – nhận xe
-  { key: "customers", label: "Xác thực khách hàng", icon: <UserOutlined /> }, // b. Xác thực khách hàng
-  { key: "payments", label: "Thanh toán tại điểm", icon: <DesktopOutlined /> }, // c. Thanh toán tại điểm
-  { key: "vehicles", label: "Xe tại điểm", icon: <TeamOutlined /> }, // d. Quản lý xe tại điểm
-  { key: "documents", label: "Tài liệu", icon: <FileOutlined /> }, // Phụ: hướng dẫn sử dụng nội bộ
+  { key: "tasks", label: "Giao / Nhận xe", icon: <PieChartOutlined /> },
+  { key: "customers", label: "Xác thực khách hàng", icon: <UserOutlined /> },
+  { key: "payments", label: "Thanh toán tại điểm", icon: <DesktopOutlined /> },
+  { key: "vehicles", label: "Xe tại điểm", icon: <TeamOutlined /> },
+  { key: "documents", label: "Tài liệu", icon: <FileOutlined /> },
 ];
 
 /* =========================================================
  📑 PHẦN 2: SUBMENU (SIDEBAR)
- → Các mục chi tiết nhỏ bên trong mỗi chức năng
  ========================================================= */
-
 const subMenus: Record<string, { key: string; label: string; icon: React.ReactNode }[]> = {
-  // a. GIAO / NHẬN XE
   tasks: [
-    { key: "1", label: "Danh sách xe sẵn sàng", icon: <PieChartOutlined /> },   // Xem xe có sẵn
-    { key: "2", label: "Xe đã đặt / đang thuê", icon: <DesktopOutlined /> },   // Xe đã đặt hoặc đang thuê
-    { key: "3", label: "Thủ tục bàn giao xe", icon: <FileOutlined /> },        // Kiểm tra, chụp ảnh, cập nhật tình trạng
-    { key: "4", label: "Ký xác nhận giao / nhận", icon: <UserOutlined /> },    // Ký xác nhận điện tử
+    { key: "1", label: "Danh sách xe sẵn sàng", icon: <PieChartOutlined /> },
+    { key: "2", label: "Xe đã đặt / đang thuê", icon: <DesktopOutlined /> },
+    { key: "3", label: "Thủ tục bàn giao xe", icon: <FileOutlined /> },
+    { key: "4", label: "Ký xác nhận giao / nhận", icon: <UserOutlined /> },
   ],
 
-  // b. XÁC THỰC KHÁCH HÀNG
   customers: [
-    { key: "1", label: "Kiểm tra giấy tờ", icon: <UserOutlined /> },            // Giấy phép lái xe & CCCD
-    { key: "2", label: "Đối chiếu hồ sơ hệ thống", icon: <TeamOutlined /> },    // So khớp với thông tin trong hệ thống
+    { key: "1", label: "Kiểm tra giấy tờ", icon: <UserOutlined /> },
+    { key: "2", label: "Đối chiếu hồ sơ hệ thống", icon: <TeamOutlined /> },
   ],
 
-  // c. THANH TOÁN TẠI ĐIỂM
   payments: [
-    { key: "1", label: "Ghi nhận thanh toán", icon: <DesktopOutlined /> },      // Ghi nhận phí thuê xe
-    { key: "2", label: "Đặt cọc / Hoàn cọc", icon: <FileOutlined /> },          // Xử lý cọc
+    { key: "1", label: "Ghi nhận thanh toán", icon: <DesktopOutlined /> },
+    { key: "2", label: "Đặt cọc / Hoàn cọc", icon: <FileOutlined /> },
   ],
 
-  // d. QUẢN LÝ XE TẠI ĐIỂM
   vehicles: [
-    { key: "1", label: "Quản lý xe", icon: <TeamOutlined /> },                   // Thêm/sửa xe
-    { key: "2", label: "Trạng thái pin & kỹ thuật", icon: <TeamOutlined /> },   // Theo dõi pin, tình trạng xe
-    { key: "3", label: "Báo cáo sự cố / hỏng hóc", icon: <FileOutlined /> },    // Gửi báo cáo cho admin
+    { key: "1", label: "Quản lý xe", icon: <TeamOutlined /> },
+    { key: "2", label: "Trạng thái pin & kỹ thuật", icon: <TeamOutlined /> },
+    { key: "3", label: "Báo cáo sự cố / hỏng hóc", icon: <FileOutlined /> },
   ],
 
-  // e. TÀI LIỆU
   documents: [
-    { key: "1", label: "Hướng dẫn sử dụng hệ thống", icon: <FileOutlined /> },  // Tài liệu trợ giúp
+    { key: "1", label: "Hướng dẫn sử dụng hệ thống", icon: <FileOutlined /> },
   ],
 };
 
 /* =========================================================
- 👤 PHẦN 3: MENU NGƯỜI DÙNG (DROPDOWN)
- → Đăng xuất, xem thông tin cá nhân
+ 👤 PHẦN 3: COMPONENT CHÍNH
  ========================================================= */
-
-const userMenu = {
-  items: [
-    { key: "1", label: "Thông tin cá nhân" },
-    { key: "2", label: "Đăng xuất", icon: <LogoutOutlined /> },
-  ],
-};
-
-/* =========================================================
- 🧠 PHẦN 4: COMPONENT CHÍNH
- → Kết hợp toàn bộ layout + cơ chế đổi nội dung
- ========================================================= */
-
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
-  // Trạng thái thu gọn sidebar
   const [collapsed, setCollapsed] = useState(false);
-
-  // Module hiện tại (menu trên header)
   const [selectedModule, setSelectedModule] = useState("tasks");
-
-  // Mục con hiện tại (submenu bên trái)
   const [selectedSubMenu, setSelectedSubMenu] = useState("1");
 
-  // State cho hành động bàn giao / nhận xe
   const [showDelivery, setShowDelivery] = useState(false);
   const [showReturn, setShowReturn] = useState(false);
+  const [allowed, setAllowed] = useState(false);
+  const [denied, setDenied] = useState(false);
   const [selectedCar, setSelectedCar] = useState<{ carId: string; carName: string } | null>(null);
 
+  const router = useRouter();
+
+  // ✅ Kiểm tra quyền staff
+  useEffect(() => {
+    const isAuthed = authUtils.isAuthenticated();
+    const isStaff = authUtils.isStaff();
+
+    if (!isAuthed || !isStaff) {
+      message.warning("Bạn không có quyền truy cập trang này.");
+      setDenied(true);
+      setAllowed(false);
+      return;
+    }
+
+    setAllowed(true);
+    setDenied(false);
+  }, [router]);
+
+  // 📦 Mở modal bàn giao xe
   const handleOpenDelivery = (car: { carId: string; carName: string }) => {
     setSelectedCar(car);
     setShowDelivery(true);
   };
 
+  // 📦 Mở modal nhận xe
   const handleOpenReturn = (car: { carId: string; carName: string }) => {
     setSelectedCar(car);
     setShowReturn(true);
   };
 
+  // 📤 Xử lý hoàn tất
   const handleDeliverySubmit = async () => {
     message.success("Bàn giao thành công");
     setShowDelivery(false);
@@ -123,9 +128,22 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     setShowReturn(false);
   };
 
+  // 🚫 Nếu không có quyền thì không render
+  if (denied) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#E3EFFF] p-6">
+        <h2 className="text-2xl font-semibold text-red-500">
+          Bạn không có quyền truy cập trang này.
+        </h2>
+      </div>
+    );
+  }
+
+  if (!allowed) return null;
+
   return (
     <Layout style={{ minHeight: "100vh", background: "#E3EFFF" }}>
-      {/* 🧭 SIDEBAR - hiển thị submenu tương ứng module */}
+      {/* 🧭 SIDEBAR */}
       <Sider
         collapsible
         collapsed={collapsed}
@@ -137,7 +155,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           {collapsed ? "EV" : "EV STAFF"}
         </div>
 
-        {/* Khi click submenu, đổi selectedSubMenu */}
         <Menu
           mode="inline"
           theme="light"
@@ -147,7 +164,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         />
       </Sider>
 
-      {/* 🧩 PHẦN NỘI DUNG CHÍNH */}
+      {/* 🧩 MAIN CONTENT */}
       <Layout>
         {/* 🔷 HEADER */}
         <Header
@@ -160,7 +177,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             padding: "0 24px",
           }}
         >
-          {/* MENU CHÍNH - chọn module */}
           <Menu
             theme="dark"
             mode="horizontal"
@@ -173,8 +189,24 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             style={{ flex: 1, background: "transparent" }}
           />
 
-          {/* DROPDOWN NGƯỜI DÙNG */}
-          <Dropdown menu={userMenu} trigger={["click"]}>
+          {/* ✅ Dropdown người dùng */}
+          <Dropdown
+            trigger={["click"]}
+            menu={{
+              items: [
+                { key: "1", label: "Thông tin cá nhân" },
+                { key: "2", label: "Đăng xuất", icon: <LogoutOutlined /> },
+              ],
+              onClick: ({ key }) => {
+                if (key === "1") router.push("/profile");
+                if (key === "2") {
+                  authUtils.logout();
+                  message.success("Đăng xuất thành công!");
+                  router.push("/login");
+                }
+              },
+            }}
+          >
             <Space style={{ color: "white", cursor: "pointer" }}>
               <Avatar size="small" style={{ backgroundColor: "#fff", color: "#1447E6" }}>
                 S
@@ -185,7 +217,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           </Dropdown>
         </Header>
 
-        {/* 📍 BREADCRUMB - hiển thị đường dẫn hiện tại */}
+        {/* 📍 BREADCRUMB + CONTENT */}
         <Content style={{ margin: "16px" }}>
           <Breadcrumb
             style={{ marginBottom: 16 }}
@@ -197,7 +229,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             ]}
           />
 
-          {/* 💡 NỘI DUNG CHÍNH - sẽ thay đổi theo submenu */}
           <div
             style={{
               padding: 24,
@@ -227,7 +258,9 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
                 </div>
               ) : null
             ) : selectedModule === "customers" ? (
-              <DocumentVerification mode={selectedSubMenu === "1" ? "check-documents" : "verify-system"} />
+              <DocumentVerification
+                mode={selectedSubMenu === "1" ? "check-documents" : "verify-system"}
+              />
             ) : selectedModule === "vehicles" ? (
               selectedSubMenu === "1" ? (
                 <CarManagement />
@@ -240,6 +273,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               children
             )}
 
+            {/* 🪟 MODAL */}
             <Modal
               title={selectedCar ? `Bàn giao xe - ${selectedCar.carName}` : "Bàn giao xe"}
               open={showDelivery}
@@ -248,7 +282,11 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               destroyOnClose
             >
               {selectedCar && (
-                <DeliveryForm carId={selectedCar.carId} customerId="KH-001" onSubmit={handleDeliverySubmit} />
+                <DeliveryForm
+                  carId={selectedCar.carId}
+                  customerId="KH-001"
+                  onSubmit={handleDeliverySubmit}
+                />
               )}
             </Modal>
 
@@ -260,7 +298,11 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               destroyOnClose
             >
               {selectedCar && (
-                <ReturnForm carId={selectedCar.carId} customerId="KH-001" onSubmit={handleReturnSubmit} />
+                <ReturnForm
+                  carId={selectedCar.carId}
+                  customerId="KH-001"
+                  onSubmit={handleReturnSubmit}
+                />
               )}
             </Modal>
           </div>
