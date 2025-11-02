@@ -93,7 +93,7 @@ export default function Home() {
               </p>
             ) : cars.length === 0 ? (
               <p className="text-center text-gray-500 col-span-full">
-                Không có xe nào.
+                Không có xe nào
               </p>
             ) : (
               cars.map((car) => <CarCardComp key={car.id} car={car} />)
