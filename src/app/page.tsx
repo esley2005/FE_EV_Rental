@@ -68,7 +68,7 @@ export default function Home() {
               </p>
             ) : cars.length === 0 ? (
               <p className="text-center text-gray-500 col-span-full">
-                Không có xe nào.
+                Không có xe nào
               </p>
             ) : (
               cars.slice(0, 6).map((car) => <CarCard key={car.id} car={car} />)
