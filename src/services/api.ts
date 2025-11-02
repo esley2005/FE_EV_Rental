@@ -5,6 +5,7 @@ import type { Car } from '@/types/car';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://localhost:7200/api';
 
 // Lightweight logger: only logs in development to avoid eslint no-console in prod
+/* eslint-disable no-console */
 const logger = {
   log: (...args: any[]) => {
     if (process.env.NODE_ENV !== 'production') console.log(...args);
@@ -16,6 +17,7 @@ const logger = {
     if (process.env.NODE_ENV !== 'production') console.error(...args);
   },
 };
+/* eslint-enable no-console */
 
 // Auth storage helpers
 export type AuthUser = { userId: string; role: string; fullName: string };
