@@ -1,8 +1,10 @@
-<<<<<<< Updated upstream
 // Data hooks - logic fetch và normalize data
-import { useState, useEffect } from 'react';
-import { Car } from '@/types/car';
-import { carsApi } from '@/services/carsApi';
+"use client";
+
+import { useState, useEffect } from "react";
+import { carsApi } from "@/services/api";
+import type { Car } from "@/types/car";
+import { geocodeAddress } from "@/utils/geocode";
 import { mockCars } from '@/utils/apiTest';
 
 export interface UseCarsResult {
@@ -12,15 +14,6 @@ export interface UseCarsResult {
   isDemo: boolean;
   refetch: () => void;
 }
-
-export function useCars(): UseCarsResult {
-=======
-"use client";
-
-import { useState, useEffect } from "react";
-import { carsApi } from "@/services/api";
-import type { Car } from "@/types/car";
-import { geocodeAddress } from "@/utils/geocode";
 
 // Helper: lấy địa chỉ từ bảng RentalLocations trả về kèm theo Car (nếu có)
 function getPrimaryAddressFromCar(car: any): string | null {
@@ -72,8 +65,7 @@ async function enrichCarWithCoords(car: any) {
 /**
  * Hook: Lấy toàn bộ danh sách xe
  */
-export function useCars() {
->>>>>>> Stashed changes
+export function useCars(): UseCarsResult {
   const [cars, setCars] = useState<Car[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -81,21 +73,24 @@ export function useCars() {
 
   const fetchCars = async () => {
     try {
+      setLoading(true);
       setError(null);
       setIsDemo(false);
       
       const response = await carsApi.getAll();
       
-      if (response.success && response.data) {
+      if (response.success && response.data !== undefined) {
         // Normalize C# format: { $values: [...] } -> array
-        const carsData = (response.data as { $values?: Car[] })?.$values || response.data;
+        const rawList = toArray<any>(response.data);
         
         // Filter active cars
-        const activeCars = Array.isArray(carsData) 
-          ? carsData.filter((car: Car) => car.isActive && !car.isDeleted)
-          : [];
+        const activeCars = rawList.filter((car: Car) => car.isActive && !car.isDeleted);
         
-        setCars(activeCars);
+        // ✅ Làm giàu dữ liệu từng xe để có tọa độ (cần thì gọi getById)
+        const carsWithLocation = await Promise.all(activeCars.map(enrichCarWithCoords));
+        
+        setCars(carsWithLocation as unknown as Car[]);
+        setError(null);
       } else {
         // Fallback to mock data
         console.warn('API không khả dụng, sử dụng mock data');
@@ -114,7 +109,6 @@ export function useCars() {
   };
 
   useEffect(() => {
-<<<<<<< Updated upstream
     fetchCars();
   }, []);
 
@@ -125,48 +119,6 @@ export function useCars() {
     isDemo,
     refetch: fetchCars
   };
-}
-=======
-    async function fetchCars() {
-      try {
-        setLoading(true);
-        const response = await carsApi.getAll();
-
-        if (response.success && response.data !== undefined) {
-          const rawList = toArray<any>(response.data);
-          // ✅ Làm giàu dữ liệu từng xe để có tọa độ (cần thì gọi getById)
-          const carsWithLocation = await Promise.all(rawList.map(enrichCarWithCoords));
-
-          setCars(carsWithLocation as unknown as Car[]);
-          setError(null);
-        } else {
-          setError(response.error || "Failed to fetch cars");
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Unknown error");
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchCars();
-  }, []);
-
-  const refetch = async () => {
-    setLoading(true);
-    const response = await carsApi.getAll();
-    if (response.success && response.data !== undefined) {
-      const list = toArray<any>(response.data);
-      const enriched = await Promise.all(list.map(enrichCarWithCoords));
-      setCars(enriched as Car[]);
-      setError(null);
-    } else {
-      setError(response.error || "Failed to fetch cars");
-    }
-    setLoading(false);
-  };
-
-  return { cars, loading, error, refetch };
 }
 
 /**
@@ -224,4 +176,3 @@ export function useCar(id: string) {
 
   return { car, loading, error, refetch };
 }
->>>>>>> Stashed changes

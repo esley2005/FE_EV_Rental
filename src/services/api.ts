@@ -142,7 +142,7 @@ export async function apiCall<T>(
       }
     }
 
-    // Parse JSON
+
     let data;
     try {
       data = JSON.parse(text);
@@ -150,7 +150,7 @@ export async function apiCall<T>(
     } catch (e) {
   logger.warn('[API] Response is not JSON, text content:', text.substring(0, 300));
       
-      // Nếu không phải JSON nhưng response OK (200-299), coi như success
+      // check nếu repo ok thì return success
       if (response.ok) {
   logger.log('[API] Plain text response (success)');
         return {
@@ -160,36 +160,25 @@ export async function apiCall<T>(
         };
       }
       
-      // Nếu không OK và không phải JSON (có thể là HTML error page)
+  
   logger.error('[API] Failed to parse JSON for non-OK response');
       
       // Kiểm tra nếu là HTML error page
       if (text.includes('<!DOCTYPE') || text.includes('<html')) {
-<<<<<<< Updated upstream
-        console.error('[API] Server returned HTML error page - API server might be down or URL incorrect');
+        logger.error('[API] Server returned HTML error page - API server might be down or URL incorrect');
         return {
           success: false,
           error: `API server không khả dụng. Vui lòng kiểm tra lại kết nối hoặc liên hệ quản trị viên. (Status: ${response.status})`
         };
       }
       
-      // Trả về error thay vì throw để tránh crash app
-=======
-        return {
-          success: false,
-          error: `API server không khả dụng hoặc trả về HTML (Status ${response.status}). Vui lòng kiểm tra cấu hình API.`
-        };
-      }
-      
-      // Trả về lỗi có kiểm soát thay vì throw để tránh crash UI
->>>>>>> Stashed changes
+   
       return {
         success: false,
         error: `Lỗi server (Status ${response.status}): ${text.substring(0, 150)}`
       };
     }
 
-    // Kiểm tra response status sau khi parse JSON
     if (!response.ok) {
       // Xử lý validation errors (400)
       if (response.status === 400 && data?.errors) {

@@ -15,33 +15,33 @@ export default function MenuPage() {
   const [error, setError] = useState<string | null>(null);
 
   // === Gọi API xe ===
-  // SỬA NHƯ THẾ NÀY:
-useEffect(() => {
-  const fetchCars = async () => {
-    try {
-      const response = await carsApi.getAll();
-      
-      if (response.success && response.data) {
-        // Lọc xe active và chưa xóa
-        const carsData = response.data;
-        const activeCars = Array.isArray(carsData) 
-          ? carsData.filter((car: Car) => car.isActive && !car.isDeleted)
-          : [];
+  useEffect(() => {
+    const fetchCars = async () => {
+      try {
+        const response = await carsApi.getAll();
         
-        setCars(activeCars);
-        setFiltered(activeCars);
-      } else {
+        if (response.success && response.data) {
+          // Normalize C# format: { $values: [...] } -> array
+          const carsData = (response.data as any)?.$values || response.data;
+          // Lọc xe active và chưa xóa
+          const activeCars = Array.isArray(carsData) 
+            ? carsData.filter((car: Car) => car.isActive && !car.isDeleted)
+            : [];
+          
+          setCars(activeCars);
+          setFiltered(activeCars);
+        } else {
+          setError("Không thể tải danh sách xe.");
+        }
+      } catch (err) {
+        console.error("❌ Lỗi tải danh sách xe:", err);
         setError("Không thể tải danh sách xe.");
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error("❌ Lỗi tải danh sách xe:", err);
-      setError("Không thể tải danh sách xe.");
-    } finally {
-      setLoading(false);
-    }
-  };
-  fetchCars();
-}, []);
+    };
+    fetchCars();
+  }, []);
 
   // === Tìm kiếm theo tên / loại xe ===
   const onSearch = (value: string) => {
@@ -59,7 +59,6 @@ useEffect(() => {
 
   // === Lọc nhanh theo loại xe ===
   const quickFilter = (type: string) => {
-    setQuery(""); // Clear search query when filtering
     if (!type) return setFiltered(cars);
     setFiltered(cars.filter((c) => c.sizeType.toLowerCase() === type.toLowerCase()));
   };
@@ -79,13 +78,12 @@ useEffect(() => {
               onChange={(e) => setQuery(e.target.value)}
               onSearch={onSearch}
             />
-<<<<<<< Updated upstream
           </div>
 
           <Space wrap>
             <Button
               icon={<EnvironmentOutlined />}
-              onClick={() => alert("Tìm kiếm bằng bản đồ (chưa triển khai)")}
+              onClick={() => (window.location.href = "/searchmap")}
             >
               Tìm theo bản đồ
             </Button>
@@ -98,58 +96,18 @@ useEffect(() => {
       </div>
 
       {loading ? (
-        <p className="text-center mt-10 text-gray-600">Đang tải dữ liệu...</p>
+        <p className="text-center mt-10 text-gray-500">Đang tải danh sách xe...</p>
       ) : error ? (
         <p className="text-center mt-10 text-red-500">{error}</p>
-      ) : cars.length === 0 ? (
-        <p className="text-center mt-10 text-gray-500">Không có xe nào trong hệ thống.</p>
-      ) : filtered.length === 0 && query.trim() !== "" ? (
-        <p className="text-center mt-10 text-gray-500">Không tìm thấy xe nào phù hợp với "{query}".</p>
+      ) : filtered.length === 0 ? (
+        <p className="text-center mt-10 text-gray-500">Không có xe nào phù hợp.</p>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-          {(filtered.length === 0 ? cars : filtered).map((car) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+          {filtered.map((car) => (
             <CarCard key={car.id} car={car} />
           ))}
         </div>
       )}
     </div>
-=======
-
-            <Space wrap>
-              <Button
-                icon={<EnvironmentOutlined />}
-                onClick={() =>
-                  (window.location.href = "/searchmap")
-                }
-              >
-                Tìm theo bản đồ
-              </Button>
-              <Button onClick={() => quickFilter("")}>Tất cả</Button>
-              <Button onClick={() => quickFilter("Minicar")}>Minicar</Button>
-              <Button onClick={() => quickFilter("SUV")}>SUV</Button>
-              <Button onClick={() => quickFilter("Sedan")}>Sedan</Button>
-            </Space>
-          </div>
-
-          {loading ? (
-            <p className="text-center text-gray-500 mt-10">
-              Đang tải danh sách xe...
-            </p>
-          ) : error ? (
-            <p className="text-center text-red-500 mt-10">{error}</p>
-          ) : filtered.length === 0 ? (
-            <p className="text-center text-gray-500 mt-10">
-              Không có xe nào phù hợp.
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
-              {filtered.map((car) => (
-                <CarCard key={car.id} car={car} />
-              ))}
-            </div>
-          )}
-        </section>
-    </>
->>>>>>> Stashed changes
   );
 }
