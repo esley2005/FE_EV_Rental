@@ -93,7 +93,7 @@ export default function HeroSection() {
               onClick={() => setRentalType("self-drive")}
               className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all ${
                 rentalType === "self-drive"
-                  ? "bg-green-500 text-white shadow-md"
+                  ? "bg-blue-500 text-white shadow-md"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
@@ -104,7 +104,7 @@ export default function HeroSection() {
               onClick={() => setRentalType("with-driver")}
               className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all ${
                 rentalType === "with-driver"
-                  ? "bg-green-500 text-white shadow-md"
+                  ? "bg-blue-500 text-white shadow-md"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
@@ -115,7 +115,7 @@ export default function HeroSection() {
               onClick={() => setRentalType("long-term")}
               className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all ${
                 rentalType === "long-term"
-                  ? "bg-green-500 text-white shadow-md"
+                  ? "bg-blue-500 text-white shadow-md"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
@@ -169,7 +169,7 @@ export default function HeroSection() {
           {/* Search Button */}
           <button
             onClick={handleSearch}
-            className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-8 rounded-lg text-lg transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+            className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-lg transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
           >
             <SearchOutlined />
             <span>Tìm Xe</span>
