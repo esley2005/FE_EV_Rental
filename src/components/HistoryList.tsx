@@ -13,8 +13,8 @@ interface HistoryRecord {
 
 const HistoryList: React.FC = () => {
   const [dataSource, setDataSource] = useState<HistoryRecord[]>([
-    { key: "1", customer: "Nguyễn Văn A", car: "VinFast VF e34", date: "08/10/2025", status: "Đã trả" },
-    { key: "2", customer: "Trần Thị B", car: "Yadea G5", date: "09/10/2025", status: "Đang thuê" },
+    // { key: "1", customer: "Nguyễn Văn A", car: "VinFast VF e34", date: "08/10/2025", status: "Đã trả" },
+    // { key: "2", customer: "Trần Thị B", car: "Yadea G5", date: "09/10/2025", status: "Đang thuê" },
   ]);
 
   const [isModalVisible, setIsModalVisible] = useState(false);
