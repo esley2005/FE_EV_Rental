@@ -333,6 +333,9 @@ export interface User {
   address?: string;
   dateOfBirth?: string;
   avatar?: string;
+  driverLicenseStatus?: number; // 0 = chưa cập nhật/chưa xác thực, 1 = đã xác thực
+  citizenIdStatus?: number; // 0 = chưa cập nhật/chưa xác thực, 1 = đã xác thực
+  createdAt?: string;
 }
 
 export interface AuthResponse {
@@ -360,6 +363,22 @@ export interface UpdateProfileData {
 export interface ChangePasswordData {
   oldPassword: string;
   newPassword: string;
+}
+
+// Driver License API
+export interface DriverLicenseData {
+  name: string;
+  imageUrl: string; // Combined URL for both sides or JSON string of both URLs
+  rentalOrderId?: number | null;
+}
+
+// Citizen ID API
+export interface CitizenIdData {
+  name: string;
+  citizenIdNumber: string;
+  birthDate: string; // YYYY-MM-DD format
+  imageUrl: string; // Combined URL for both sides or JSON string of both URLs
+  rentalOrderId?: number | null;
 }
 
 export const authApi = {
@@ -421,6 +440,52 @@ export const authApi = {
   logout: () => {
     authUtils.logout();
   },
+};
+
+// Driver License API
+export const driverLicenseApi = {
+  // Upload/Create driver license
+  upload: (data: DriverLicenseData) =>
+    apiCall<{ message: string }>('/DriverLicense', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Update driver license
+  update: (data: DriverLicenseData & { id: number }) =>
+    apiCall<{ message: string }>(`/DriverLicense/${data.id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  // Get current user's driver license
+  getCurrent: () =>
+    apiCall<DriverLicenseData>('/DriverLicense/current', {
+      method: 'GET',
+    }),
+};
+
+// Citizen ID API
+export const citizenIdApi = {
+  // Upload/Create citizen ID
+  upload: (data: CitizenIdData) =>
+    apiCall<{ message: string }>('/CitizenId', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Update citizen ID
+  update: (data: CitizenIdData & { id: number }) =>
+    apiCall<{ message: string }>(`/CitizenId/${data.id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  // Get current user's citizen ID
+  getCurrent: () =>
+    apiCall<CitizenIdData>('/CitizenId/current', {
+      method: 'GET',
+    }),
 };
 
 // Rental Order API
