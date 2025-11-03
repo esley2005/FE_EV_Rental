@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from 'react';
-import { Card, Form, Input, Button, Upload, message, Steps, Descriptions, Alert, Space, Tag } from 'antd';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Card, Form, Input, Button, Upload, message, Descriptions, Alert, Space, Tag, Table, Typography } from 'antd';
+import { authApi, type User } from '@/services/api';
 import SystemVerification from './SystemVerification';
 import { 
   IdcardOutlined, 
@@ -12,8 +13,8 @@ import {
   SearchOutlined
 } from '@ant-design/icons';
 
-const { Step } = Steps;
 const { TextArea } = Input;
+const { Title } = Typography;
 
 interface CustomerInfo {
   id: string;
@@ -32,10 +33,12 @@ interface DocumentVerificationProps {
 }
 
 export default function DocumentVerification({ mode = 'check-documents' }: DocumentVerificationProps) {
-  const [currentStep, setCurrentStep] = useState(0);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [verificationStatus, setVerificationStatus] = useState<'pending' | 'verified' | 'rejected'>('pending');
   const [form] = Form.useForm();
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [customers, setCustomers] = useState<CustomerInfo[]>([]);
 
   // Mock data - trong thực tế sẽ gọi API
   const mockCustomerData: CustomerInfo = {
@@ -50,16 +53,37 @@ export default function DocumentVerification({ mode = 'check-documents' }: Docum
     licenseExpiry: '2025-12-31'
   };
 
-  const handleSearchCustomer = (values: { phone: string; idCard: string }) => {
-    // Mock search - trong thực tế sẽ gọi API
-    if (values.phone === '0901234567' || values.idCard === '123456789012') {
-      setCustomerInfo(mockCustomerData);
-      setCurrentStep(1);
-      message.success('Tìm thấy thông tin khách hàng');
-    } else {
-      message.error('Không tìm thấy thông tin khách hàng');
-    }
-  };
+  // Tải danh sách khách hàng từ API sẵn có (userService)
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setLoading(true);
+        // Lấy từ auth API chuẩn
+        const res = await authApi.getAllUsers();
+        const users: any[] = Array.isArray((res as any)?.data) ? (res as any).data : [];
+        if (!mounted) return;
+        const mapped: CustomerInfo[] = users.map((u: any, idx: number) => ({
+          id: String(u.userId ?? u.id ?? idx + 1),
+          fullName: u.fullName || u.name || u.username || 'Chưa rõ',
+          phone: u.phone || u.phoneNumber || '',
+          email: u.email || u.mail || '',
+          licenseNumber: '',
+          idCardNumber: '',
+          address: u.address || u.homeAddress || '',
+          dateOfBirth: u.dateOfBirth || u.dob || '',
+          licenseExpiry: '',
+        }));
+        setCustomers(mapped);
+      } catch (e) {
+        // fallback: dùng mock nếu API không sẵn
+        setCustomers([mockCustomerData]);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   const handleDocumentUpload = (info: any) => {
     if (info.file.status === 'done') {
@@ -72,43 +96,36 @@ export default function DocumentVerification({ mode = 'check-documents' }: Docum
   const handleVerifyDocuments = () => {
     // Mock verification process
     setVerificationStatus('verified');
-    setCurrentStep(2);
     message.success('Xác thực giấy tờ thành công');
   };
 
   const handleRejectDocuments = () => {
     setVerificationStatus('rejected');
-    setCurrentStep(2);
     message.error('Giấy tờ không hợp lệ');
   };
 
-  const renderSearchStep = () => (
-    <Card title="🔍 Tìm kiếm khách hàng" className="mb-4">
-      <Form form={form} onFinish={handleSearchCustomer} layout="vertical">
-        <Form.Item
-          name="phone"
-          label="Số điện thoại"
-          rules={[{ required: true, message: 'Vui lòng nhập số điện thoại' }]}
-        >
-          <Input prefix="📱" placeholder="Nhập số điện thoại" />
-        </Form.Item>
-        
-        <Form.Item
-          name="idCard"
-          label="Số CCCD/CMND"
-          rules={[{ required: true, message: 'Vui lòng nhập số CCCD/CMND' }]}
-        >
-          <Input prefix="🆔" placeholder="Nhập số CCCD/CMND" />
-        </Form.Item>
+  const filteredCustomers = useMemo(() => {
+    const key = search.trim().toLowerCase();
+    if (!key) return customers;
+    return customers.filter((c) =>
+      [c.phone, c.fullName, c.email, c.idCardNumber].some((v) => (v || '').toLowerCase().includes(key))
+    );
+  }, [search, customers]);
 
-        <Form.Item>
-          <Button type="primary" htmlType="submit" icon={<SearchOutlined />} block>
-            Tìm kiếm khách hàng
-          </Button>
-        </Form.Item>
-      </Form>
-    </Card>
-  );
+  const customersColumns = [
+    { title: 'Mã KH', dataIndex: 'id', key: 'id', width: 100 },
+    { title: 'Họ tên', dataIndex: 'fullName', key: 'fullName' },
+    { title: 'SĐT', dataIndex: 'phone', key: 'phone', width: 160 },
+    { title: 'Email', dataIndex: 'email', key: 'email' },
+    {
+      title: 'Thao tác',
+      key: 'action',
+      width: 140,
+      render: (_: any, record: CustomerInfo) => (
+        <Button type="link" onClick={() => setCustomerInfo(record)}>Chọn</Button>
+      ),
+    },
+  ];
 
   const renderCustomerInfo = () => (
     <Card title="👤 Thông tin khách hàng" className="mb-4">
@@ -233,7 +250,6 @@ export default function DocumentVerification({ mode = 'check-documents' }: Docum
       
       <div className="mt-4">
         <Button type="primary" onClick={() => {
-          setCurrentStep(0);
           setCustomerInfo(null);
           setVerificationStatus('pending');
           form.resetFields();
@@ -250,20 +266,31 @@ export default function DocumentVerification({ mode = 'check-documents' }: Docum
 
   return (
     <div>
-      <Steps current={currentStep} className="mb-6">
-        <Step title="Tìm kiếm" description="Tìm thông tin khách hàng" />
-        <Step title="Kiểm tra" description="Xác thực giấy tờ" />
-        <Step title="Kết quả" description="Hoàn thành xác thực" />
-      </Steps>
+      <Card className="mb-4">
+        <Title level={5} style={{ marginBottom: 12 }}>Danh sách khách hàng</Title>
+        <Input.Search
+          placeholder="Tìm theo số điện thoại"
+          allowClear
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ maxWidth: 360, marginBottom: 12 }}
+        />
+        <Table
+          loading={loading}
+          columns={customersColumns as any}
+          dataSource={filteredCustomers}
+          rowKey={(r) => r.id}
+          pagination={{ pageSize: 8 }}
+        />
+      </Card>
 
-      {currentStep === 0 && renderSearchStep()}
-      {currentStep === 1 && (
+      {customerInfo && (
         <>
           {renderCustomerInfo()}
           {renderDocumentCheck()}
+          {verificationStatus !== 'pending' && renderVerificationResult()}
         </>
       )}
-      {currentStep === 2 && renderVerificationResult()}
     </div>
   );
 }
