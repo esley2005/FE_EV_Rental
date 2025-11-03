@@ -217,7 +217,7 @@ export default function ProfilePage() {
       setLicenseVerified(false); // mock: set not verified yet
       api.success({
         message: "Gửi GPLX thành công",
-        description: "Yêu cầu xác thực GPLX đã được gửi, admin sẽ kiểm tra.",
+        description: "Yêu cầu xác thực GPLX đã được gửi, chúng tôi sẽ kiểm tra",
         placement: "topRight",
       });
       console.log("GPLX payload:", values, licenseImage);
@@ -434,22 +434,62 @@ export default function ProfilePage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Upload area */}
                   <div>
-                    <Form.Item label="Hình ảnh GPLX (mặt trước / sau)">
-                      <Upload
-                        listType="picture-card"
-                        showUploadList={false}
-                        beforeUpload={beforeUploadLicense}
-                      >
-                        {licenseImage ? (
-                          <img src={licenseImage} alt="GPLX" style={{ width: '100%', borderRadius: 8 }} />
-                        ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                            <UploadOutlined style={{ fontSize: 24 }} />
-                            <div className="text-sm text-gray-500">Kéo thả hoặc bấm để tải lên</div>
-                          </div>
-                        )}
-                      </Upload>
-                    </Form.Item>
+                    <Form.Item label="GPLX - Mặt trước" name="licenseFront" rules={[{ required: true, message: "Vui lòng tải ảnh mặt trước" }]}>
+        <Upload
+          listType="picture-card"
+          showUploadList={false}
+          beforeUpload={(file) => {
+            const isImage = file.type.startsWith("image/");
+            if (!isImage) {
+              message.error("Chỉ được tải ảnh (jpg/png)");
+              return Upload.LIST_IGNORE;
+            }
+            const reader = new FileReader();
+            reader.onload = (e) => setLicenseImage((prev: any) => ({ ...prev, front: e.target?.result as string }));
+            reader.readAsDataURL(file);
+            return false; // không auto upload
+          }}
+        >
+          {licenseImage?.front ? (
+            <img src={licenseImage.front} alt="front" style={{ width: '100%', borderRadius: 8 }} />
+          ) : (
+            <div className="flex flex-col items-center gap-2">
+              <UploadOutlined style={{ fontSize: 22 }} />
+              <div className="text-xs text-gray-500">Tải ảnh mặt trước</div>
+            </div>
+          )}
+        </Upload>
+      </Form.Item>
+    </div>
+
+    {/* Upload Mặt sau */}
+    <div>
+      <Form.Item label="GPLX - Mặt sau" name="licenseBack" rules={[{ required: true, message: "Vui lòng tải ảnh mặt sau" }]}>
+        <Upload
+          listType="picture-card"
+          showUploadList={false}
+          beforeUpload={(file) => {
+            const isImage = file.type.startsWith("image/");
+            if (!isImage) {
+              message.error("Chỉ được tải ảnh (jpg/png)");
+              return Upload.LIST_IGNORE;
+            }
+            const reader = new FileReader();
+            reader.onload = (e) => setLicenseImage((prev: any) => ({ ...prev, back: e.target?.result as string }));
+            reader.readAsDataURL(file);
+            return false;
+          }}
+        >
+          {licenseImage?.back ? (
+            <img src={licenseImage.back} alt="back" style={{ width: '100%', borderRadius: 8 }} />
+          ) : (
+            <div className="flex flex-col items-center gap-2">
+              <UploadOutlined style={{ fontSize: 22 }} />
+              <div className="text-xs text-gray-500">Tải ảnh mặt sau</div>
+            </div>
+          )}
+        </Upload>
+      </Form.Item>
                   </div>
 
                   {/* Info fields */}
@@ -484,3 +524,4 @@ export default function ProfilePage() {
     </Layout>
   );
 }
+ 
