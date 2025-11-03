@@ -422,6 +422,43 @@ export const authApi = {
       method: 'GET',
     }),
 
+  // Lấy tất cả user (khách hàng) từ hệ thống auth
+  getAllUsers: async () => {
+    const candidates = [
+      '/user', '/users', '/user/all', '/auth/users',
+      '/User', '/User/all', '/User/GetAll', '/User/List'
+    ];
+    for (const ep of candidates) {
+      const res = await apiCall<any>(ep, { method: 'GET' });
+      const raw = (res as any)?.data ?? res;
+      // Unwrap common server response shapes
+      const data = raw?.data ?? raw; // supports { isSuccess, data } or direct array
+      const values = data?.$values ?? data?.data?.$values; // supports .data.$values
+      const arr = Array.isArray(data)
+        ? data
+        : Array.isArray(values)
+        ? values
+        : Array.isArray((data as any)?.items)
+        ? (data as any).items
+        : null;
+      if (arr) {
+        // Normalize field names to match User type
+        const normalized = (arr as any[]).map((u) => ({
+          id: u.userId ?? u.id,
+          email: u.email,
+          fullName: u.fullName ?? u.name,
+          role: u.role ?? 'Customer',
+          phone: u.phone ?? u.phoneNumber,
+          address: u.address,
+          dateOfBirth: u.dateOfBirth ?? u.dob,
+          avatar: u.avatar,
+        })) as User[];
+        return { success: true, data: normalized } as ApiResponse<User[]>;
+      }
+    }
+    return { success: true, data: [] } as ApiResponse<User[]>;
+  },
+
   // Cập nhật thông tin user
   updateProfile: (data: UpdateProfileData) =>
     apiCall<User>('/user/profile', {
