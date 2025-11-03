@@ -23,7 +23,6 @@ import {
   Row,
   Col,
   Statistic,
-  Progress,
   Input,
   Badge,
 } from "antd";
@@ -33,6 +32,8 @@ import ReturnForm from "@/components/ReturnForm";
 import DocumentVerification from "@/components/DocumentVerification";
 import CarManagement from "@/components/admin/CarManagement";
 import { authUtils } from "@/utils/auth";
+import { carsApi as carsApiWrapped, bookingsApi as bookingsApiWrapped, rentalOrderApi, type ApiResponse } from "@/services/api";
+import { getUsers } from "@/services/userService";
 import { useRouter } from "next/navigation"; // ✅ Đúng cho App Router
 
 const { Header, Sider, Content, Footer } = Layout;
@@ -93,6 +94,13 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const [allowed, setAllowed] = useState(false);
   const [denied, setDenied] = useState(false);
   const [selectedCar, setSelectedCar] = useState<{ carId: string; carName: string } | null>(null);
+  const [metricsLoading, setMetricsLoading] = useState(true);
+  const [metrics, setMetrics] = useState({
+    revenue: 0,
+    orders: 0,
+    templates: 0,
+    clients: 0,
+  });
 
   const router = useRouter();
 
@@ -111,6 +119,74 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     setAllowed(true);
     setDenied(false);
   }, [router]);
+
+  // 📊 Load dashboard metrics from real APIs
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setMetricsLoading(true);
+
+        type UnknownApi = ApiResponse<unknown> | unknown;
+        const rentalApi = (rentalOrderApi as unknown as { getAll?: () => Promise<ApiResponse<unknown>> }).getAll?.();
+        const [ordersRes, carsRes, usersRes] = await Promise.all<[
+          UnknownApi,
+          UnknownApi,
+          unknown
+        ]>([
+          (rentalApi as Promise<UnknownApi>) ?? (bookingsApiWrapped.getAll() as Promise<UnknownApi>),
+          carsApiWrapped.getAll() as Promise<UnknownApi>,
+          getUsers().catch(() => []) as Promise<unknown>,
+        ]);
+
+        // Orders and revenue
+        let revenue = 0;
+        let orders = 0;
+        const hasDataArray = (res: unknown): res is { data: unknown[] } =>
+          typeof res === "object" && res !== null && Array.isArray((res as Record<string, unknown>).data);
+        const getArray = (res: unknown): unknown[] => {
+          if (hasDataArray(res)) return res.data;
+          return Array.isArray(res) ? res : [];
+        };
+        const arr = getArray(ordersRes);
+        if (arr.length) {
+          orders = arr.length;
+          const getNumberField = (obj: unknown, keys: string[]): number => {
+            if (typeof obj === "object" && obj !== null) {
+              const rec = obj as Record<string, unknown>;
+              for (const k of keys) {
+                if (k in rec) {
+                  const v = rec[k];
+                  const n = typeof v === "number" ? v : Number(v);
+                  if (!Number.isNaN(n)) return n;
+                }
+              }
+            }
+            return 0;
+          };
+          revenue = arr.reduce<number>((sum, o) => sum + getNumberField(o, ["total", "Total"]), 0);
+        }
+
+        // Vehicles count
+        const vehiclesArray = getArray(carsRes);
+        const vehiclesCount = vehiclesArray.length;
+
+        // Clients count
+        const clientsCount = Array.isArray(usersRes) ? usersRes.length : 0;
+
+        if (mounted) {
+          setMetrics({ revenue, orders, templates: vehiclesCount, clients: clientsCount });
+        }
+      } catch {
+        // swallow; metrics stay default
+      } finally {
+        if (mounted) setMetricsLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // 📦 Mở modal bàn giao xe
   const handleOpenDelivery = (car: { carId: string; carName: string }) => {
@@ -253,47 +329,28 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           {/* ElaAdmin-like top summary cards */}
           <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
             <Col xs={24} sm={12} md={6}>
-              <Card bordered hoverable>
-                <Statistic title="Revenue" prefix={<span>₫</span>} value={23569} precision={0} />
+              <Card bordered hoverable loading={metricsLoading}>
+                <Statistic title="Doanh thu" prefix={<span>₫</span>} value={metrics.revenue} precision={0} />
               </Card>
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <Card bordered hoverable>
-                <Statistic title="Orders" value={3435} />
+              <Card bordered hoverable loading={metricsLoading}>
+                <Statistic title="Đơn hàng" value={metrics.orders} />
               </Card>
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <Card bordered hoverable>
-                <Statistic title="Templates" value={349} />
+              <Card bordered hoverable loading={metricsLoading}>
+                <Statistic title="Số xe" value={metrics.templates} />
               </Card>
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <Card bordered hoverable>
-                <Statistic title="Clients" value={2986} />
+              <Card bordered hoverable loading={metricsLoading}>
+                <Statistic title="Khách hàng" value={metrics.clients} />
               </Card>
             </Col>
           </Row>
 
-          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-            <Col xs={24} md={16}>
-              <Card title="Traffic" bordered>
-                <Progress percent={68} showInfo={false} strokeColor="#1447E6" />
-                <div style={{ height: 8 }} />
-                <Progress percent={54} showInfo={false} strokeColor="#22c55e" />
-                <div style={{ height: 8 }} />
-                <Progress percent={32} showInfo={false} strokeColor="#ef4444" />
-              </Card>
-            </Col>
-            <Col xs={24} md={8}>
-              <Card title="KPIs" bordered>
-                <div style={{ display: "grid", gap: 12 }}>
-                  <Statistic title="Bounce Rate" value={32.5} suffix="%" />
-                  <Statistic title="Unique Visitors" value={23681} />
-                  <Statistic title="Targeted Visitors" value={9863} />
-                </div>
-              </Card>
-            </Col>
-          </Row>
+          {/* Đã bỏ các khối Lưu lượng và Chỉ số theo yêu cầu */}
 
           <div
             style={{
