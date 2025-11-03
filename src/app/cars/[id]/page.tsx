@@ -4,12 +4,15 @@ import React, { useState, useEffect } from "react";
 import { notFound, useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { Spin } from "antd";
+import { Spin, message, notification, Modal, Button } from "antd";
+import { StarOutlined, ShareAltOutlined, HeartOutlined, SafetyOutlined, EnvironmentOutlined, QuestionCircleOutlined, InfoCircleOutlined } from "@ant-design/icons";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import BookingModal from "@/components/BookingModal";
-import { carsApi } from "@/services/api";
+import { carsApi, authApi } from "@/services/api";
 import type { Car } from "@/types/car";
+import type { User } from "@/services/api";
+import { authUtils } from "@/utils/auth";
 //1
 // params.id chính là số ID của xe trong đường dẫn (VD: /cars/5 → id = "5")
 interface CarDetailPageProps {
@@ -28,6 +31,15 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   const [car, setCar] = useState<Car | null>(null);
   const [otherCars, setOtherCars] = useState<Car[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [documentType, setDocumentType] = useState<'id' | 'passport'>('id');
+  const [showFullDescription, setShowFullDescription] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [documentWarningModal, setDocumentWarningModal] = useState<{
+    visible: boolean;
+    title: string;
+    content: string;
+  }>({ visible: false, title: '', content: '' });
 //3
 //  → Gọi API /api/Car để lấy tất cả xe
 // → Lọc ra những xe còn hoạt động (isActive && !isDeleted)
@@ -72,6 +84,41 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     loadCar();
   }, [resolvedParams.id]);
 
+  // Load user profile để kiểm tra status
+  useEffect(() => {
+    const loadUserProfile = async () => {
+      // Nếu đã có user trong localStorage, sử dụng luôn
+      const localUser = authUtils.getCurrentUser();
+      if (localUser) {
+        setUser(localUser);
+        // Vẫn gọi API để lấy thông tin mới nhất (bao gồm status)
+        try {
+          const response = await authApi.getProfile();
+          if (response.success && response.data) {
+            setUser(response.data);
+            // Cập nhật lại localStorage
+            localStorage.setItem('user', JSON.stringify(response.data));
+          }
+        } catch (error) {
+          console.error('Load user profile error:', error);
+        }
+      } else if (authUtils.isAuthenticated()) {
+        // Có token nhưng chưa có user trong localStorage, gọi API
+        try {
+          const response = await authApi.getProfile();
+          if (response.success && response.data) {
+            setUser(response.data);
+            localStorage.setItem('user', JSON.stringify(response.data));
+          }
+        } catch (error) {
+          console.error('Load user profile error:', error);
+        }
+      }
+    };
+
+    loadUserProfile();
+  }, []);
+
 //4 
 //Hiện thị khi đang load 
 //Dùng spinner từ thư viện Ant Design
@@ -95,6 +142,80 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 // 1500000 → 1.500.000 ₫
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+  };
+
+  // Kiểm tra status giấy tờ trước khi cho phép thuê
+  const handleBookingClick = async () => {
+    // Kiểm tra authentication trước
+    if (!authUtils.isAuthenticated()) {
+      message.warning('Vui lòng đăng nhập để thuê xe');
+      router.push('/login');
+      return;
+    }
+
+    // Nếu chưa có thông tin user trong state, thử lấy từ localStorage hoặc gọi API
+    let currentUser = user;
+    if (!currentUser) {
+      // Thử lấy từ localStorage trước
+      const localUser = authUtils.getCurrentUser();
+      if (localUser) {
+        currentUser = localUser as User;
+        setUser(localUser as User);
+      } else {
+        // Gọi API để lấy thông tin user
+        const response = await authApi.getProfile();
+        if (response.success && response.data) {
+          currentUser = response.data;
+          setUser(response.data);
+          localStorage.setItem('user', JSON.stringify(response.data));
+        } else {
+          message.error('Không thể tải thông tin tài khoản. Vui lòng thử lại.');
+          return;
+        }
+      }
+    }
+
+    // Kiểm tra driverLicenseStatus
+    const driverLicenseStatus = currentUser?.driverLicenseStatus ?? 0;
+    // Kiểm tra citizenIdStatus (hoặc passport status tùy theo documentType)
+    const citizenIdStatus = currentUser?.citizenIdStatus ?? 0;
+
+    // Kiểm tra xem thiếu giấy tờ gì
+    const missingDriverLicense = driverLicenseStatus !== 1;
+    const missingCitizenId = documentType === 'id' && citizenIdStatus !== 1;
+
+    // Nếu thiếu cả 2 loại giấy tờ
+    if (missingDriverLicense && missingCitizenId) {
+      setDocumentWarningModal({
+        visible: true,
+        title: 'Thiếu giấy tờ cần thiết',
+        content: 'Vui lòng cập nhật Giấy phép lái xe và Căn cước công dân trong trang cá nhân để có thể thuê xe.',
+      });
+      return;
+    }
+
+    // Nếu chỉ thiếu giấy phép lái xe
+    if (missingDriverLicense) {
+      setDocumentWarningModal({
+        visible: true,
+        title: 'Thiếu Giấy phép lái xe',
+        content: 'Vui lòng cập nhật Giấy phép lái xe trong trang cá nhân để có thể thuê xe.',
+      });
+      return;
+    }
+
+    // Nếu chỉ thiếu CCCD (khi chọn loại giấy tờ là CCCD)
+    if (missingCitizenId) {
+      setDocumentWarningModal({
+        visible: true,
+        title: 'Thiếu Căn cước công dân',
+        content: 'Vui lòng cập nhật Căn cước công dân trong trang cá nhân để có thể thuê xe.',
+      });
+      return;
+    }
+
+    // Nếu cả 2 status đều = 1 thì cho phép mở modal
+    setIsBookingModalOpen(true);
   };
 
 //5
@@ -129,135 +250,380 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
           </ol>
         </nav>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* Hình ảnh xe */}
-          <div className="space-y-4">
-            <div className="bg-white rounded-lg shadow-lg p-4">
-              <img
-                src={car.imageUrl || '/logo_ev.png'}
-                alt={car.name}
-                className="w-full h-80 object-cover rounded-lg"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = '/logo_ev.png';
-                }}
-              />
+        {/* Hình ảnh xe */}
+        <div className="bg-white rounded-lg shadow-lg p-4 mb-6">
+          <img
+            src={car.imageUrl || '/logo_ev.png'}
+            alt={car.name}
+            className="w-full h-96 object-cover rounded-lg"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = '/logo_ev.png';
+            }}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+          {/* Phần thông tin xe chính - Chiếm 2/3 cột */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Vehicle Header */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex-1">
+                  <h1 className="text-3xl font-bold text-gray-900 mb-3">
+                    {car.name} {car.model && car.model}
+                  </h1>
+                  
+                  {/* Rating và số chuyến */}
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="flex items-center gap-1">
+                      <StarOutlined className="text-yellow-400 text-lg" />
+                      <span className="font-semibold text-gray-900">5.0</span>
+                    </div>
+                    <span className="text-sm text-gray-500">100+ chuyến</span>
+                  </div>
+
+                  {/* Location */}
+                  <p className="text-sm text-gray-500 mb-4">
+                    {car.carRentalLocations?.$values?.[0]?.address || 
+                     car.carRentalLocations?.address || 
+                     "Địa chỉ giao nhận xe sẽ được thông báo sau"}
+                  </p>
+
+                  {/* Badges */}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-2 bg-blue-500 text-white px-3 py-1.5 rounded-full text-sm">
+                      <SafetyOutlined className="text-white" />
+                      <span>Miễn thế chấp</span>
+                    </div>
+                    {/* <div className="flex items-center gap-2 bg-red-500 text-white px-3 py-1.5 rounded-full text-sm">
+                      <EnvironmentOutlined className="text-white" />
+                      <span>Giao xe tận nơi</span>
+                    </div> */}
+                  </div>
+                </div>
+
+                {/* Action Icons */}
+                <div className="flex items-center gap-3">
+                  <button className="p-2 rounded-full hover:bg-gray-100 transition-colors">
+                    <ShareAltOutlined className="text-gray-600 text-lg" />
+                  </button>
+                  <button 
+                    onClick={() => setIsFavorite(!isFavorite)}
+                    className={`p-2 rounded-full transition-colors ${
+                      isFavorite ? 'text-red-500' : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    <HeartOutlined className={`text-lg ${isFavorite ? 'fill-current' : ''}`} />
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow p-4">
-              <div className={`text-center p-3 rounded-lg ${car.status === 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                <span className="font-semibold">
-                  {car.status === 0 ? '🚗 Xe đang có sẵn' : '⛔ Hết xe'}
-                </span>
+            {/* Đặc điểm (Features) Section */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Đặc điểm</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-gray-200">
+                {/* Truyền động */}
+                <div className="flex flex-col items-center text-center p-4">
+                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-3">
+                    <svg className="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
+                    </svg>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-1">Truyền động</p>
+                  <p className="font-bold text-gray-900">Số tự động</p>
+                </div>
+
+                {/* Số ghế */}
+                <div className="flex flex-col items-center text-center p-4">
+                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-3">
+                    <svg className="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                    </svg>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-1">Số ghế</p>
+                  <p className="font-bold text-gray-900">{car.seats} chỗ</p>
+                </div>
+
+                {/* Nhiên liệu */}
+                <div className="flex flex-col items-center text-center p-4">
+                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-3">
+                    <svg className="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                    </svg>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-1">Nhiên liệu</p>
+                  <p className="font-bold text-gray-900">Điện</p>
+                </div>
+
+                {/* Tiêu hao */}
+                <div className="flex flex-col items-center text-center p-4">
+                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-3">
+                    <svg className="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-1">Tiêu hao</p>
+                  <p className="font-bold text-gray-900">{car.batteryDuration}km/100%</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Mô tả (Description) Section */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Mô tả</h2>
+              
+              {/* Rental Policies */}
+              <ul className="space-y-2 mb-4 text-gray-900">
+                {/* <li className="flex items-start">
+                  <span className="mr-2 text-green-600">•</span>
+                  <span>Hoàn tiền đổ xăng dư.</span>
+                </li> */}
+                <li className="flex items-start">
+                  <span className="mr-2 text-green-600">•</span>
+                  <span>Miễn phí vượt dưới 1h.</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="mr-2 text-green-600">•</span>
+                  <span>Miễn phí vượt dưới 10Km.</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="mr-2 text-green-600">•</span>
+                  <span>Sử dụng miễn phí: Nước, Đồ ăn vặt, Khăn giấy có trong gói EV CARKIT khi thuê xe</span>
+                </li>
+              </ul>
+
+              {/* Car Description */}
+              <div className="mb-3">
+                <p className="text-gray-900 leading-relaxed">
+                  {showFullDescription ? (
+                    <>
+                      Xe {car.sizeType} {car.seats} chỗ với thiết kế mạnh mẽ và tính năng linh hoạt, 
+                      phù hợp cho gia đình. Xe điện thân thiện với môi trường, tiết kiệm điện và 
+                      vận hành êm ái. Quãng đường lên tới {car.batteryDuration}km, đáp ứng nhu cầu di chuyển 
+                      hàng ngày của bạn. Dung tích cốp {car.trunkCapacity}L rộng rãi, đủ không gian cho hành lý.
+                    </>
+                  ) : (
+                    <>
+                      Xe {car.sizeType} {car.seats} chỗ với thiết kế mạnh mẽ và tính năng linh hoạt, 
+                      phù hợp cho gia đình...
+                    </>
+                  )}
+                </p>
+              </div>
+              
+              <button
+                onClick={() => setShowFullDescription(!showFullDescription)}
+                className="text-green-600 hover:text-green-700 font-medium text-sm"
+              >
+                {showFullDescription ? 'Thu gọn' : 'Xem thêm'}
+              </button>
+            </div>
+
+            {/* Các tiện nghi khác (Other Amenities) Section */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Các tiện nghi khác</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                {[
+                  { name: 'Bản đồ', icon: '🗺️' },
+                  { name: 'Bluetooth', icon: '📶' },
+                  { name: 'Camera 360', icon: '📷' },
+                  { name: 'Camera hành trình', icon: '🎥' },
+                  { name: 'Định vị GPS', icon: '📍' },
+                  { name: 'Lốp dự phòng', icon: '🛞' },
+                  { name: 'Túi khí an toàn', icon: '💨' },
+                  { name: 'Kết nối USB', icon: '🔌' },
+                  { name: 'Màn hình cảm ứng', icon: '📺' },
+                  { name: 'Điều hòa', icon: '❄️' },
+                  { name: 'Cửa sổ trời', icon: '☀️' },
+                  { name: 'Hệ thống âm thanh', icon: '🔊' },
+                  { name: 'Đèn LED', icon: '💡' },
+                  { name: 'Ghế da', icon: '🪑' },
+                  { name: 'Cảnh báo va chạm', icon: '⚠️' },
+                ].map((amenity, index) => (
+                  <div key={index} className="flex items-center gap-2 text-gray-900">
+                    <span className="text-lg">{amenity.icon}</span>
+                    <span className="text-sm">{amenity.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Giấy tờ thuê xe (Rental Documents) Section */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <div className="flex items-center gap-2 mb-2">
+                <h2 className="text-xl font-bold text-gray-900">Giấy tờ thuê xe</h2>
+                <QuestionCircleOutlined className="text-gray-400 cursor-help" />
+              </div>
+              <p className="text-sm text-gray-500 mb-4">Chọn 1 trong 2 hình thức</p>
+              
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 p-3 "
+                      >
+               
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                    </svg>
+                    <span className="text-gray-900">GPLX (đối chiếu) & CCCD (đối chiếu VNeID)</span>
+                  </div>
+                </label>
+                
+                <label className="flex items-center gap-3 p-3"
+                   >
+                
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                    </svg>
+                    <span className="text-gray-900">GPLX (đối chiếu) & Passport (giữ lại)</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Tài sản thế chấp (Collateral) Section */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <h2 className="text-xl font-bold text-gray-900">Tài sản thế chấp</h2>
+                <QuestionCircleOutlined className="text-gray-400 cursor-help" />
+              </div>
+              
+              <div className="bg-orange-100 border border-orange-200 rounded-lg p-4">
+                <p className="text-gray-900 text-sm">
+                  Không yêu cầu khách thuê thế chấp Tiền mặt hoặc Xe máy
+                </p>
+              </div>
+            </div>
+
+            {/* Phụ phí có thể phát sinh (Additional Fees) Section */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <h2 className="text-xl font-bold text-green-600 mb-4">Phụ phí có thể phát sinh</h2>
+              <div className="space-y-4">
+                {/* Phí vượt giới hạn */}
+                <div className="flex items-start gap-3 p-3 border-b border-gray-100 last:border-b-0">
+                  <InfoCircleOutlined className="text-blue-500 text-lg mt-1 flex-shrink-0" />
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <h3 className="font-bold text-gray-900 mb-1">Phí vượt giới hạn</h3>
+                        <p className="text-sm text-gray-600">
+                          Phụ phí phát sinh nếu lộ trình di chuyển vượt quá 350km khi thuê xe 1 ngày
+                        </p>
+                      </div>
+                      <span className="text-green-600 font-bold text-sm whitespace-nowrap">3.000₫/km</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Phí quá giờ */}
+                <div className="flex items-start gap-3 p-3 border-b border-gray-100 last:border-b-0">
+                  <InfoCircleOutlined className="text-blue-500 text-lg mt-1 flex-shrink-0" />
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <h3 className="font-bold text-gray-900 mb-1">Phí quá giờ</h3>
+                        <p className="text-sm text-gray-600">
+                          Phụ phí phát sinh nếu hoàn trả xe trễ giờ. Trường hợp trễ quá 5 giờ, phụ phí thêm 1 ngày thuê
+                        </p>
+                      </div>
+                      <span className="text-green-600 font-bold text-sm whitespace-nowrap">70.000₫/giờ</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Phí vệ sinh */}
+                <div className="flex items-start gap-3 p-3 border-b border-gray-100 last:border-b-0">
+                  <InfoCircleOutlined className="text-blue-500 text-lg mt-1 flex-shrink-0" />
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <h3 className="font-bold text-gray-900 mb-1">Phí vệ sinh</h3>
+                        <p className="text-sm text-gray-600">
+                          Phụ phí phát sinh khi xe hoàn trả không đảm bảo vệ sinh (nhiều vết bẩn, bùn cát, sình lầy...)
+                        </p>
+                      </div>
+                      <span className="text-green-600 font-bold text-sm whitespace-nowrap">70.000₫</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Phí khử mùi */}
+                <div className="flex items-start gap-3 p-3">
+                  <InfoCircleOutlined className="text-blue-500 text-lg mt-1 flex-shrink-0" />
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <h3 className="font-bold text-gray-900 mb-1">Phí khử mùi</h3>
+                        <p className="text-sm text-gray-600">
+                          Phụ phí phát sinh khi xe hoàn trả bị ám mùi khó chịu (mùi thuốc lá, thực phẩm nặng mùi...)
+                        </p>
+                      </div>
+                      <span className="text-green-600 font-bold text-sm whitespace-nowrap">500.000₫</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Thông tin xe */}
-          <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow-lg p-6">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                {car.name}
-              </h1>
-              <p className="text-lg text-gray-600 mb-4">{car.model}</p>
-
-              {/* Thông số cơ bản */}
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="flex items-center gap-2">
-                  <Image
-                    src="/typecar.png"
-                    alt="Loại xe"
-                    width={28}
-                    height={28}
-                  />
-                  <div>
-                    <p className="text-sm text-gray-500">Loại xe</p>
-                    <p className="font-semibold">{car.sizeType}</p>
-                  </div>
+          {/* Phần booking panel - Chiếm 1/3 cột */}
+          <div className="lg:col-span-1">
+            <div className="bg-gray-50 rounded-lg shadow-lg p-6 sticky top-4">
+              {/* Status và giá */}
+              <div className="mb-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="line-through text-gray-500">752K</span>
+                  <span className="bg-red-500 text-white px-2 py-0.5 rounded-full text-xs">-21%</span>
                 </div>
+                <p className="text-3xl font-bold text-gray-900">
+                  {Math.round(car.rentPricePerDay / 1000)}K/ngày
+                </p>
+              </div>
 
-                <div className="flex items-center gap-2">
-                  <Image
-                    src="/battery.png"
-                    alt="Quãng đường"
-                    width={28}
-                    height={28}
-                  />
-                  <div>
-                    <p className="text-sm text-gray-500">Quãng đường</p>
-                    <p className="font-semibold">{car.batteryDuration} km</p>
-                  </div>
+              {/* Status */}
+              <div className={`text-center p-3 rounded-lg mb-6 ${car.status === 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                <span className="font-semibold text-gray-900">
+                  {car.status === 0 ? 'Xe đang có sẵn' : 'Hết xe'}
+                </span>
+              </div>
+
+              {/* Booking Button */}
+              <button
+                onClick={handleBookingClick}
+                disabled={car.status !== 0}
+                className={`w-full py-4 px-6 rounded-lg font-bold text-lg transition-colors mb-4 ${
+                  car.status === 0 
+                    ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                    : 'bg-gray-300 text-gray-900 cursor-not-allowed'
+                }`}
+              >
+                {car.status === 0 ? '+ CHỌN THUÊ' : 'Xe đã hết'}
+              </button>
+
+              {/* Quick Info */}
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-900">Loại xe</span>
+                  <span className="font-semibold text-gray-900">{car.sizeType}</span>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <Image
-                    src="/seat.png"
-                    alt="Số chỗ ngồi"
-                    width={28}
-                    height={28}
-                  />
-                  <div>
-                    <p className="text-sm text-gray-500">Số chỗ ngồi</p>
-                    <p className="font-semibold">{car.seats} chỗ</p>
-                  </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Số chỗ</span>
+                  <span className="font-semibold text-gray-900">{car.seats} chỗ</span>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <Image
-                    src="/cop.png"
-                    alt="Dung tích cốp"
-                    width={28}
-                    height={28}
-                  />
-                  <div>
-                    <p className="text-sm text-gray-500">Dung tích cốp</p>
-                    <p className="font-semibold">{car.trunkCapacity} L</p>
-                  </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Quãng đường</span>
+                  <span className="font-semibold text-gray-900">{car.batteryDuration} km</span>
                 </div>
               </div>
 
-              {/* Giá và nút thuê */}
-              <div className="border-t pt-6">
-                <div className="space-y-3 mb-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-gray-500">Giá thuê theo ngày</p>
-                    <p className="text-2xl font-bold text-blue-600">
-                      {formatCurrency(car.rentPricePerDay)}
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-gray-500">Giá thuê theo giờ</p>
-                    <p className="text-lg font-semibold text-gray-700">
-                      {formatCurrency(car.rentPricePerHour)}
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-between border-t pt-2">
-                    <p className="text-sm text-gray-500">Có tài xế (ngày)</p>
-                    <p className="text-lg font-semibold text-gray-700">
-                      {formatCurrency(car.rentPricePerDayWithDriver)}
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => setIsBookingModalOpen(true)}
-                  disabled={car.status !== 0}
-                  className={`w-full py-3 px-6 rounded-lg font-semibold text-lg transition-colors ${
-                    car.status === 0 
-                      ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  }`}
-                >
-                  {car.status === 0 ? 'Thuê xe ngay' : 'Xe đã hết'}
+              <div className="mt-6 grid grid-cols-2 gap-3">
+                <button className="border border-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-50 transition-colors text-sm">
+                  📞 Gọi tư vấn
                 </button>
-
-                <div className="mt-4 grid grid-cols-2 gap-3">
-                  <button className="border border-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-50 transition-colors">
-                    📞 Gọi tư vấn
-                  </button>
-                  <button className="border border-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-50 transition-colors">
-                    💬 Chat hỗ trợ
-                  </button>
-                </div>
+                <button className="border border-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-50 transition-colors text-sm">
+                  💬 Chat hỗ trợ
+                </button>
               </div>
             </div>
           </div>
@@ -272,37 +638,37 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             <div className="space-y-4">
               <div className="flex justify-between py-2 border-b border-gray-100">
                 <span className="text-gray-600">Model</span>
-                <span className="font-semibold">{car.model}</span>
+                <span className="font-semibold text-gray-900">{car.model}</span>
               </div>
               <div className="flex justify-between py-2 border-b border-gray-100">
                 <span className="text-gray-600">Loại xe</span>
-                <span className="font-semibold">{car.sizeType}</span>
+                <span className="font-semibold text-gray-900">{car.sizeType}</span>
               </div>
               <div className="flex justify-between py-2 border-b border-gray-100">
                 <span className="text-gray-600">Số chỗ ngồi</span>
-                <span className="font-semibold">{car.seats} chỗ</span>
+                <span className="font-semibold text-gray-900">{car.seats} chỗ</span>
               </div>
               <div className="flex justify-between py-2">
                 <span className="text-gray-600">Dung tích cốp</span>
-                <span className="font-semibold">{car.trunkCapacity} lít</span>
+                <span className="font-semibold text-gray-900">{car.trunkCapacity} lít</span>
               </div>
             </div>
             <div className="space-y-4">
               <div className="flex justify-between py-2 border-b border-gray-100">
                 <span className="text-gray-600">Loại pin</span>
-                <span className="font-semibold">{car.batteryType}</span>
+                <span className="font-semibold text-gray-900">{car.batteryType}</span>
               </div>
               <div className="flex justify-between py-2 border-b border-gray-100">
                 <span className="text-gray-600">Quãng đường</span>
-                <span className="font-semibold">{car.batteryDuration} km</span>
+                <span className="font-semibold text-gray-900">{car.batteryDuration} km</span>
               </div>
               <div className="flex justify-between py-2 border-b border-gray-100">
                 <span className="text-gray-600">Động cơ</span>
-                <span className="font-semibold">Điện 100%</span>
+                <span className="font-semibold text-gray-900">Điện 100%</span>
               </div>
               <div className="flex justify-between py-2">
                 <span className="text-gray-600">Năng lượng</span>
-                <span className="font-semibold">Xe điện</span>
+                <span className="font-semibold text-gray-900">Xe điện</span>
               </div>
             </div>
           </div>
@@ -358,6 +724,42 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
         isOpen={isBookingModalOpen}
         onClose={() => setIsBookingModalOpen(false)}
       />
+
+      {/* Modal cảnh báo thiếu giấy tờ */}
+      <Modal
+        title={documentWarningModal.title}
+        open={documentWarningModal.visible}
+        onCancel={() => setDocumentWarningModal({ ...documentWarningModal, visible: false })}
+        footer={[
+          <Button
+            key="cancel"
+            onClick={() => setDocumentWarningModal({ ...documentWarningModal, visible: false })}
+          >
+            Đóng
+          </Button>,
+          <Button
+            key="update"
+            type="primary"
+            onClick={() => {
+              setDocumentWarningModal({ ...documentWarningModal, visible: false });
+              router.push('/profile');
+            }}
+            className="bg-blue-800 hover:bg-blue-700"
+          >
+            Cập nhật
+          </Button>,
+        ]}
+        centered
+      >
+        <div className="py-4">
+          <p className="text-gray-700 mb-4">{documentWarningModal.content}</p>
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mt-4">
+            <p className="text-sm text-orange-800">
+              <strong>Lưu ý:</strong> Bạn cần cập nhật và xác thực giấy tờ trong trang cá nhân trước khi có thể thuê xe.
+            </p>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
