@@ -2,13 +2,13 @@
 
 export default function DispatchList() {
   const dispatchData = [
-    // { id: 1, car: "VF 8", driver: "Lê Minh", route: "Q1 → Q5", status: "Đang di chuyển" },
-    // { id: 2, car: "Gogoro Delight", driver: "Phạm Hùng", route: "Q7 → Q3", status: "Hoàn thành" },
+    { id: 1, car: "VF 8", driver: "Lê Minh", route: "Q1 → Q5", status: "Đang di chuyển" },
+    { id: 2, car: "Gogoro Delight", driver: "Phạm Hùng", route: "Q7 → Q3", status: "Hoàn thành" },
   ];
 
   return (
     <div className="p-6 bg-white rounded-lg shadow text-gray-900">
-      <h2 className="text-2xl font-semibold mb-4">Điều phối xe</h2>
+      <h2 className="text-2xl font-semibold mb-4">🚗 Điều phối xe</h2>
       <table className="min-w-full border border-gray-300 rounded-lg overflow-hidden">
         <thead className="bg-blue-100">
           <tr>

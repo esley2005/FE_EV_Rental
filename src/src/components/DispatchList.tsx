@@ -2,8 +2,8 @@
 
 export default function DispatchList() {
   const dispatchData = [
-    // { id: 1, car: "VF 8", driver: "Lê Minh", route: "Q1 → Q5", status: "Đang di chuyển" },
-    // { id: 2, car: "Gogoro Delight", driver: "Phạm Hùng", route: "Q7 → Q3", status: "Hoàn thành" },
+    { id: 1, car: "VF 8", driver: "Lê Minh", route: "Q1 → Q5", status: "Đang di chuyển" },
+    { id: 2, car: "Gogoro Delight", driver: "Phạm Hùng", route: "Q7 → Q3", status: "Hoàn thành" },
   ];
 
   return (
