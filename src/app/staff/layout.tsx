@@ -19,6 +19,13 @@ import {
   Avatar,
   Modal,
   message,
+  Card,
+  Row,
+  Col,
+  Statistic,
+  Progress,
+  Input,
+  Badge,
 } from "antd";
 import CarStatusList from "@/components/CarStatusList";
 import DeliveryForm from "@/components/DeliveryForm";
@@ -142,7 +149,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   if (!allowed) return null;
 
   return (
-    <Layout style={{ minHeight: "100vh", background: "#E3EFFF" }}>
+    <Layout style={{ minHeight: "100vh", background: "#F5F7FB" }}>
       {/* 🧭 SIDEBAR */}
       <Sider
         collapsible
@@ -151,9 +158,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         width={230}
         style={{ background: "#fff", borderRight: "1px solid #e8e8e8" }}
       >
-        <div className="p-4 text-center font-bold text-blue-600 text-lg">
-          {collapsed ? "EV" : "EV STAFF"}
-        </div>
+        <div className="p-4 text-center font-bold text-blue-600 text-lg">{collapsed ? "EV" : "EV STAFF"}</div>
 
         <Menu
           mode="inline"
@@ -174,7 +179,8 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "0 24px",
+            padding: "0 16px",
+            gap: 12,
           }}
         >
           <Menu
@@ -188,6 +194,21 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             }}
             style={{ flex: 1, background: "transparent" }}
           />
+
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <Input.Search placeholder="Tìm kiếm nhanh" allowClear style={{ width: 260 }} />
+            <Badge count={3} size="small">
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  background: "rgba(255,255,255,0.2)",
+                }}
+              />
+            </Badge>
+          </div>
 
           {/* ✅ Dropdown người dùng */}
           <Dropdown
@@ -228,6 +249,51 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               },
             ]}
           />
+
+          {/* ElaAdmin-like top summary cards */}
+          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+            <Col xs={24} sm={12} md={6}>
+              <Card bordered hoverable>
+                <Statistic title="Revenue" prefix={<span>₫</span>} value={23569} precision={0} />
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} md={6}>
+              <Card bordered hoverable>
+                <Statistic title="Orders" value={3435} />
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} md={6}>
+              <Card bordered hoverable>
+                <Statistic title="Templates" value={349} />
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} md={6}>
+              <Card bordered hoverable>
+                <Statistic title="Clients" value={2986} />
+              </Card>
+            </Col>
+          </Row>
+
+          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+            <Col xs={24} md={16}>
+              <Card title="Traffic" bordered>
+                <Progress percent={68} showInfo={false} strokeColor="#1447E6" />
+                <div style={{ height: 8 }} />
+                <Progress percent={54} showInfo={false} strokeColor="#22c55e" />
+                <div style={{ height: 8 }} />
+                <Progress percent={32} showInfo={false} strokeColor="#ef4444" />
+              </Card>
+            </Col>
+            <Col xs={24} md={8}>
+              <Card title="KPIs" bordered>
+                <div style={{ display: "grid", gap: 12 }}>
+                  <Statistic title="Bounce Rate" value={32.5} suffix="%" />
+                  <Statistic title="Unique Visitors" value={23681} />
+                  <Statistic title="Targeted Visitors" value={9863} />
+                </div>
+              </Card>
+            </Col>
+          </Row>
 
           <div
             style={{
