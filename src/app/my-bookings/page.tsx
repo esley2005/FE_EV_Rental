@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Header from "@/components/Header";
 import { 
   ShoppingOutlined,
   CalendarOutlined,
@@ -248,38 +249,31 @@ export default function MyBookingsPage() {
   return (
     <>
       {contextHolder}
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
-        <div className="max-w-6xl mx-auto">
-          {/* Header */}
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+          {/* Header chung */}
+          <Header />
+        <div className="max-w-6xl mx-auto px-4 pt-24 pb-8">
+          {/* Page Title */}
           <div className="mb-6">
-            <Button 
-              type="link" 
-              onClick={() => router.back()}
-              className="mb-2"
-            >
-              ← Quay lại
-            </Button>
-            <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-2">
-              <ShoppingOutlined /> Đơn hàng của tôi
-            </h1>
+            <h1 className="text-2xl font-bold text-gray-800">Đơn hàng của tôi</h1>
             <p className="text-gray-600 mt-1">Quản lý tất cả đơn thuê xe của bạn</p>
           </div>
 
           {/* Filters */}
           <Card className="mb-6 shadow-md">
-            <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex flex-col md:flex-row md:items-center gap-4">
               <Input
                 placeholder="Tìm kiếm theo mã đơn, tên xe..."
                 prefix={<SearchOutlined />}
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
-                className="md:w-64"
+                className="w-full md:w-1/2"
                 size="large"
               />
               <Select
                 value={selectedStatus}
                 onChange={setSelectedStatus}
-                className="md:w-48"
+                className="md:w-44 shrink-0"
                 size="large"
                 suffixIcon={<FilterOutlined />}
               >
@@ -289,8 +283,8 @@ export default function MyBookingsPage() {
                 <Select.Option value="completed">Hoàn thành</Select.Option>
                 <Select.Option value="cancelled">Đã hủy</Select.Option>
               </Select>
-              <div className="flex-1 text-right">
-                <span className="text-gray-600">
+              <div className="ml-auto text-right">
+                <span className="text-gray-600 whitespace-nowrap">
                   Tìm thấy <strong>{filteredBookings.length}</strong> đơn hàng
                 </span>
               </div>

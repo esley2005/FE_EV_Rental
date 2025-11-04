@@ -49,8 +49,8 @@ export default function ContactPage() {
               </p>
               <p>
                 <strong>Email:</strong>{" "}
-                <a href="mailto:huynhtuyetmai2005@gmail.com" className="text-blue-600 hover:underline">
-                  huynhtuyetmai2005@gmail.com
+                <a href="contact@evrental.vn" className="text-blue-600 hover:underline">
+                  contact@evrental.vn
                 </a>
               </p>
               <p><strong>Giờ làm việc:</strong> 8:00 – 20:00 (Thứ 2 – Chủ nhật)</p>
@@ -118,7 +118,7 @@ export default function ContactPage() {
               Gửi liên hệ
             </button>
 
-            {status && <p className="text-green-600 text-sm mt-3 text-center">{status}</p>}
+            {status && <p className="text-blue-600 text-sm mt-3 text-center">{status}</p>}
           </form>
         </div>
       </main>

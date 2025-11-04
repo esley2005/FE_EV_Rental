@@ -13,6 +13,24 @@ import { carsApi, authApi } from "@/services/api";
 import type { Car } from "@/types/car";
 import type { User } from "@/services/api";
 import { authUtils } from "@/utils/auth";
+import {
+  MapPin,
+  Bluetooth,
+  Camera,
+  Video,
+  Navigation,
+  Cog,
+  Wind,
+  Usb,
+  Monitor,
+  Snowflake,
+  Sun,
+  Speaker,
+  Lightbulb,
+  Armchair,
+  AlertTriangle,
+} from "lucide-react";
+
 //1
 // params.id chính là số ID của xe trong đường dẫn (VD: /cars/5 → id = "5")
 interface CarDetailPageProps {
@@ -23,10 +41,10 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   const resolvedParams = React.use(params);
   const router = useRouter();
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
-//2
-// car: xe hiện tại
-// otherCars: các xe khác để hiển thị bên dưới
-// loading: hiển thị vòng xoay loading khi chờ API
+  //2
+  // car: xe hiện tại
+  // otherCars: các xe khác để hiển thị bên dưới
+  // loading: hiển thị vòng xoay loading khi chờ API
 
   const [car, setCar] = useState<Car | null>(null);
   const [otherCars, setOtherCars] = useState<Car[]>([]);
@@ -40,12 +58,12 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     title: string;
     content: string;
   }>({ visible: false, title: '', content: '' });
-//3
-//  → Gọi API /api/Car để lấy tất cả xe
-// → Lọc ra những xe còn hoạt động (isActive && !isDeleted)
-// → Tìm xe có ID đúng với URL
-// → Nếu có → hiển thị
-// → Nếu không → notFound() (404)
+  //3
+  //  → Gọi API /api/Car để lấy tất cả xe
+  // → Lọc ra những xe còn hoạt động (isActive && !isDeleted)
+  // → Tìm xe có ID đúng với URL
+  // → Nếu có → hiển thị
+  // → Nếu không → notFound() (404)
   useEffect(() => {
     const loadCar = async () => {
       try {
@@ -57,20 +75,20 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
         // Lấy tất cả xe để tìm xe hiện tại và xe khác
         const response = await carsApi.getAll();
-        
+
         if (response.success && response.data) {
           const carsData = (response.data as any)?.$values || response.data;
-          const activeCars = Array.isArray(carsData) 
+          const activeCars = Array.isArray(carsData)
             ? carsData.filter((c: Car) => c.isActive && !c.isDeleted)
             : [];
-          
+
           const currentCar = activeCars.find((c: Car) => c.id === carId);
-          
+
           if (!currentCar) {
             notFound();
             return;
           }
-          
+
           setCar(currentCar);
           setOtherCars(activeCars.filter((c: Car) => c.id !== carId).slice(0, 3));
         }
@@ -119,9 +137,9 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     loadUserProfile();
   }, []);
 
-//4 
-//Hiện thị khi đang load 
-//Dùng spinner từ thư viện Ant Design
+  //4 
+  //Hiện thị khi đang load 
+  //Dùng spinner từ thư viện Ant Design
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -138,8 +156,8 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     notFound();
     return null;
   }
-// → Định dạng tiền VND:
-// 1500000 → 1.500.000 ₫
+  // → Định dạng tiền VND:
+  // 1500000 → 1.500.000 ₫
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
   };
@@ -176,9 +194,9 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     }
 
     // Kiểm tra driverLicenseStatus
-    const driverLicenseStatus = currentUser?.driverLicenseStatus ?? 0;
+    const driverLicenseStatus = (currentUser as any)?.driverLicenseStatus ?? 0;
     // Kiểm tra citizenIdStatus (hoặc passport status tùy theo documentType)
-    const citizenIdStatus = currentUser?.citizenIdStatus ?? 0;
+    const citizenIdStatus = (currentUser as any)?.citizenIdStatus ?? 0;
 
     // Kiểm tra xem thiếu giấy tờ gì
     const missingDriverLicense = driverLicenseStatus !== 1;
@@ -218,14 +236,14 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     setIsBookingModalOpen(true);
   };
 
-//5
-// Ảnh
-// Tên, Model
-// Thông số (loại, số chỗ, dung tích cốp, pin, v.v.)
-// Giá thuê (ngày, giờ, có tài xế)
-// Nút "Thuê xe ngay"
-// Nút Gọi tư vấn / Chat hỗ trợ
-// Phần "Xe khác" (hiển thị 3 xe ngẫu nhiên khác)
+  //5
+  // Ảnh
+  // Tên, Model
+  // Thông số (loại, số chỗ, dung tích cốp, pin, v.v.)
+  // Giá thuê (ngày, giờ, có tài xế)
+  // Nút "Thuê xe ngay"
+  // Nút Gọi tư vấn / Chat hỗ trợ
+  // Phần "Xe khác" (hiển thị 3 xe ngẫu nhiên khác)
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header />
@@ -272,7 +290,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                   <h1 className="text-3xl font-bold text-gray-900 mb-3">
                     {car.name} {car.model && car.model}
                   </h1>
-                  
+
                   {/* Rating và số chuyến */}
                   <div className="flex items-center gap-3 mb-2">
                     <div className="flex items-center gap-1">
@@ -284,14 +302,14 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
                   {/* Location */}
                   <p className="text-sm text-gray-500 mb-4">
-                    {car.carRentalLocations?.$values?.[0]?.address || 
-                     car.carRentalLocations?.address || 
-                     "Địa chỉ giao nhận xe sẽ được thông báo sau"}
+                    {car.carRentalLocations?.$values?.[0]?.address ||
+                      car.carRentalLocations?.address ||
+                      "Địa chỉ giao nhận xe sẽ được thông báo sau"}
                   </p>
 
                   {/* Badges */}
                   <div className="flex items-center gap-3 flex-wrap">
-                    <div className="flex items-center gap-2 bg-blue-500 text-white px-3 py-1.5 rounded-full text-sm">
+                    <div className="flex items-center gap-2 bg-green-500 text-white px-3 py-1.5 rounded-full text-sm">
                       <SafetyOutlined className="text-white" />
                       <span>Miễn thế chấp</span>
                     </div>
@@ -307,11 +325,10 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                   <button className="p-2 rounded-full hover:bg-gray-100 transition-colors">
                     <ShareAltOutlined className="text-gray-600 text-lg" />
                   </button>
-                  <button 
+                  <button
                     onClick={() => setIsFavorite(!isFavorite)}
-                    className={`p-2 rounded-full transition-colors ${
-                      isFavorite ? 'text-red-500' : 'text-gray-600 hover:bg-gray-100'
-                    }`}
+                    className={`p-2 rounded-full transition-colors ${isFavorite ? 'text-red-500' : 'text-gray-600 hover:bg-gray-100'
+                      }`}
                   >
                     <HeartOutlined className={`text-lg ${isFavorite ? 'fill-current' : ''}`} />
                   </button>
@@ -326,7 +343,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                 {/* Truyền động */}
                 <div className="flex flex-col items-center text-center p-4">
                   <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-3">
-                    <svg className="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                    <svg className="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
                     </svg>
                   </div>
@@ -337,7 +354,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                 {/* Số ghế */}
                 <div className="flex flex-col items-center text-center p-4">
                   <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-3">
-                    <svg className="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                    <svg className="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
                     </svg>
                   </div>
@@ -347,8 +364,8 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
                 {/* Nhiên liệu */}
                 <div className="flex flex-col items-center text-center p-4">
-                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-3">
-                    <svg className="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-3">
+                    <svg className="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
                     </svg>
                   </div>
@@ -358,8 +375,8 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
                 {/* Tiêu hao */}
                 <div className="flex flex-col items-center text-center p-4">
-                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-3">
-                    <svg className="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-3">
+                    <svg className="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
                     </svg>
                   </div>
@@ -372,7 +389,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             {/* Mô tả (Description) Section */}
             <div className="bg-white rounded-lg shadow-lg p-6">
               <h2 className="text-xl font-bold text-gray-900 mb-4">Mô tả</h2>
-              
+
               {/* Rental Policies */}
               <ul className="space-y-2 mb-4 text-gray-900">
                 {/* <li className="flex items-start">
@@ -398,23 +415,23 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                 <p className="text-gray-900 leading-relaxed">
                   {showFullDescription ? (
                     <>
-                      Xe {car.sizeType} {car.seats} chỗ với thiết kế mạnh mẽ và tính năng linh hoạt, 
-                      phù hợp cho gia đình. Xe điện thân thiện với môi trường, tiết kiệm điện và 
-                      vận hành êm ái. Quãng đường lên tới {car.batteryDuration}km, đáp ứng nhu cầu di chuyển 
+                      Xe {car.sizeType} {car.seats} chỗ với thiết kế mạnh mẽ và tính năng linh hoạt,
+                      phù hợp cho gia đình. Xe điện thân thiện với môi trường, tiết kiệm điện và
+                      vận hành êm ái. Quãng đường lên tới {car.batteryDuration}km, đáp ứng nhu cầu di chuyển
                       hàng ngày của bạn. Dung tích cốp {car.trunkCapacity}L rộng rãi, đủ không gian cho hành lý.
                     </>
                   ) : (
                     <>
-                      Xe {car.sizeType} {car.seats} chỗ với thiết kế mạnh mẽ và tính năng linh hoạt, 
+                      Xe {car.sizeType} {car.seats} chỗ với thiết kế mạnh mẽ và tính năng linh hoạt,
                       phù hợp cho gia đình...
                     </>
                   )}
                 </p>
               </div>
-              
+
               <button
                 onClick={() => setShowFullDescription(!showFullDescription)}
-                className="text-green-600 hover:text-green-700 font-medium text-sm"
+                className="text-blue-600 hover:text-blue-700 font-medium text-sm"
               >
                 {showFullDescription ? 'Thu gọn' : 'Xem thêm'}
               </button>
@@ -425,21 +442,21 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               <h2 className="text-xl font-bold text-gray-900 mb-4">Các tiện nghi khác</h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                 {[
-                  { name: 'Bản đồ', icon: '🗺️' },
-                  { name: 'Bluetooth', icon: '📶' },
-                  { name: 'Camera 360', icon: '📷' },
-                  { name: 'Camera hành trình', icon: '🎥' },
-                  { name: 'Định vị GPS', icon: '📍' },
-                  { name: 'Lốp dự phòng', icon: '🛞' },
-                  { name: 'Túi khí an toàn', icon: '💨' },
-                  { name: 'Kết nối USB', icon: '🔌' },
-                  { name: 'Màn hình cảm ứng', icon: '📺' },
-                  { name: 'Điều hòa', icon: '❄️' },
-                  { name: 'Cửa sổ trời', icon: '☀️' },
-                  { name: 'Hệ thống âm thanh', icon: '🔊' },
-                  { name: 'Đèn LED', icon: '💡' },
-                  { name: 'Ghế da', icon: '🪑' },
-                  { name: 'Cảnh báo va chạm', icon: '⚠️' },
+                  { name: "Bản đồ", icon: <MapPin size={20} /> },
+                  { name: "Bluetooth", icon: <Bluetooth size={20} /> },
+                  { name: "Camera 360", icon: <Camera size={20} /> },
+                  { name: "Camera hành trình", icon: <Video size={20} /> },
+                  { name: "Định vị GPS", icon: <Navigation size={20} /> },
+                  { name: "Lốp dự phòng", icon: <Cog size={20} /> },
+                  { name: "Túi khí an toàn", icon: <Wind size={20} /> },
+                  { name: "Kết nối USB", icon: <Usb size={20} /> },
+                  { name: "Màn hình cảm ứng", icon: <Monitor size={20} /> },
+                  { name: "Điều hòa", icon: <Snowflake size={20} /> },
+                  { name: "Cửa sổ trời", icon: <Sun size={20} /> },
+                  { name: "Hệ thống âm thanh", icon: <Speaker size={20} /> },
+                  { name: "Đèn LED", icon: <Lightbulb size={20} /> },
+                  { name: "Ghế da", icon: <Armchair size={20} /> },
+                  { name: "Cảnh báo va chạm", icon: <AlertTriangle size={20} /> },
                 ].map((amenity, index) => (
                   <div key={index} className="flex items-center gap-2 text-gray-900">
                     <span className="text-lg">{amenity.icon}</span>
@@ -456,11 +473,11 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                 <QuestionCircleOutlined className="text-gray-400 cursor-help" />
               </div>
               <p className="text-sm text-gray-500 mb-4">Chọn 1 trong 2 hình thức</p>
-              
+
               <div className="space-y-3">
                 <label className="flex items-center gap-3 p-3 "
-                      >
-               
+                >
+
                   <div className="flex items-center gap-2">
                     <svg className="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
@@ -468,10 +485,10 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                     <span className="text-gray-900">GPLX (đối chiếu) & CCCD (đối chiếu VNeID)</span>
                   </div>
                 </label>
-                
+
                 <label className="flex items-center gap-3 p-3"
-                   >
-                
+                >
+
                   <div className="flex items-center gap-2">
                     <svg className="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
@@ -488,7 +505,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                 <h2 className="text-xl font-bold text-gray-900">Tài sản thế chấp</h2>
                 <QuestionCircleOutlined className="text-gray-400 cursor-help" />
               </div>
-              
+
               <div className="bg-orange-100 border border-orange-200 rounded-lg p-4">
                 <p className="text-gray-900 text-sm">
                   Không yêu cầu khách thuê thế chấp Tiền mặt hoặc Xe máy
@@ -498,7 +515,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
             {/* Phụ phí có thể phát sinh (Additional Fees) Section */}
             <div className="bg-white rounded-lg shadow-lg p-6">
-              <h2 className="text-xl font-bold text-green-600 mb-4">Phụ phí có thể phát sinh</h2>
+              <h2 className="text-xl font-bold text-blue-600 mb-4">Phụ phí có thể phát sinh</h2>
               <div className="space-y-4">
                 {/* Phí vượt giới hạn */}
                 <div className="flex items-start gap-3 p-3 border-b border-gray-100 last:border-b-0">
@@ -511,7 +528,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                           Phụ phí phát sinh nếu lộ trình di chuyển vượt quá 350km khi thuê xe 1 ngày
                         </p>
                       </div>
-                      <span className="text-green-600 font-bold text-sm whitespace-nowrap">3.000₫/km</span>
+                      <span className="text-blue-600 font-bold text-sm whitespace-nowrap">3.000₫/km</span>
                     </div>
                   </div>
                 </div>
@@ -527,7 +544,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                           Phụ phí phát sinh nếu hoàn trả xe trễ giờ. Trường hợp trễ quá 5 giờ, phụ phí thêm 1 ngày thuê
                         </p>
                       </div>
-                      <span className="text-green-600 font-bold text-sm whitespace-nowrap">70.000₫/giờ</span>
+                      <span className="text-blue-600 font-bold text-sm whitespace-nowrap">70.000₫/giờ</span>
                     </div>
                   </div>
                 </div>
@@ -543,7 +560,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                           Phụ phí phát sinh khi xe hoàn trả không đảm bảo vệ sinh (nhiều vết bẩn, bùn cát, sình lầy...)
                         </p>
                       </div>
-                      <span className="text-green-600 font-bold text-sm whitespace-nowrap">70.000₫</span>
+                      <span className="text-blue-600 font-bold text-sm whitespace-nowrap">70.000₫</span>
                     </div>
                   </div>
                 </div>
@@ -559,7 +576,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                           Phụ phí phát sinh khi xe hoàn trả bị ám mùi khó chịu (mùi thuốc lá, thực phẩm nặng mùi...)
                         </p>
                       </div>
-                      <span className="text-green-600 font-bold text-sm whitespace-nowrap">500.000₫</span>
+                      <span className="text-blue-600 font-bold text-sm whitespace-nowrap">500.000₫</span>
                     </div>
                   </div>
                 </div>
@@ -582,7 +599,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               </div>
 
               {/* Status */}
-              <div className={`text-center p-3 rounded-lg mb-6 ${car.status === 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+              <div className={`text-center p-3 rounded-lg mb-6 ${car.status === 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
                 <span className="font-semibold text-gray-900">
                   {car.status === 0 ? 'Xe đang có sẵn' : 'Hết xe'}
                 </span>
@@ -592,11 +609,10 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               <button
                 onClick={handleBookingClick}
                 disabled={car.status !== 0}
-                className={`w-full py-4 px-6 rounded-lg font-bold text-lg transition-colors mb-4 ${
-                  car.status === 0 
-                    ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                    : 'bg-gray-300 text-gray-900 cursor-not-allowed'
-                }`}
+                className={`w-full py-4 px-6 rounded-lg font-bold text-lg transition-colors mb-4 ${car.status === 0
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-gray-300 text-gray-900 cursor-not-allowed'
+                  }`}
               >
                 {car.status === 0 ? '+ CHỌN THUÊ' : 'Xe đã hết'}
               </button>
@@ -715,8 +731,8 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
       </main>
 
       <Footer />
-{/* 6 */}
-{/* → Khi bấm “Thuê xe ngay” sẽ mở BookingModal
+      {/* 6 */}
+      {/* → Khi bấm “Thuê xe ngay” sẽ mở BookingModal
 → BookingModal sẽ thực hiện việc gửi request thuê xe đến backend (thường là /api/RentalOrder/Create hoặc tương tự). */}
 
       <BookingModal

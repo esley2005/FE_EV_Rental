@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
+import Header from "@/components/Header";
 import { 
-  CarOutlined,
   SearchOutlined,
   FilterOutlined,
   ThunderboltOutlined,
@@ -152,7 +151,7 @@ export default function AllCarsPage() {
 
   const getStatusTag = (status: number) => {
     return status === 0 ? (
-      <Tag color="green">Sẵn sàng</Tag>
+      <Tag color="blue">Sẵn sàng</Tag>
     ) : (
       <Tag color="red">Hết xe</Tag>
     );
@@ -161,29 +160,18 @@ export default function AllCarsPage() {
   return (
     <>
       {contextHolder}
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        {/* Header */}
-        <div className="bg-white shadow-sm border-b">
-          <div className="max-w-7xl mx-auto px-4 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Link href="/">
-                  <Button type="link" className="p-0">
-                    ← Trang chủ
-                  </Button>
-                </Link>
-                <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                  <CarOutlined /> Danh sách xe
-                </h1>
-              </div>
-              <div className="text-sm text-gray-600">
-                Tổng: <strong>{totalCount}</strong> xe
-              </div>
-            </div>
-          </div>
-        </div>
+  <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100">
+        {/* Header chung */}
+        <Header />
 
         <div className="max-w-7xl mx-auto px-4 py-8">
+          {/* Page title + count */}
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-bold text-gray-800">Danh sách xe</h1>
+            <div className="text-sm text-gray-600">
+              Tổng: <strong>{totalCount}</strong> xe
+            </div>
+          </div>
           {/* Search & Filter */}
           <Card className="mb-6 shadow-md">
             <div className="flex flex-col md:flex-row gap-4">
@@ -209,6 +197,8 @@ export default function AllCarsPage() {
               </Button>
             </div>
           </Card>
+
+  <br></br>
 
           {/* Cars Grid */}
           {loading ? (
@@ -290,7 +280,7 @@ export default function AllCarsPage() {
                         <div className="flex items-center justify-between">
                           <div>
                             <div className="text-xs text-gray-500">Giá thuê/ngày</div>
-                            <div className="text-lg font-bold text-green-600">
+                            <div className="text-lg font-bold text-blue-600">
                               {formatCurrency(car.rentPricePerDay)}
                             </div>
                           </div>

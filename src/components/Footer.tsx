@@ -32,10 +32,10 @@ export default function Footer() {
             {/* Phone Number */}
             <div>
               <a 
-                href="tel:19009217" 
+                href="tel:1900000" 
                 className="text-2xl font-bold text-gray-900 hover:text-green-600 transition-colors"
               >
-                1900 9217
+                1900 0000
               </a>
               <p className="text-sm text-gray-500 mt-1">
                 Tổng đài hỗ trợ: 7AM - 10PM
