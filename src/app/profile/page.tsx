@@ -1,790 +1,218 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import {
-  UserOutlined,
-  MailOutlined,
-  PhoneOutlined,
-  HomeOutlined,
-  CalendarOutlined,
-  LockOutlined,
-  EditOutlined,
-  SaveOutlined,
-  CloseOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  WarningOutlined,
-  ArrowLeftOutlined,
-  HeartOutlined,
-  UploadOutlined,
-  IdcardOutlined,
-} from "@ant-design/icons";
+import React, { useEffect, useState } from "react";
 import {
   Layout,
-  Card,
+  Form,
   Input,
   Button,
-  notification as antdNotification,
   Tabs,
-  Avatar,
-  Descriptions,
-  Form,
-  DatePicker,
-  Space,
+  Card,
   Upload,
   message,
-  Tag,
+  notification,
 } from "antd";
-import { authApi, driverLicenseApi, citizenIdApi } from "@/services/api";
-import type { User, UpdateProfileData, ChangePasswordData, DriverLicenseData, CitizenIdData } from "@/services/api";
-import dayjs from "dayjs";
+import {
+  UserOutlined,
+  HomeOutlined,
+  HeartOutlined,
+  UploadOutlined,
+} from "@ant-design/icons";
+import Image from "next/image";
+import Header from "@/components/Header";
 
-const { Content } = Layout;
+const { Sider, Content } = Layout;
+const { TabPane } = Tabs;
 
 export default function ProfilePage() {
-  const router = useRouter();
-  const [api, contextHolder] = antdNotification.useNotification();
+  const [form] = Form.useForm();
+  const [api, contextHolder] = notification.useNotification();
+
   const [loading, setLoading] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
-  const [profileForm] = Form.useForm();
-  const [passwordForm] = Form.useForm();
-  const [licenseForm] = Form.useForm();
-  const [citizenIdForm] = Form.useForm();
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [gplxUrl, setGplxUrl] = useState<string | null>(null);
+  const [cccdUrl, setCccdUrl] = useState<string | null>(null);
 
-  // GPLX states - 2 mặt
-  const [licenseImageFront, setLicenseImageFront] = useState<string | null>(null);
-  const [licenseImageBack, setLicenseImageBack] = useState<string | null>(null);
-  const [licenseUploading, setLicenseUploading] = useState(false);
-  const [licenseVerified, setLicenseVerified] = useState<boolean | null>(null);
-  const [hasLicense, setHasLicense] = useState(false);
-  const [licenseId, setLicenseId] = useState<number | null>(null);
-
-  // CCCD states - 2 mặt
-  const [citizenIdImageFront, setCitizenIdImageFront] = useState<string | null>(null);
-  const [citizenIdImageBack, setCitizenIdImageBack] = useState<string | null>(null);
-  const [citizenIdUploading, setCitizenIdUploading] = useState(false);
-  const [citizenIdVerified, setCitizenIdVerified] = useState<boolean | null>(null);
-  const [hasCitizenId, setHasCitizenId] = useState(false);
-  const [citizenIdDocId, setCitizenIdDocId] = useState<number | null>(null);
-
-  // ================== KEEP your existing data-loading logic ==================
   useEffect(() => {
-    const loadUserProfile = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        if (!token) {
-          setTimeout(() => {
-            api.warning({
-              message: "Chưa đăng nhập",
-              description: "Vui lòng đăng nhập để xem thông tin tài khoản!",
-              placement: "topRight",
-              icon: <WarningOutlined style={{ color: "#faad14" }} />,
-            });
-          }, 0);
-          router.push("/login");
-          return;
-        }
-
-        const userStr = localStorage.getItem("user");
-        if (userStr) {
-          const userData = JSON.parse(userStr);
-          setUser(userData);
-          profileForm.setFieldsValue({
-            fullName: userData.fullName,
-            email: userData.email,
-            phone: userData.phone || "",
-            address: userData.address || "",
-            dateOfBirth: userData.dateOfBirth ? dayjs(userData.dateOfBirth) : null,
-          });
-        }
-
-        const response = await authApi.getProfile();
-        if (response.success && response.data) {
-          setUser(response.data);
-          profileForm.setFieldsValue({
-            fullName: response.data.fullName,
-            email: response.data.email,
-            phone: response.data.phone || "",
-            address: response.data.address || "",
-            dateOfBirth: response.data.dateOfBirth ? dayjs(response.data.dateOfBirth) : null,
-          });
-          localStorage.setItem("user", JSON.stringify(response.data));
-
-          // Load driver license status
-          if (response.data.driverLicenseStatus !== undefined) {
-            setLicenseVerified(response.data.driverLicenseStatus === 1);
-            setHasLicense(true);
-          }
-
-          // Load citizen ID status
-          if (response.data.citizenIdStatus !== undefined) {
-            setCitizenIdVerified(response.data.citizenIdStatus === 1);
-            setHasCitizenId(true);
-          }
-
-          // Load existing documents if any
-          try {
-            const licenseResponse = await driverLicenseApi.getCurrent();
-            if (licenseResponse.success && licenseResponse.data) {
-              const licenseData = licenseResponse.data as any;
-              setHasLicense(true);
-              if (licenseData.id) setLicenseId(licenseData.id);
-              licenseForm.setFieldsValue({
-                licenseName: licenseData.name,
-                licenseNumber: licenseData.licenseNumber || "",
-              });
-              // Parse imageUrl if it's JSON string containing both sides
-              try {
-                const images = JSON.parse(licenseData.imageUrl);
-                if (Array.isArray(images) && images.length >= 2) {
-                  setLicenseImageFront(images[0]);
-                  setLicenseImageBack(images[1]);
-                }
-              } catch {
-                // If not JSON, use as single image
-                setLicenseImageFront(licenseData.imageUrl);
-              }
-            }
-          } catch (error) {
-            console.log("No existing driver license found");
-          }
-
-          try {
-            const citizenIdResponse = await citizenIdApi.getCurrent();
-            if (citizenIdResponse.success && citizenIdResponse.data) {
-              const citizenData = citizenIdResponse.data as any;
-              setHasCitizenId(true);
-              if (citizenData.id) setCitizenIdDocId(citizenData.id);
-              citizenIdForm.setFieldsValue({
-                citizenName: citizenData.name,
-                citizenIdNumber: citizenData.citizenIdNumber,
-                citizenBirthDate: citizenData.birthDate ? dayjs(citizenData.birthDate) : null,
-              });
-              // Parse imageUrl if it's JSON string containing both sides
-              try {
-                const images = JSON.parse(citizenData.imageUrl);
-                if (Array.isArray(images) && images.length >= 2) {
-                  setCitizenIdImageFront(images[0]);
-                  setCitizenIdImageBack(images[1]);
-                }
-              } catch {
-                // If not JSON, use as single image
-                setCitizenIdImageFront(citizenData.imageUrl);
-              }
-            }
-          } catch (error) {
-            console.log("No existing citizen ID found");
-          }
-        }
-      } catch (error) {
-        console.error("Load profile error:", error);
-      }
-    };
-
-    loadUserProfile();
-  }, [router, api, profileForm, licenseForm, citizenIdForm]);
-
-  // ================== KEEP your existing handlers ==================
-  const handleUpdateProfile = async (values: any) => {
+    // Giả lập fetch dữ liệu hồ sơ
     setLoading(true);
-    try {
-      const updateData: UpdateProfileData = {
-        fullName: values.fullName,
-        phone: values.phone,
-        address: values.address,
-        dateOfBirth: values.dateOfBirth ? values.dateOfBirth.format("YYYY-MM-DD") : undefined,
-      };
-
-      const response = await authApi.updateProfile(updateData);
-
-      if (response.success) {
-        api.success({
-          message: "Cập nhật thành công!",
-          description: "Thông tin tài khoản đã được cập nhật.",
-          placement: "topRight",
-          icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
-        });
-
-        if (response.data) {
-          setUser(response.data);
-          localStorage.setItem("user", JSON.stringify(response.data));
-        }
-        setEditing(false);
-      } else {
-        api.error({
-          message: "Cập nhật thất bại",
-          description: response.error || "Không thể cập nhật thông tin!",
-          placement: "topRight",
-          icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
-        });
-      }
-    } catch (error) {
-      console.error("Update profile error:", error);
-      api.error({
-        message: "Có lỗi xảy ra",
-        description: "Không thể cập nhật thông tin. Vui lòng thử lại!",
-        placement: "topRight",
-        icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+    setTimeout(() => {
+      form.setFieldsValue({
+        name: "Nguyễn Văn A",
+        phone: "0901234567",
+        email: "vana@example.com",
       });
-    } finally {
+      setAvatarUrl("/images/avatar-default.png");
       setLoading(false);
-    }
+    }, 1000);
+  }, [form]);
+
+  const handleUpdate = () => {
+    message.success("Cập nhật thông tin thành công!");
   };
 
-  const handleChangePassword = async (values: ChangePasswordData) => {
-    setLoading(true);
-    try {
-      const response = await authApi.changePassword(values);
-
-      if (response.success) {
-        api.success({
-          message: "Đổi mật khẩu thành công!",
-          description: "Mật khẩu của bạn đã được cập nhật.",
-          placement: "topRight",
-          icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
-        });
-        password_form_reset();
-      } else {
-        api.error({
-          message: "Đổi mật khẩu thất bại",
-          description: response.error || "Mật khẩu cũ không đúng hoặc có lỗi xảy ra!",
-          placement: "topRight",
-          icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
-        });
-      }
-    } catch (error) {
-      console.error("Change password error:", error);
-      api.error({
-        message: "Có lỗi xảy ra",
-        description: "Không thể đổi mật khẩu. Vui lòng thử lại!",
-        placement: "topRight",
-        icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
-      });
-    } finally {
-      setLoading(false);
+  const handleUpload = (type: "gplx" | "cccd", info: any) => {
+    if (info.file.status === "done") {
+      message.success(`${info.file.name} tải lên thành công.`);
+      const imageUrl = URL.createObjectURL(info.file.originFileObj);
+      if (type === "gplx") setGplxUrl(imageUrl);
+      if (type === "cccd") setCccdUrl(imageUrl);
     }
   };
-
-  // helper because passwordForm is declared above
-  const password_form_reset = () => passwordForm.resetFields();
-
-  // ================== GPLX upload logic ==================
-  const beforeUploadLicenseFront = (file: File) => {
-    const isImage = file.type.startsWith("image/");
-    if (!isImage) {
-      message.error("Chỉ được tải ảnh (jpg/png).");
-      return Upload.LIST_IGNORE;
-    }
-    const reader = new FileReader();
-    reader.onload = (e) => setLicenseImageFront(e.target?.result as string);
-    reader.readAsDataURL(file);
-    return false;
-  };
-
-  const beforeUploadLicenseBack = (file: File) => {
-    const isImage = file.type.startsWith("image/");
-    if (!isImage) {
-      message.error("Chỉ được tải ảnh (jpg/png).");
-      return Upload.LIST_IGNORE;
-    }
-    const reader = new FileReader();
-    reader.onload = (e) => setLicenseImageBack(e.target?.result as string);
-    reader.readAsDataURL(file);
-    return false;
-  };
-
-  const handleSubmitLicense = async (values: any) => {
-    if (!licenseImageFront || !licenseImageBack) {
-      message.error("Vui lòng tải lên cả 2 mặt của giấy phép lái xe.");
-      return;
-    }
-
-    setLicenseUploading(true);
-    try {
-      // Combine 2 images as JSON string
-      const imageUrl = JSON.stringify([licenseImageFront, licenseImageBack]);
-      
-      const licenseData: DriverLicenseData = {
-        name: values.licenseName,
-        imageUrl: imageUrl,
-        rentalOrderId: null,
-      };
-
-      const response = hasLicense && licenseId !== null
-        ? await driverLicenseApi.update({ ...licenseData, id: licenseId })
-        : await driverLicenseApi.upload(licenseData);
-
-      if (response.success) {
-        setLicenseVerified(false); // Will be verified by admin
-        setHasLicense(true);
-        api.success({
-          message: "Gửi GPLX thành công",
-          description: "Yêu cầu xác thực GPLX đã được gửi, admin sẽ kiểm tra.",
-          placement: "topRight",
-          icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
-        });
-      } else {
-        api.error({
-          message: "Tải GPLX thất bại",
-          description: response.error || "Không thể tải lên giấy phép lái xe.",
-          placement: "topRight",
-          icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
-        });
-      }
-    } catch (e) {
-      api.error({ 
-        message: "Tải GPLX thất bại",
-        description: "Có lỗi xảy ra khi tải lên giấy phép lái xe.",
-        placement: "topRight",
-        icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
-      });
-    } finally {
-      setLicenseUploading(false);
-    }
-  };
-
-  // ================== CCCD upload logic ==================
-  const beforeUploadCitizenIdFront = (file: File) => {
-    const isImage = file.type.startsWith("image/");
-    if (!isImage) {
-      message.error("Chỉ được tải ảnh (jpg/png).");
-      return Upload.LIST_IGNORE;
-    }
-    const reader = new FileReader();
-    reader.onload = (e) => setCitizenIdImageFront(e.target?.result as string);
-    reader.readAsDataURL(file);
-    return false;
-  };
-
-  const beforeUploadCitizenIdBack = (file: File) => {
-    const isImage = file.type.startsWith("image/");
-    if (!isImage) {
-      message.error("Chỉ được tải ảnh (jpg/png).");
-      return Upload.LIST_IGNORE;
-    }
-    const reader = new FileReader();
-    reader.onload = (e) => setCitizenIdImageBack(e.target?.result as string);
-    reader.readAsDataURL(file);
-    return false;
-  };
-
-  const handleSubmitCitizenId = async (values: any) => {
-    if (!citizenIdImageFront || !citizenIdImageBack) {
-      message.error("Vui lòng tải lên cả 2 mặt của căn cước công dân.");
-      return;
-    }
-
-    setCitizenIdUploading(true);
-    try {
-      // Combine 2 images as JSON string
-      const imageUrl = JSON.stringify([citizenIdImageFront, citizenIdImageBack]);
-      
-      const citizenIdData: CitizenIdData = {
-        name: values.citizenName,
-        citizenIdNumber: values.citizenIdNumber,
-        birthDate: values.citizenBirthDate ? values.citizenBirthDate.format("YYYY-MM-DD") : "",
-        imageUrl: imageUrl,
-        rentalOrderId: null,
-      };
-
-      const response = hasCitizenId && citizenIdDocId !== null
-        ? await citizenIdApi.update({ ...citizenIdData, id: citizenIdDocId })
-        : await citizenIdApi.upload(citizenIdData);
-
-      if (response.success) {
-        setCitizenIdVerified(false); // Will be verified by admin
-        setHasCitizenId(true);
-        api.success({
-          message: "Gửi CCCD thành công",
-          description: "Yêu cầu xác thực CCCD đã được gửi, admin sẽ kiểm tra.",
-          placement: "topRight",
-          icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
-        });
-      } else {
-        api.error({
-          message: "Tải CCCD thất bại",
-          description: response.error || "Không thể tải lên căn cước công dân.",
-          placement: "topRight",
-          icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
-        });
-      }
-    } catch (e) {
-      api.error({ 
-        message: "Tải CCCD thất bại",
-        description: "Có lỗi xảy ra khi tải lên căn cước công dân.",
-        placement: "topRight",
-        icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
-      });
-    } finally {
-      setCitizenIdUploading(false);
-    }
-  };
-
-  // ================== RENDER ==================
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Đang tải thông tin...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <Layout className="min-h-screen bg-gray-50 text-gray-900">
+    <Layout style={{ minHeight: "100vh" }}>
       {contextHolder}
+  <Header colorScheme="black" />
 
-      <div className="flex mt-20">
-        {/* Sidebar (kept simple) */}
-        <aside className="w-64 bg-white border-r shadow-sm p-6 h-[calc(100vh-80px)] fixed left-0 top-20">
-          <h2 className="text-2xl font-bold mb-4">Xin chào bạn!</h2>
-          <nav className="flex flex-col space-y-2">
-            <button className="flex items-center gap-3 px-3 py-2 rounded-lg text-green-600 bg-green-50 font-medium">
-              <UserOutlined />
-              <span>Tài khoản của tôi</span>
-            </button>
-            <button className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100">
-              <HomeOutlined />
-              <span>Quản lý cho thuê</span>
-            </button>
-            <button className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100">
-              <HeartOutlined />
-              <span>Xe yêu thích</span>
-            </button>
-          </nav>
-        </aside>
+      {/* BODY */}
+      <Layout className="pt-24">
+        {/* SIDEBAR */}
+        <Sider
+          width={240}
+          theme="light"
+          style={{
+            background: "#fff",
+            borderRight: "1px solid #f0f0f0",
+          }}
+        >
+          <div style={{ padding: "24px" }}>
+            <h2 className="text-xl font-bold mb-4">Thông Tin Cá Nhân</h2>
+            <Form layout="vertical">
+              <Form.Item>
+                <Button
+                  type="text"
+                  block
+                  icon={<UserOutlined />}
+                  className="text-left"
+                  style={{ color: "#1677ff" }}
+                >
+                  Tài khoản của tôi
+                </Button>
+              </Form.Item>
+              <Form.Item>
+                <Button
+                  type="text"
+                  block
+                  icon={<HomeOutlined />}
+                  className="text-left text-gray-700 hover:text-black"
+                >
+                  Quản lý cho thuê
+                </Button>
+              </Form.Item>
+              <Form.Item>
+                <Button
+                  type="text"
+                  block
+                  icon={<HeartOutlined />}
+                  className="text-left text-gray-700 hover:text-black"
+                >
+                  Xe yêu thích
+                </Button>
+              </Form.Item>
+            </Form>
+          </div>
+        </Sider>
 
-        {/* Main Content */}
-        <Content style={{ marginLeft: "17rem", padding: "24px", width: "100%" }}>
-          {/* === SUMMARY CARD (avatar, name, email, small meta) === */}
-          <div style={{ width: "100%", maxWidth: 1000, marginBottom: 18 }}>
-            <Card className="shadow-lg rounded-xl">
+        {/* MAIN CONTENT */}
+        <Content
+          style={{
+            padding: "24px",
+            background: "#f9fafb",
+            overflowY: "auto",
+          }}
+        >
+          <div style={{ maxWidth: 1000, margin: "0 auto" }}>
+            {/* THÔNG TIN CÁ NHÂN */}
+            <Card title="Hồ sơ cá nhân" loading={loading} className="mb-6">
               <div className="flex items-start gap-6">
                 <div>
-                  <Avatar
-                    size={96}
-                    icon={<UserOutlined />}
-                    src={user.avatar}
-                    className="border"
+                  <Image
+                    src={avatarUrl || "/images/avatar-default.png"}
+                    alt="Avatar"
+                    width={96}
+                    height={96}
+                    className="rounded-full object-cover"
                   />
                 </div>
+                <Form
+                  form={form}
+                  layout="vertical"
+                  className="flex-1"
+                  onFinish={handleUpdate}
+                >
+                  <Form.Item label="Họ tên" name="name">
+                    <Input placeholder="Nhập họ tên" />
+                  </Form.Item>
+                  <Form.Item label="Số điện thoại" name="phone">
+                    <Input placeholder="Nhập số điện thoại" />
+                  </Form.Item>
+                  <Form.Item label="Email" name="email">
+                    <Input placeholder="Nhập email" />
+                  </Form.Item>
+                  <Button type="primary" htmlType="submit">
+                    Cập nhật thông tin
+                  </Button>
+                </Form>
+              </div>
+            </Card>
 
-                <div className="flex-1">
-                  <h2 className="text-2xl font-semibold">{user.fullName}</h2>
-                  <p className="text-gray-600 mb-2">{user.email}</p>
-
-                  <div className="flex gap-4 items-center">
-                    <div>
-                      <div className="text-sm text-gray-500">Tham gia</div>
-                      <div className="font-medium">{dayjs(user.createdAt).format("DD/MM/YYYY")}</div>
+            {/* TABS: Lịch sử / Giấy tờ */}
+            <Tabs defaultActiveKey="1">
+              <TabPane tab="Lịch sử giao dịch" key="1">
+                <Card>
+                  <p>Hiển thị danh sách giao dịch của người dùng...</p>
+                </Card>
+              </TabPane>
+              <TabPane tab="Giấy tờ cá nhân" key="2">
+                <Card title="Hình ảnh giấy tờ">
+                  <div className="grid md:grid-cols-2 gap-6">
+                    {/* GPLX */}
+                    <div className="flex flex-col items-center">
+                      <Upload
+                        name="gplx"
+                        showUploadList={false}
+                        onChange={(info) => handleUpload("gplx", info)}
+                      >
+                        <Button icon={<UploadOutlined />}>Tải GPLX</Button>
+                      </Upload>
+                      {gplxUrl && (
+                        <Image
+                          src={gplxUrl}
+                          alt="GPLX"
+                          width={240}
+                          height={160}
+                          className="rounded-lg mt-3 object-cover"
+                        />
+                      )}
                     </div>
 
-                    <div>
-                      <div className="text-sm text-gray-500">Điểm</div>
-                      <div className="font-medium">0 điểm</div>
+                    {/* CCCD */}
+                    <div className="flex flex-col items-center">
+                      <Upload
+                        name="cccd"
+                        showUploadList={false}
+                        onChange={(info) => handleUpload("cccd", info)}
+                      >
+                        <Button icon={<UploadOutlined />}>Tải CCCD</Button>
+                      </Upload>
+                      {cccdUrl && (
+                        <Image
+                          src={cccdUrl}
+                          alt="CCCD"
+                          width={240}
+                          height={160}
+                          className="rounded-lg mt-3 object-cover"
+                        />
+                      )}
                     </div>
-
-                    <div className="ml-auto flex gap-2">
-                      {/* small status tag - license verification state */}
-                      {licenseVerified === true && <Tag color="success">GPLX: Đã xác thực</Tag>}
-                      {licenseVerified === false && <Tag color="error">GPLX: Chưa xác thực</Tag>}
-                      {licenseVerified === null && <Tag color="default">GPLX: Chưa gửi</Tag>}
-                      
-                      {/* Citizen ID status */}
-                      {citizenIdVerified === true && <Tag color="success">CCCD: Đã xác thực</Tag>}
-                      {citizenIdVerified === false && <Tag color="error">CCCD: Chưa xác thực</Tag>}
-                      {citizenIdVerified === null && <Tag color="default">CCCD: Chưa gửi</Tag>}
-                    </div>
                   </div>
-                </div>
-              </div>
-            </Card>
-          </div>
-
-          {/* === TABS (Thông tin cá nhân + Đổi mật khẩu) === */}
-          <div style={{ width: "100%", maxWidth: 1000, marginBottom: 18 }}>
-            <Card className="shadow-lg rounded-xl">
-              <Tabs
-                defaultActiveKey="1"
-                items={[
-                  {
-                    key: "1",
-                    label: (
-                      <span>
-                        <UserOutlined /> Thông tin cá nhân
-                      </span>
-                    ),
-                    children: (
-                      <div>
-                        {!editing ? (
-                          <>
-                            <Descriptions column={1} bordered>
-                              <Descriptions.Item label="Họ và tên">{user.fullName}</Descriptions.Item>
-                              <Descriptions.Item label="Email">{user.email}</Descriptions.Item>
-                              <Descriptions.Item label="Số điện thoại">
-                                {user.phone || "Chưa cập nhật"}
-                              </Descriptions.Item>
-                              <Descriptions.Item label="Địa chỉ">
-                                {user.address || "Chưa cập nhật"}
-                              </Descriptions.Item>
-                              <Descriptions.Item label="Ngày sinh">
-                                {user.dateOfBirth ? dayjs(user.dateOfBirth).format("DD/MM/YYYY") : "Chưa cập nhật"}
-                              </Descriptions.Item>
-                            </Descriptions>
-                            <Button
-                              type="primary"
-                              icon={<EditOutlined />}
-                              onClick={() => setEditing(true)}
-                              className="mt-4 bg-blue-600 hover:bg-blue-700"
-                            >
-                              Chỉnh sửa thông tin
-                            </Button>
-                          </>
-                        ) : (
-                          <Form form={profileForm} layout="vertical" onFinish={handleUpdateProfile}>
-                            <Form.Item label="Họ và tên" name="fullName" rules={[{ required: true }]}>
-                              <Input size="large" prefix={<UserOutlined />} />
-                            </Form.Item>
-                            <Form.Item label="Email" name="email">
-                              <Input size="large" prefix={<MailOutlined />} disabled />
-                            </Form.Item>
-                            <Form.Item label="Số điện thoại" name="phone">
-                              <Input size="large" prefix={<PhoneOutlined />} />
-                            </Form.Item>
-                            <Form.Item label="Địa chỉ" name="address">
-                              <Input.TextArea rows={2} />
-                            </Form.Item>
-                            <Form.Item label="Ngày sinh" name="dateOfBirth">
-                              <DatePicker size="large" className="w-full" format="DD/MM/YYYY" />
-                            </Form.Item>
-                            <Space>
-                              <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading} className="bg-blue-600">
-                                Lưu thay đổi
-                              </Button>
-                              <Button icon={<CloseOutlined />} onClick={() => { setEditing(false); profileForm.resetFields(); }}>
-                                Hủy
-                              </Button>
-                            </Space>
-                          </Form>
-                        )}
-                      </div>
-                    ),
-                  },
-                  {
-                    key: "2",
-                    label: (
-                      <span>
-                        <LockOutlined /> Đổi mật khẩu
-                      </span>
-                    ),
-                    children: (
-                      <Form form={passwordForm} layout="vertical" onFinish={handleChangePassword}>
-                        <Form.Item label="Mật khẩu hiện tại" name="oldPassword" rules={[{ required: true }]}>
-                          <Input.Password size="large" prefix={<LockOutlined />} />
-                        </Form.Item>
-                        <Form.Item label="Mật khẩu mới" name="newPassword" rules={[{ required: true, min: 6 }]}>
-                          <Input.Password size="large" prefix={<LockOutlined />} />
-                        </Form.Item>
-                        <Form.Item
-                          label="Xác nhận mật khẩu mới"
-                          name="confirmPassword"
-                          dependencies={["newPassword"]}
-                          rules={[
-                            { required: true },
-                            ({ getFieldValue }) => ({
-                              validator(_, value) {
-                                if (!value || getFieldValue("newPassword") === value) return Promise.resolve();
-                                return Promise.reject(new Error("Mật khẩu xác nhận không khớp!"));
-                              },
-                            }),
-                          ]}
-                        >
-                          <Input.Password size="large" prefix={<LockOutlined />} />
-                        </Form.Item>
-                        <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading} className="bg-blue-600">
-                          Đổi mật khẩu
-                        </Button>
-                      </Form>
-                    ),
-                  },
-                ]}
-              />
-            </Card>
-          </div>
-
-          {/* === GPLX CARD (separate, under tabs) === */}
-          <div style={{ width: "100%", maxWidth: 1000, marginBottom: 18 }}>
-            <Card title={<><IdcardOutlined /> Giấy phép lái xe</>} className="shadow-lg rounded-xl">
-              <div className="mb-3">
-                <Tag color={licenseVerified === true ? "success" : licenseVerified === false ? "error" : "default"}>
-                  {licenseVerified === true ? "Đã xác thực" : licenseVerified === false ? "Chưa xác thực" : "Chưa gửi"}
-                </Tag>
-              </div>
-
-              <div className="bg-blue-50 border border-blue-100 p-3 rounded mb-4 text-blue-700 text-sm">
-                <strong>Lưu ý:</strong> Vui lòng tải lên cả 2 mặt (mặt trước và mặt sau) của giấy phép lái xe. 
-                Mỗi lần thuê xe sẽ yêu cầu cập nhật lại.
-              </div>
-
-              <Form form={licenseForm} layout="vertical" onFinish={handleSubmitLicense}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                  {/* Upload mặt trước */}
-                  <div>
-                    <Form.Item label="Mặt trước GPLX" required>
-                      <Upload
-                        listType="picture-card"
-                        showUploadList={false}
-                        beforeUpload={beforeUploadLicenseFront}
-                        accept="image/*"
-                      >
-                        {licenseImageFront ? (
-                          <img src={licenseImageFront} alt="GPLX mặt trước" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
-                        ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                            <UploadOutlined style={{ fontSize: 24 }} />
-                            <div className="text-sm text-gray-500">Mặt trước</div>
-                          </div>
-                        )}
-                      </Upload>
-                    </Form.Item>
-                  </div>
-
-                  {/* Upload mặt sau */}
-                  <div>
-                    <Form.Item label="Mặt sau GPLX" required>
-                      <Upload
-                        listType="picture-card"
-                        showUploadList={false}
-                        beforeUpload={beforeUploadLicenseBack}
-                        accept="image/*"
-                      >
-                        {licenseImageBack ? (
-                          <img src={licenseImageBack} alt="GPLX mặt sau" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
-                        ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                            <UploadOutlined style={{ fontSize: 24 }} />
-                            <div className="text-sm text-gray-500">Mặt sau</div>
-                          </div>
-                        )}
-                      </Upload>
-                    </Form.Item>
-                  </div>
-                </div>
-
-                {/* Info fields */}
-                <Form.Item label="Họ và tên (trên GPLX)" name="licenseName" rules={[{ required: true, message: "Nhập họ tên trên GPLX" }]}>
-                  <Input placeholder="Nhập đầy đủ họ tên" />
-                </Form.Item>
-
-                <div className="flex gap-3 mt-4">
-                  <Button type="default" onClick={() => { 
-                    licenseForm.resetFields(); 
-                    setLicenseImageFront(null); 
-                    setLicenseImageBack(null); 
-                  }}>
-                    Hủy
-                  </Button>
-                  <Button type="primary" htmlType="submit" loading={licenseUploading} className="bg-green-600">
-                    {hasLicense ? "Cập nhật" : "Gửi xác thực"}
-                  </Button>
-                </div>
-              </Form>
-            </Card>
-          </div>
-
-          {/* === CCCD CARD === */}
-          <div style={{ width: "100%", maxWidth: 1000 }}>
-            <Card title={<><IdcardOutlined /> Căn cước công dân</>} className="shadow-lg rounded-xl">
-              <div className="mb-3">
-                <Tag color={citizenIdVerified === true ? "success" : citizenIdVerified === false ? "error" : "default"}>
-                  {citizenIdVerified === true ? "Đã xác thực" : citizenIdVerified === false ? "Chưa xác thực" : "Chưa gửi"}
-                </Tag>
-              </div>
-
-              <div className="bg-blue-50 border border-blue-100 p-3 rounded mb-4 text-blue-700 text-sm">
-                <strong>Lưu ý:</strong> Vui lòng tải lên cả 2 mặt (mặt trước và mặt sau) của căn cước công dân. 
-                Mỗi lần thuê xe sẽ yêu cầu cập nhật lại.
-              </div>
-
-              <Form form={citizenIdForm} layout="vertical" onFinish={handleSubmitCitizenId}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                  {/* Upload mặt trước */}
-                  <div>
-                    <Form.Item label="Mặt trước CCCD" required>
-                      <Upload
-                        listType="picture-card"
-                        showUploadList={false}
-                        beforeUpload={beforeUploadCitizenIdFront}
-                        accept="image/*"
-                      >
-                        {citizenIdImageFront ? (
-                          <img src={citizenIdImageFront} alt="CCCD mặt trước" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
-                        ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                            <UploadOutlined style={{ fontSize: 24 }} />
-                            <div className="text-sm text-gray-500">Mặt trước</div>
-                          </div>
-                        )}
-                      </Upload>
-                    </Form.Item>
-                  </div>
-
-                  {/* Upload mặt sau */}
-                  <div>
-                    <Form.Item label="Mặt sau CCCD" required>
-                      <Upload
-                        listType="picture-card"
-                        showUploadList={false}
-                        beforeUpload={beforeUploadCitizenIdBack}
-                        accept="image/*"
-                      >
-                        {citizenIdImageBack ? (
-                          <img src={citizenIdImageBack} alt="CCCD mặt sau" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
-                        ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                            <UploadOutlined style={{ fontSize: 24 }} />
-                            <div className="text-sm text-gray-500">Mặt sau</div>
-                          </div>
-                        )}
-                      </Upload>
-                    </Form.Item>
-                  </div>
-                </div>
-
-                {/* Info fields */}
-                <Form.Item label="Họ và tên (trên CCCD)" name="citizenName" rules={[{ required: true, message: "Nhập họ tên trên CCCD" }]}>
-                  <Input placeholder="Nhập đầy đủ họ tên" />
-                </Form.Item>
-
-                <Form.Item label="Số căn cước công dân" name="citizenIdNumber" rules={[{ required: true, message: "Nhập số căn cước công dân" }]}>
-                  <Input placeholder="Nhập số CCCD" />
-                </Form.Item>
-
-                <Form.Item label="Ngày sinh (trên CCCD)" name="citizenBirthDate" rules={[{ required: true, message: "Chọn ngày sinh" }]}>
-                  <DatePicker className="w-full" format="DD/MM/YYYY" placeholder="Chọn ngày sinh" />
-                </Form.Item>
-
-                <div className="flex gap-3 mt-4">
-                  <Button type="default" onClick={() => { 
-                    citizenIdForm.resetFields(); 
-                    setCitizenIdImageFront(null); 
-                    setCitizenIdImageBack(null); 
-                  }}>
-                    Hủy
-                  </Button>
-                  <Button type="primary" htmlType="submit" loading={citizenIdUploading} className="bg-green-600">
-                    {hasCitizenId ? "Cập nhật" : "Gửi xác thực"}
-                  </Button>
-                </div>
-              </Form>
-            </Card>
+                </Card>
+              </TabPane>
+            </Tabs>
           </div>
         </Content>
-      </div>
+      </Layout>
     </Layout>
   );
 }

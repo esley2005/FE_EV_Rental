@@ -26,6 +26,7 @@ import CarList from "@/components/CarList";
 import HistoryList from "@/components/HistoryList";
 import DispatchList from "@/components/DispatchList";
 import CarManagement from "@/components/admin/CarManagement";
+import CustomerCard from "@/components/admin/CustomerCard";
 
 const { Header, Sider, Content, Footer } = Layout;
 
@@ -80,6 +81,8 @@ export default function AdminLayout() {
   const [allowed, setAllowed] = useState(false);
   const [denied, setDenied] = useState(false);
   const router = useRouter();
+  const [userName, setUserName] = useState<string>("Admin");
+  const [userInitial, setUserInitial] = useState<string>("A");
 
   // Chỉ cho phép user có role admin truy cập
   useEffect(() => {
@@ -97,6 +100,15 @@ export default function AdminLayout() {
     setAllowed(true);
     setDenied(false);
   }, [router]);
+
+  // Lấy tên user để hiển thị trên header
+  useEffect(() => {
+    const u = authUtils.getCurrentUser();
+    const name = u?.fullName ?? u?.name ?? u?.Email ?? u?.email ?? "Admin";
+    setUserName(name);
+    const initial = (name || "A").trim().charAt(0).toUpperCase();
+    setUserInitial(initial || "A");
+  }, []);
 
   // Hiển thị nội dung theo module và submenu
   const renderContent = () => {
@@ -116,6 +128,7 @@ export default function AdminLayout() {
     if (selectedModule === "customers") {
       switch (selectedSubMenu) {
         case "1":
+          // TODO: Hiển thị danh sách khách hàng từ API
           return <p>Hồ sơ khách hàng</p>;
         case "2":
           return <p>Trang Khiếu nại khách hàng</p>;
@@ -258,9 +271,9 @@ export default function AdminLayout() {
           >
             <Space style={{ color: "white", cursor: "pointer" }}>
               <Avatar size="small" style={{ backgroundColor: "#fff", color: "#1447E6" }}>
-                A
+                {userInitial}
               </Avatar>
-              <span>Admin</span>
+              <span>{userName}</span>
               <DownOutlined />
             </Space>
           </Dropdown>
