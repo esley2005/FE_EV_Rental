@@ -169,7 +169,7 @@ export default function CarManagement() {
     }
   };
 
-  const handleImageUpload = async (options: any) => {
+  const handleImageUpload = async (options: any, fieldName: string = 'imageUrl') => {
     const { file, onSuccess, onError } = options;
     
     // Validate file type
@@ -200,7 +200,7 @@ export default function CarManagement() {
     
     try {
       const imageUrl = await handleUploadToCloudinary(file);
-      form.setFieldsValue({ imageUrl });
+      form.setFieldsValue({ [fieldName]: imageUrl });
       api.success({
         message: 'Upload ảnh thành công!',
         description: 'Ảnh đã được tải lên Cloudinary và link đã được cập nhật.',
@@ -239,6 +239,8 @@ export default function CarManagement() {
         RentPricePerDayWithDriver: values.rentPricePerDayWithDriver,
         RentPricePerHourWithDriver: values.rentPricePerHourWithDriver,
         ImageUrl: values.imageUrl,
+        ImageUrl2: values.imageUrl2 || null,
+        ImageUrl3: values.imageUrl3 || null,
         Status: values.status,
         IsActive: values.isActive !== undefined ? values.isActive : true,
         IsDeleted: false,
@@ -554,10 +556,11 @@ export default function CarManagement() {
             </Form.Item>
           </div>
 
+          {/* Ảnh chính */}
           <Form.Item
-            label="URL ảnh xe"
+            label="URL ảnh xe chính (bắt buộc)"
             name="imageUrl"
-            rules={[{ required: true, message: 'Vui lòng nhập URL ảnh!' }]}
+            rules={[{ required: true, message: 'Vui lòng nhập URL ảnh chính!' }]}
             tooltip="Link ảnh từ internet hoặc upload bên dưới"
           >
             <Input 
@@ -565,12 +568,12 @@ export default function CarManagement() {
             />
           </Form.Item>
 
-          {/* Preview ảnh nếu có URL */}
+          {/* Preview ảnh chính */}
           <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.imageUrl !== currentValues.imageUrl}>
             {({ getFieldValue }) => {
               const imageUrl = getFieldValue('imageUrl');
               return imageUrl ? (
-                <Form.Item label="Xem trước">
+                <Form.Item label="Xem trước ảnh chính">
                   <Image
                     src={imageUrl}
                     alt="Preview"
@@ -584,9 +587,9 @@ export default function CarManagement() {
             }}
           </Form.Item>
 
-          <Form.Item label="Hoặc upload ảnh từ máy">
+          <Form.Item label="Hoặc upload ảnh chính từ máy">
             <Upload
-              customRequest={handleImageUpload}
+              customRequest={(options) => handleImageUpload(options, 'imageUrl')}
               showUploadList={false}
               accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
               maxCount={1}
@@ -597,7 +600,103 @@ export default function CarManagement() {
                 type="dashed"
                 block
               >
-                {uploading ? 'Đang tải lên...' : 'Chọn ảnh từ máy tính'}
+                {uploading ? 'Đang tải lên...' : 'Chọn ảnh chính từ máy tính'}
+              </Button>
+            </Upload>
+          </Form.Item>
+
+          {/* Ảnh phụ 1 */}
+          <Form.Item
+            label="URL ảnh xe phụ 1 (tùy chọn)"
+            name="imageUrl2"
+            tooltip="Link ảnh từ internet hoặc upload bên dưới"
+          >
+            <Input 
+              placeholder="https://res.cloudinary.com/... hoặc upload ảnh bên dưới"
+            />
+          </Form.Item>
+
+          {/* Preview ảnh phụ 1 */}
+          <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.imageUrl2 !== currentValues.imageUrl2}>
+            {({ getFieldValue }) => {
+              const imageUrl2 = getFieldValue('imageUrl2');
+              return imageUrl2 ? (
+                <Form.Item label="Xem trước ảnh phụ 1">
+                  <Image
+                    src={imageUrl2}
+                    alt="Preview 2"
+                    width={200}
+                    height={150}
+                    style={{ objectFit: 'cover', borderRadius: '8px' }}
+                    fallback="https://via.placeholder.com/200x150?text=Invalid+Image"
+                  />
+                </Form.Item>
+              ) : null;
+            }}
+          </Form.Item>
+
+          <Form.Item label="Hoặc upload ảnh phụ 1 từ máy">
+            <Upload
+              customRequest={(options) => handleImageUpload(options, 'imageUrl2')}
+              showUploadList={false}
+              accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+              maxCount={1}
+            >
+              <Button 
+                icon={<UploadOutlined />} 
+                loading={uploading}
+                type="dashed"
+                block
+              >
+                {uploading ? 'Đang tải lên...' : 'Chọn ảnh phụ 1 từ máy tính'}
+              </Button>
+            </Upload>
+          </Form.Item>
+
+          {/* Ảnh phụ 2 */}
+          <Form.Item
+            label="URL ảnh xe phụ 2 (tùy chọn)"
+            name="imageUrl3"
+            tooltip="Link ảnh từ internet hoặc upload bên dưới"
+          >
+            <Input 
+              placeholder="https://res.cloudinary.com/... hoặc upload ảnh bên dưới"
+            />
+          </Form.Item>
+
+          {/* Preview ảnh phụ 2 */}
+          <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.imageUrl3 !== currentValues.imageUrl3}>
+            {({ getFieldValue }) => {
+              const imageUrl3 = getFieldValue('imageUrl3');
+              return imageUrl3 ? (
+                <Form.Item label="Xem trước ảnh phụ 2">
+                  <Image
+                    src={imageUrl3}
+                    alt="Preview 3"
+                    width={200}
+                    height={150}
+                    style={{ objectFit: 'cover', borderRadius: '8px' }}
+                    fallback="https://via.placeholder.com/200x150?text=Invalid+Image"
+                  />
+                </Form.Item>
+              ) : null;
+            }}
+          </Form.Item>
+
+          <Form.Item label="Hoặc upload ảnh phụ 2 từ máy">
+            <Upload
+              customRequest={(options) => handleImageUpload(options, 'imageUrl3')}
+              showUploadList={false}
+              accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+              maxCount={1}
+            >
+              <Button 
+                icon={<UploadOutlined />} 
+                loading={uploading}
+                type="dashed"
+                block
+              >
+                {uploading ? 'Đang tải lên...' : 'Chọn ảnh phụ 2 từ máy tính'}
               </Button>
             </Upload>
             <p className="text-xs text-gray-500 mt-2">

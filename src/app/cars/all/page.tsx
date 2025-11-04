@@ -70,13 +70,29 @@ export default function AllCarsPage() {
       const response = await carsApi.getAll();
 
       if (response.success && response.data) {
+        console.log('[All Cars Page] Response data:', response.data);
+        console.log('[All Cars Page] Response data type:', typeof response.data);
+        console.log('[All Cars Page] Is array:', Array.isArray(response.data));
+        console.log('[All Cars Page] Has $values:', !!(response.data as any)?.$values);
+        
         // Backend C# có thể trả về { "$values": [...] } hoặc array trực tiếp
         const allCars = (response.data as any)?.$values || response.data || [];
         
+        console.log('[All Cars Page] All cars after processing:', allCars);
+        console.log('[All Cars Page] All cars length:', Array.isArray(allCars) ? allCars.length : 0);
+        
         // Lọc xe active và chưa xóa
         let activeCars = Array.isArray(allCars) 
-          ? allCars.filter((car: Car) => car.isActive && !car.isDeleted)
+          ? allCars.filter((car: any) => {
+              // Backend có thể trả về boolean hoặc number (0/1)
+              const isActive = car.isActive !== false && car.isActive !== 0 && car.isActive !== undefined;
+              const notDeleted = car.isDeleted !== true && car.isDeleted !== 1 && (car.isDeleted === false || car.isDeleted === 0 || car.isDeleted === undefined);
+              return isActive && notDeleted;
+            })
           : [];
+        
+        console.log('[All Cars Page] After filter - activeCars length:', activeCars.length);
+        console.log('[All Cars Page] Active cars:', activeCars);
 
         // Tìm kiếm theo keyword nếu có
         if (keyword && keyword.trim()) {
@@ -86,15 +102,20 @@ export default function AllCarsPage() {
             car.model?.toLowerCase().includes(searchTerm) ||
             car.sizeType?.toLowerCase().includes(searchTerm)
           );
+          console.log('[All Cars Page] After search filter:', activeCars.length);
         }
 
         // Lưu tổng số xe (trước khi phân trang)
         setTotalCount(activeCars.length);
+        console.log('[All Cars Page] Total count:', activeCars.length);
 
         // Phân trang phía client
         const startIndex = pageIndex * pageSize;
         const endIndex = startIndex + pageSize;
         const paginatedCars = activeCars.slice(startIndex, endIndex);
+        
+        console.log('[All Cars Page] Paginated cars:', paginatedCars.length, 'from', startIndex, 'to', endIndex);
+        console.log('[All Cars Page] Paginated cars data:', paginatedCars);
         
         setCars(paginatedCars);
       } else {
