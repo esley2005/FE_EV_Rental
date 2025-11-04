@@ -49,6 +49,12 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   const [car, setCar] = useState<Car | null>(null);
   const [otherCars, setOtherCars] = useState<Car[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Debug: Log khi otherCars thay đổi
+  useEffect(() => {
+    console.log('[Car Detail] otherCars state updated:', otherCars);
+    console.log('[Car Detail] otherCars length:', otherCars.length);
+  }, [otherCars]);
   const [isFavorite, setIsFavorite] = useState(false);
   const [documentType, setDocumentType] = useState<'id' | 'passport'>('id');
   const [showFullDescription, setShowFullDescription] = useState(false);
@@ -75,22 +81,58 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
         // Lấy tất cả xe để tìm xe hiện tại và xe khác
         const response = await carsApi.getAll();
+        
+        console.log('[Car Detail] API Response:', response);
+        console.log('[Car Detail] Response.data:', response.data);
 
         if (response.success && response.data) {
-          const carsData = (response.data as any)?.$values || response.data;
-          const activeCars = Array.isArray(carsData)
-            ? carsData.filter((c: Car) => c.isActive && !c.isDeleted)
+          // Xử lý nhiều định dạng response từ backend
+          const raw = response.data as any;
+          const data = raw?.data ?? raw; // supports { isSuccess, data } or direct array
+          const values = data?.$values ?? data?.data?.$values; // supports .data.$values
+          const carsData = Array.isArray(data)
+            ? data
+            : Array.isArray(values)
+            ? values
+            : Array.isArray(raw)
+            ? raw
             : [];
+          
+          console.log('[Car Detail] carsData after processing:', carsData);
+          console.log('[Car Detail] carsData is array:', Array.isArray(carsData));
+          
+          // Lọc xe active và chưa xóa
+          const activeCars = Array.isArray(carsData)
+            ? carsData.filter((c: Car) => c && c.isActive && !c.isDeleted)
+            : [];
+          
+          console.log('[Car Detail] activeCars:', activeCars);
+          console.log('[Car Detail] activeCars length:', activeCars.length);
 
+          // Tìm xe hiện tại
           const currentCar = activeCars.find((c: Car) => c.id === carId);
 
           if (!currentCar) {
+            console.error('[Car Detail] Car not found with id:', carId);
             notFound();
             return;
           }
 
+          console.log('[Car Detail] Current car found:', currentCar);
           setCar(currentCar);
-          setOtherCars(activeCars.filter((c: Car) => c.id !== carId).slice(0, 3));
+          
+          // Lọc các xe khác (không phải xe hiện tại) và lấy 3 xe đầu tiên
+          const otherCarsList = activeCars
+            .filter((c: Car) => c && c.id !== carId)
+            .slice(0, 3);
+          
+          console.log('[Car Detail] otherCarsList:', otherCarsList);
+          console.log('[Car Detail] otherCarsList length:', otherCarsList.length);
+          
+          setOtherCars(otherCarsList);
+        } else {
+          console.error('[Car Detail] API failed or no data:', response);
+          setOtherCars([]);
         }
       } catch (error) {
         console.error('Load car error:', error);
@@ -114,7 +156,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
           const response = await authApi.getProfile();
           if (response.success && response.data) {
             setUser(response.data);
-            // Cập nhật lại localStorage
+            // Cập nhật lại localStorage_
             localStorage.setItem('user', JSON.stringify(response.data));
           }
         } catch (error) {
@@ -268,16 +310,57 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
           </ol>
         </nav>
 
-        {/* Hình ảnh xe */}
+        {/* Hình ảnh xe - Gallery với 3 ảnh */}
         <div className="bg-white rounded-lg shadow-lg p-4 mb-6">
-          <img
-            src={car.imageUrl || '/logo_ev.png'}
-            alt={car.name}
-            className="w-full h-96 object-cover rounded-lg"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = '/logo_ev.png';
-            }}
-          />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Ảnh chính - chiếm 2 cột */}
+            <div className="md:col-span-2">
+              <img
+                src={car.imageUrl || '/logo_ev.png'}
+                alt={car.name}
+                className="w-full h-full md:h-96 object-cover rounded-lg"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = '/logo_ev.png';
+                }}
+              />
+            </div>
+            
+            {/* Ảnh phụ 1 và 2 - chia đều chiều cao */}
+            <div className="grid grid-cols-1 gap-4 h-full md:h-96">
+              {car.imageUrl2 ? (
+                <div className="flex-1">
+                  <img
+                    src={car.imageUrl2}
+                    alt={`${car.name} - Ảnh 2`}
+                    className="w-full h-full object-cover rounded-lg"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = '/logo_ev.png';
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="flex-1 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <span className="text-gray-400 text-sm">Chưa có ảnh 2</span>
+                </div>
+              )}
+              {car.imageUrl3 ? (
+                <div className="flex-1">
+                  <img
+                    src={car.imageUrl3}
+                    alt={`${car.name} - Ảnh 3`}
+                    className="w-full h-full object-cover rounded-lg"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = '/logo_ev.png';
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="flex-1 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <span className="text-gray-400 text-sm">Chưa có ảnh 3</span>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
@@ -691,7 +774,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
         </div>
 
         {/* Xe khác */}
-        {otherCars.length > 0 && (
+        {otherCars.length > 0 ? (
           <div className="mt-12">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Xe điện khác</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -726,6 +809,13 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                 </Link>
               ))}
             </div>
+          </div>
+        ) : (
+          <div className="mt-12">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Xe điện khác</h2>
+            <p className="text-gray-500 text-center py-8">
+              Hiện chưa có xe khác để hiển thị
+            </p>
           </div>
         )}
       </main>

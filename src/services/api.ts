@@ -3,7 +3,9 @@
 import { authUtils } from '@/utils/auth';
 import type { Car } from '@/types/car';
 
+// Backend có thể chạy trên HTTPS (7200) hoặc HTTP (5027)
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://localhost:7200/api';
+const API_BASE_URL_HTTP = process.env.NEXT_PUBLIC_API_URL_HTTP || 'http://localhost:5027/api';
 
 // Lightweight logger: only logs in development to avoid eslint no-console in prod
 const logger = {
@@ -66,38 +68,76 @@ interface ApiResponse<T> {
 // Generic fetch wrapper với error handling và authentication
 export async function apiCall<T>(
   endpoint: string, 
-  options: RequestInit = {}
+  options: RequestInit & { skipAuth?: boolean } = {}
 ): Promise<ApiResponse<T>> {
   try {
-    // Lấy token từ authUtils
-    const token = authUtils.getToken();
+    const { skipAuth, ...fetchOptions } = options;
     
-    const url = `${API_BASE_URL}${endpoint}`;
-  logger.log(`[API] Calling ${options.method || 'GET'} ${url}`);
+    // Thử HTTPS trước, nếu fail thì thử HTTP
+    let url = `${API_BASE_URL}${endpoint}`;
+    let useHttp = false;
+    
+  logger.log(`[API] Calling ${fetchOptions.method || 'GET'} ${url}${skipAuth ? ' (no auth - public endpoint)' : ''}`);
     
     // Build headers conditionally to avoid triggering unnecessary CORS preflight (405 on OPTIONS)
     const headers: Record<string, string> = {
-      ...(options.headers as Record<string, string> | undefined),
+      ...(fetchOptions.headers as Record<string, string> | undefined),
     };
 
     // Only set Content-Type when we actually send a body (POST/PUT/PATCH) and it's not FormData
-    const hasBody = typeof options.body !== 'undefined' && options.body !== null;
-    const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+    const hasBody = typeof fetchOptions.body !== 'undefined' && fetchOptions.body !== null;
+    const isFormData = typeof FormData !== 'undefined' && fetchOptions.body instanceof FormData;
     if (hasBody && !isFormData && !headers['Content-Type']) {
       headers['Content-Type'] = 'application/json';
     }
 
-    // Add Authorization only if token exists
-    if (token && !headers['Authorization']) {
-      headers['Authorization'] = `Bearer ${token}`;
+    // CHỈ THÊM TOKEN KHI KHÔNG PHẢI PUBLIC ENDPOINT
+    // Nếu skipAuth = true, đảm bảo KHÔNG có Authorization header
+    if (skipAuth) {
+      // Xóa bỏ Authorization header nếu có (từ options.headers)
+      delete headers['Authorization'];
+      delete headers['authorization'];
+    } else {
+      // Chỉ thêm token khi không phải public endpoint
+      const token = authUtils.getToken();
+      if (token && !headers['Authorization'] && !headers['authorization']) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
     }
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        ...fetchOptions,
+        headers,
+      });
+    } catch (fetchError: any) {
+      // Nếu HTTPS fail với connection error, thử HTTP
+      if ((fetchError.message?.includes('Failed to fetch') || 
+           fetchError.message?.includes('ERR_CONNECTION_REFUSED') ||
+           fetchError.message?.includes('NetworkError')) &&
+          url.startsWith('https://') && !useHttp) {
+        logger.warn(`[API] HTTPS failed, trying HTTP fallback...`);
+        url = `${API_BASE_URL_HTTP}${endpoint}`;
+        useHttp = true;
+        try {
+          response = await fetch(url, {
+            ...fetchOptions,
+            headers,
+          });
+        } catch (httpError) {
+          logger.error(`[API] Both HTTPS and HTTP failed for ${endpoint}`);
+          return {
+            success: false,
+            error: 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra xem backend server đã chạy chưa (https://localhost:7200 hoặc http://localhost:5027)'
+          };
+        }
+      } else {
+        throw fetchError;
+      }
+    }
 
-  logger.log(`[API] Response status: ${response.status} ${response.statusText}`);
+  logger.log(`[API] Response status: ${response.status} ${response.statusText}${useHttp ? ' (via HTTP fallback)' : ''}`);
 
     // Xử lý 204 No Content (DELETE, PUT thành công nhưng không có body)
     if (response.status === 204) {
@@ -119,11 +159,112 @@ export async function apiCall<T>(
 
     // Nếu response là 401, có thể token đã hết hạn
     if (response.status === 401) {
-      // Chỉ logout nếu user đã đăng nhập
-      if (authUtils.isAuthenticated()) {
+      // Nếu là public endpoint (skipAuth), thử lại không có token
+      if (skipAuth) {
+        logger.warn(`[API] 401 on public endpoint ${endpoint}, retrying without token...`);
+        
+        // Tạo lại request hoàn toàn không có token
+        const cleanHeaders: Record<string, string> = {
+          ...(fetchOptions.headers as Record<string, string> | undefined),
+        };
+        
+        // Remove Authorization header nếu có (cả chữ hoa và chữ thường)
+        delete cleanHeaders['Authorization'];
+        delete cleanHeaders['authorization'];
+        delete cleanHeaders['AUTHORIZATION'];
+        
+        logger.log(`[API] Retrying ${endpoint} with headers:`, Object.keys(cleanHeaders));
+        
+        // Retry request không có token
+        try {
+          const retryResponse = await fetch(url, {
+            ...fetchOptions,
+            headers: cleanHeaders,
+          });
+          
+          logger.log(`[API] Retry response status: ${retryResponse.status} ${retryResponse.statusText}`);
+          
+          // Nếu retry thành công, xử lý như response bình thường
+          if (retryResponse.ok) {
+            const retryText = await retryResponse.text();
+            logger.log(`[API] Retry response text length: ${retryText.length}`);
+            
+            if (!retryText || retryText.trim() === '') {
+              return {
+                success: true,
+                message: 'Operation completed successfully'
+              };
+            }
+            
+            try {
+              const retryData = JSON.parse(retryText);
+              logger.log(`[API] Retry successful, data type:`, Array.isArray(retryData) ? 'array' : typeof retryData);
+              return {
+                success: true,
+                data: retryData,
+                message: retryData.message || retryData.Message || 'Success'
+              };
+            } catch (e) {
+              logger.error('[API] Failed to parse retry response:', e);
+              return {
+                success: true,
+                data: retryText as any,
+                message: retryText
+              };
+            }
+          } else {
+            logger.warn(`[API] Retry still failed with status ${retryResponse.status}`);
+          }
+        } catch (retryError) {
+          logger.error('[API] Retry failed with exception:', retryError);
+        }
+      }
+      
+      // Chỉ logout nếu user đã đăng nhập VÀ không phải public endpoint
+      if (!skipAuth && authUtils.isAuthenticated()) {
   logger.warn('[API] Token expired, logging out...');
         authUtils.logout();
       }
+      
+      // Nếu là public endpoint sau khi retry vẫn fail
+      if (skipAuth) {
+        // Đọc body để xem có data không (một số backend trả về data kèm 401)
+        try {
+          // Clone response để có thể đọc lại body
+          const clonedResponse = response.clone();
+          const bodyText = await clonedResponse.text();
+          logger.warn(`[API] Public endpoint ${endpoint} 401, body length: ${bodyText.length}`);
+          
+          // Nếu có body và là JSON hợp lệ, thử parse
+          if (bodyText && bodyText.trim() && !bodyText.includes('<!DOCTYPE') && !bodyText.includes('<html')) {
+            try {
+              const bodyData = JSON.parse(bodyText);
+              // Nếu có data trong body dù là 401, có thể backend vẫn trả về data
+              if (bodyData && (Array.isArray(bodyData) || bodyData.$values || (typeof bodyData === 'object' && Object.keys(bodyData).length > 0))) {
+                logger.warn(`[API] 401 but has data in body, returning data anyway`);
+                return {
+                  success: true,
+                  data: bodyData,
+                  message: 'Data retrieved despite 401 status'
+                };
+              }
+            } catch (e) {
+              // Không phải JSON hợp lệ, bỏ qua
+            }
+          }
+        } catch (e) {
+          logger.error('[API] Failed to read 401 response body:', e);
+        }
+        
+        // Nếu không có data trong body, trả về error
+        logger.warn(`[API] Public endpoint ${endpoint} requires auth, returning error`);
+        return {
+          success: false,
+          error: 'Endpoint này yêu cầu đăng nhập. Vui lòng đăng nhập để xem danh sách xe.',
+          data: [] as T
+        };
+      }
+      
       return {
         success: false,
         error: 'Unauthorized - Please login again'
@@ -213,31 +354,81 @@ export async function apiCall<T>(
     }
 
     // Wrap response để đảm bảo có field success
+    // Backend C# trả về: { message: '...', data: { $id: '...', $values: [...] } }
+    // Nên cần extract data từ response.data
+    const responseData = data?.data ?? data;
+    
+    logger.log(`[API] Response data structure:`, {
+      hasData: !!data,
+      hasDataData: !!data?.data,
+      dataType: typeof data,
+      dataDataType: typeof data?.data,
+      isArray: Array.isArray(responseData),
+      hasValues: !!(responseData as any)?.$values,
+      valuesLength: Array.isArray((responseData as any)?.$values) ? (responseData as any).$values.length : 0
+    });
+    
     return {
       success: true,
-      data: data,
+      data: responseData,
       message: data.message || data.Message || 'Success'
     };
   } catch (error) {
   logger.error(`API call failed for ${endpoint}:`, error);
+    
+    // Xử lý các loại lỗi connection
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    if (errorMessage.includes('Failed to fetch') || 
+        errorMessage.includes('ERR_CONNECTION_REFUSED') ||
+        errorMessage.includes('NetworkError') ||
+        errorMessage.includes('Network request failed')) {
+      return {
+        success: false,
+        error: 'Không thể kết nối đến máy chủ. Vui lòng đảm bảo backend server đang chạy:\n' +
+               '- HTTPS: https://localhost:7200\n' +
+               '- HTTP: http://localhost:5027\n' +
+               'Hoặc kiểm tra biến môi trường NEXT_PUBLIC_API_URL'
+      };
+    }
+    
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
+      error: errorMessage || 'Unknown error occurred'
     };
   }
 }
 
 // Cars API
 export const carsApi = {
-  // Lấy tất cả xe
-  getAll: () => apiCall<Car[]>('/Car'),
+  // Lấy tất cả xe (public endpoint - đã được AllowAnonymous ở backend)
+  getAll: () => apiCall<Car[]>('/Car', { skipAuth: true }),
 
-  // Lấy danh sách xe thuê nhiều nhất
-  getTopRented: (topCount: number = 6) =>
-    apiCall<Car[]>(`/Car/TopRented?topCount=${encodeURIComponent(topCount)}`),
-
-  // Lấy xe theo ID
-  getById: (id: string) => apiCall<Car>(`/Car/${id}`),
+  // Lấy xe theo ID - backend không có endpoint này, sẽ lấy từ danh sách
+  getById: async (id: string) => {
+    // Backend không có endpoint /Car/{id}, nên lấy từ danh sách và filter
+    const response = await apiCall<Car[]>('/Car', { skipAuth: true });
+    if (response.success && response.data) {
+      const carsData = (response.data as any)?.$values || response.data || [];
+      const carId = parseInt(id);
+      const car = Array.isArray(carsData) 
+        ? carsData.find((c: Car) => c.id === carId)
+        : null;
+      
+      if (car) {
+        return {
+          success: true,
+          data: car,
+          message: 'Car found'
+        };
+      }
+      return {
+        success: false,
+        error: 'Car not found'
+      };
+    }
+    return response;
+  },
 
   // Tạo xe mới
   create: (carData: Partial<Car>) => 
