@@ -36,8 +36,8 @@ import {
   message,
   Tag,
 } from "antd";
-import { authApi, driverLicenseApi, citizenIdApi } from "@/services/api";
-import type { User, UpdateProfileData, ChangePasswordData, DriverLicenseData, CitizenIdData } from "@/services/api";
+import { authApi, driverLicenseApi, citizenIdApi, rentalOrderApi } from "@/services/api";
+import type { User, UpdateProfileData, ChangePasswordData, DriverLicenseData, CitizenIdData, RentalOrderData } from "@/services/api";
 import dayjs from "dayjs";
 
 const { Content } = Layout;
@@ -350,14 +350,45 @@ export default function ProfilePage() {
 
     setLicenseUploading(true);
     try {
+      // Tự động lấy rentalOrderId từ database dựa trên userId
+      let rentalOrderId = 0;
+      if (user?.id) {
+        try {
+          const ordersResponse = await rentalOrderApi.getByUserId(user.id);
+          if (ordersResponse.success && ordersResponse.data) {
+            const orders = Array.isArray(ordersResponse.data)
+              ? ordersResponse.data
+              : (ordersResponse.data as any)?.$values || [];
+            
+            // Tìm đơn hàng chưa có driverLicenseId (chưa có giấy phép lái xe) hoặc đơn hàng mới nhất
+            const orderWithoutLicense = orders.find((order: RentalOrderData) => !order.driverLicenseId);
+            
+            if (orderWithoutLicense) {
+              rentalOrderId = orderWithoutLicense.id || orderWithoutLicense.Id || 0;
+            } else if (orders.length > 0) {
+              // Nếu không có đơn hàng chưa có giấy phép, lấy đơn hàng mới nhất
+              const latestOrder = orders.sort((a: RentalOrderData, b: RentalOrderData) => {
+                const dateA = new Date(a.createdAt || '').getTime();
+                const dateB = new Date(b.createdAt || '').getTime();
+                return dateB - dateA;
+              })[0];
+              rentalOrderId = latestOrder.id || latestOrder.Id || 0;
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching rental orders:", error);
+          // Nếu không lấy được, vẫn tiếp tục với rentalOrderId = 0
+        }
+      }
+
       // Gửi ImageUrl và ImageUrl2 riêng biệt (theo backend)
-      // Mỗi lần thuê xe sẽ upload lại giấy tờ với RentalOrderId mới
+      // Tự động gắn rentalOrderId từ database
       const licenseData: DriverLicenseData = {
         name: values.licenseName,
         licenseNumber: values.licenseNumber || '',
         imageUrl: licenseImageFront, // Mặt trước
         imageUrl2: licenseImageBack, // Mặt sau
-        rentalOrderId: 0, // 0 = chưa có đơn thuê, sẽ được gán khi đặt xe
+        rentalOrderId: rentalOrderId, // Tự động lấy từ database
       };
 
       const response = hasLicense && licenseId !== null
@@ -449,15 +480,46 @@ export default function ProfilePage() {
 
     setCitizenIdUploading(true);
     try {
+      // Tự động lấy rentalOrderId từ database dựa trên userId
+      let rentalOrderId = 0;
+      if (user?.id) {
+        try {
+          const ordersResponse = await rentalOrderApi.getByUserId(user.id);
+          if (ordersResponse.success && ordersResponse.data) {
+            const orders = Array.isArray(ordersResponse.data)
+              ? ordersResponse.data
+              : (ordersResponse.data as any)?.$values || [];
+            
+            // Tìm đơn hàng chưa có citizenId (chưa có căn cước) hoặc đơn hàng mới nhất
+            const orderWithoutCitizenId = orders.find((order: RentalOrderData) => !order.citizenId);
+            
+            if (orderWithoutCitizenId) {
+              rentalOrderId = orderWithoutCitizenId.id || orderWithoutCitizenId.Id || 0;
+            } else if (orders.length > 0) {
+              // Nếu không có đơn hàng chưa có căn cước, lấy đơn hàng mới nhất
+              const latestOrder = orders.sort((a: RentalOrderData, b: RentalOrderData) => {
+                const dateA = new Date(a.createdAt || '').getTime();
+                const dateB = new Date(b.createdAt || '').getTime();
+                return dateB - dateA;
+              })[0];
+              rentalOrderId = latestOrder.id || latestOrder.Id || 0;
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching rental orders:", error);
+          // Nếu không lấy được, vẫn tiếp tục với rentalOrderId = 0
+        }
+      }
+
       // Gửi ImageUrl và ImageUrl2 riêng biệt (theo backend)
-      // Mỗi lần thuê xe sẽ upload lại giấy tờ với RentalOrderId mới
+      // Tự động gắn rentalOrderId từ database
       const citizenIdData: CitizenIdData = {
         name: values.citizenName,
         citizenIdNumber: values.citizenIdNumber,
         birthDate: values.citizenBirthDate ? values.citizenBirthDate.format("YYYY-MM-DD") : "",
         imageUrl: citizenIdImageFront, // Mặt trước
         imageUrl2: citizenIdImageBack, // Mặt sau
-        rentalOrderId: 0, // 0 = chưa có đơn thuê, sẽ được gán khi đặt xe
+        rentalOrderId: rentalOrderId, // Tự động lấy từ database
       };
 
       const response = hasCitizenId && citizenIdDocId !== null

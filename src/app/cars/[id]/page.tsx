@@ -204,8 +204,8 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
   };
 
-  // Kiểm tra status giấy tờ trước khi cho phép thuê
-  const handleBookingClick = async () => {
+  // Mở modal đặt xe (không kiểm tra giấy tờ trước, sẽ upload sau khi tạo đơn hàng)
+  const handleBookingClick = () => {
     // Kiểm tra authentication trước
     if (!authUtils.isAuthenticated()) {
       message.warning('Vui lòng đăng nhập để thuê xe');
@@ -213,68 +213,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
       return;
     }
 
-    // Nếu chưa có thông tin user trong state, thử lấy từ localStorage hoặc gọi API
-    let currentUser = user;
-    if (!currentUser) {
-      // Thử lấy từ localStorage trước
-      const localUser = authUtils.getCurrentUser();
-      if (localUser) {
-        currentUser = localUser as User;
-        setUser(localUser as User);
-      } else {
-        // Gọi API để lấy thông tin user
-        const response = await authApi.getProfile();
-        if (response.success && response.data) {
-          currentUser = response.data;
-          setUser(response.data);
-          localStorage.setItem('user', JSON.stringify(response.data));
-        } else {
-          message.error('Không thể tải thông tin tài khoản. Vui lòng thử lại.');
-          return;
-        }
-      }
-    }
-
-    // Kiểm tra driverLicenseStatus
-    const driverLicenseStatus = (currentUser as any)?.driverLicenseStatus ?? 0;
-    // Kiểm tra citizenIdStatus (hoặc passport status tùy theo documentType)
-    const citizenIdStatus = (currentUser as any)?.citizenIdStatus ?? 0;
-
-    // Kiểm tra xem thiếu giấy tờ gì
-    const missingDriverLicense = driverLicenseStatus !== 1;
-    const missingCitizenId = documentType === 'id' && citizenIdStatus !== 1;
-
-    // Nếu thiếu cả 2 loại giấy tờ
-    if (missingDriverLicense && missingCitizenId) {
-      setDocumentWarningModal({
-        visible: true,
-        title: 'Thiếu giấy tờ cần thiết',
-        content: 'Vui lòng cập nhật Giấy phép lái xe và Căn cước công dân trong trang cá nhân để có thể thuê xe.',
-      });
-      return;
-    }
-
-    // Nếu chỉ thiếu giấy phép lái xe
-    if (missingDriverLicense) {
-      setDocumentWarningModal({
-        visible: true,
-        title: 'Thiếu Giấy phép lái xe',
-        content: 'Vui lòng cập nhật Giấy phép lái xe trong trang cá nhân để có thể thuê xe.',
-      });
-      return;
-    }
-
-    // Nếu chỉ thiếu CCCD (khi chọn loại giấy tờ là CCCD)
-    if (missingCitizenId) {
-      setDocumentWarningModal({
-        visible: true,
-        title: 'Thiếu Căn cước công dân',
-        content: 'Vui lòng cập nhật Căn cước công dân trong trang cá nhân để có thể thuê xe.',
-      });
-      return;
-    }
-
-    // Nếu cả 2 status đều = 1 thì cho phép mở modal
+    // Mở modal luôn - giấy tờ sẽ được yêu cầu upload sau khi tạo đơn hàng
     setIsBookingModalOpen(true);
   };
 
