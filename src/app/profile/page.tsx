@@ -45,6 +45,7 @@ const { Content } = Layout;
 export default function ProfilePage() {
   const router = useRouter();
   const [api, contextHolder] = antdNotification.useNotification();
+
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -69,7 +70,6 @@ export default function ProfilePage() {
   const [hasCitizenId, setHasCitizenId] = useState(false);
   const [citizenIdDocId, setCitizenIdDocId] = useState<number | null>(null);
 
-  // ================== KEEP your existing data-loading logic ==================
   useEffect(() => {
     const loadUserProfile = async () => {
       try {
@@ -178,7 +178,6 @@ export default function ProfilePage() {
     loadUserProfile();
   }, [router, api, profileForm, licenseForm, citizenIdForm]);
 
-  // ================== KEEP your existing handlers ==================
   const handleUpdateProfile = async (values: any) => {
     setLoading(true);
     try {
@@ -237,7 +236,7 @@ export default function ProfilePage() {
           placement: "topRight",
           icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
         });
-        password_form_reset();
+        passwordForm.resetFields();
       } else {
         api.error({
           message: "Đổi mật khẩu thất bại",
@@ -258,9 +257,6 @@ export default function ProfilePage() {
       setLoading(false);
     }
   };
-
-  // helper because passwordForm is declared above
-  const password_form_reset = () => passwordForm.resetFields();
 
   // ================== Upload to Cloudinary ==================
   const handleUploadToCloudinary = async (file: File): Promise<string> => {

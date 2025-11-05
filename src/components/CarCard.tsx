@@ -9,7 +9,7 @@ import {
   StarFilled,
   CarOutlined
 } from "@ant-design/icons";
-
+import { Zap } from "lucide-react";
 interface CarCardProps {
   car: Car;
 }
@@ -33,10 +33,10 @@ export default function CarCard({ car }: CarCardProps) {
   // Xác định loại nhiên liệu từ batteryType hoặc sizeType
   const getFuelType = () => {
     // Nếu là xe điện
-    if (car.batteryType?.toLowerCase().includes("lithium") || 
-        car.batteryType?.toLowerCase().includes("ev") ||
-        car.name?.toLowerCase().includes("ev") ||
-        car.name?.toLowerCase().includes("electric")) {
+    if (car.batteryType?.toLowerCase().includes("lithium") ||
+      car.batteryType?.toLowerCase().includes("ev") ||
+      car.name?.toLowerCase().includes("ev") ||
+      car.name?.toLowerCase().includes("electric")) {
       return "Điện";
     }
     return "Điện";
@@ -65,25 +65,23 @@ export default function CarCard({ car }: CarCardProps) {
               (e.target as HTMLImageElement).src = '/logo_ev.png';
             }}
           />
-          
+
           {/* Badge icon tia sét (góc trên trái) */}
           <div className="absolute top-2 left-2">
             <div className="bg-gray-800 bg-opacity-70 rounded-lg p-1.5">
-              <ThunderboltOutlined className="text-yellow-400 text-base" />
+              <Zap className="text-yellow-400 fill-yellow-400" size={16} />
             </div>
           </div>
-
           {/* Badge giảm giá (góc dưới phải) - chỉ hiển thị nếu có trong data */}
           {/* Có thể thêm logic kiểm tra giảm giá từ backend sau */}
 
           {/* Badge trạng thái (góc trên phải) */}
           <div className="absolute top-2 right-2">
             <span
-              className={`px-2 py-1 text-[10px] font-semibold rounded-lg shadow-md ${
-                car.status === 0
+              className={`px-2 py-1 text-[10px] font-semibold rounded-lg shadow-md ${car.status === 0
                   ? "bg-blue-600 text-white"
                   : "bg-red-500 text-white"
-              }`}
+                }`}
             >
               {car.status === 0 ? "Sẵn sàng" : "Hết xe"}
             </span>

@@ -6,7 +6,11 @@ import Link from "next/link";
 import { authUtils } from "@/utils/auth";
 import NotificationDropdown from "./NotificationDropdown";
 
-export default function Header() {
+type HeaderProps = {
+  colorScheme?: "blue" | "black";
+};
+
+export default function Header({ colorScheme = "blue" }: HeaderProps) {
   const [open, setOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -29,6 +33,22 @@ export default function Header() {
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, [userMenuOpen]);
+
+  const scheme = colorScheme === "black"
+    ? {
+        border: "border-black",
+        textAccent: "text-black",
+        primaryBg: "bg-black",
+        primaryHoverBg: "hover:bg-gray-900",
+        subtleHoverBg: "hover:bg-gray-100",
+      }
+    : {
+        border: "border-blue-600",
+        textAccent: "text-blue-700",
+        primaryBg: "bg-blue-600",
+        primaryHoverBg: "hover:bg-blue-700",
+        subtleHoverBg: "hover:bg-blue-50",
+      };
 
   return (
     <header className="fixed top-0 left-0 w-full z-50 bg-white shadow-md">
@@ -83,7 +103,7 @@ export default function Header() {
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
                 className="flex items-center gap-2 px-4 py-2 rounded-full border border-gray-300 hover:bg-gray-50 transition"
               >
-                <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-semibold">
+                <div className={`w-8 h-8 rounded-full ${scheme.primaryBg} text-white flex items-center justify-center font-semibold`}>
                   {user.fullName?.charAt(0).toUpperCase()}
                 </div>
                 <span className="font-medium text-gray-700">{user.fullName}</span>
@@ -112,7 +132,7 @@ export default function Header() {
                   {(user.role === 'Admin') && (
                     <Link
                       href="/admin"
-                      className="block px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-md mx-2 my-1 text-center"
+                      className={`block px-4 py-2 text-sm font-semibold text-white ${scheme.primaryBg} ${scheme.primaryHoverBg} rounded-md mx-2 my-1 text-center`}
                       onClick={() => setUserMenuOpen(false)}
                     >
                       Trang Admin
@@ -154,14 +174,14 @@ export default function Header() {
             <>
               <Link
                 href="/login"
-                className="px-4 py-2 rounded-full border border-blue-600 text-blue-700 hover:bg-blue-50 transition"
+                className={`px-4 py-2 rounded-full border ${scheme.border} ${scheme.textAccent} ${scheme.subtleHoverBg} transition`}
               >
                 Đăng nhập
               </Link>
 
               <Link
                 href="/register"
-                className="px-4 py-2 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition"
+                className={`px-4 py-2 rounded-full ${scheme.primaryBg} text-white ${scheme.primaryHoverBg} transition`}
               >
                 Đăng ký
               </Link>
@@ -188,7 +208,7 @@ export default function Header() {
             <div className="pt-2 border-t border-gray-100 space-y-2">
               <div className="px-3 py-2 bg-gray-50 rounded">
                 <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-semibold">
+                  <div className={`w-10 h-10 rounded-full ${scheme.primaryBg} text-white flex items-center justify-center font-semibold`}>
                     {user.fullName?.charAt(0).toUpperCase()}
                   </div>
                   <div>
@@ -212,8 +232,8 @@ export default function Header() {
           ) : (
             // User chưa đăng nhập (Mobile)
             <div className="pt-2 border-t border-gray-100 flex gap-2">
-              <Link href="/login" className="flex-1 text-center px-3 py-2 rounded border border-blue-600 text-blue-700">Đăng nhập</Link>
-              <Link href="/register" className="flex-1 text-center px-3 py-2 rounded bg-blue-600 text-white">Đăng ký</Link>
+              <Link href="/login" className={`flex-1 text-center px-3 py-2 rounded border ${scheme.border} ${scheme.textAccent}`}>Đăng nhập</Link>
+              <Link href="/register" className={`flex-1 text-center px-3 py-2 rounded ${scheme.primaryBg} text-white`}>Đăng ký</Link>
             </div>
           )}
         </div>
