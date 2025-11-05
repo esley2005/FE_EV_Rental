@@ -126,24 +126,25 @@ export default function Header({ colorScheme = "blue" }: HeaderProps) {
                     )}
                   </div>
 
-                  {(user.role === 'Staff') && (
-                    <Link
-                      href="/staff"
-                      className={`block px-4 py-2 text-sm font-semibold text-white ${scheme.primaryBg} ${scheme.primaryHoverBg} rounded-md mx-2 my-1 text-center`}
-                      onClick={() => setUserMenuOpen(false)}
-                    >
-                      Trang Staff
-                    </Link>
-                  )}
-
-                  {/* Nút Admin - */}
-                  {(user.role === 'Admin') && (
+                  {/* Nút Admin */}
+                  {(user.role === 'Admin' || user.role === 'S' || authUtils.isAdmin()) && (
                     <Link
                       href="/admin"
                       className={`block px-4 py-2 text-sm font-semibold text-white ${scheme.primaryBg} ${scheme.primaryHoverBg} rounded-md mx-2 my-1 text-center`}
                       onClick={() => setUserMenuOpen(false)}
                     >
                       Trang Admin
+                    </Link>
+                  )}
+
+                  {/* Nút Staff */}
+                  {(user.role === 'Staff' || authUtils.isStaff()) && (
+                    <Link
+                      href="/staff"
+                      className={`block px-4 py-2 text-sm font-semibold text-white ${scheme.primaryBg} ${scheme.primaryHoverBg} rounded-md mx-2 my-1 text-center`}
+                      onClick={() => setUserMenuOpen(false)}
+                    >
+                      Trang Staff
                     </Link>
                   )}
 
@@ -225,6 +226,17 @@ export default function Header({ colorScheme = "blue" }: HeaderProps) {
                   </div>
                 </div>
               </div>
+              {/* Mobile menu links */}
+              {(user.role === 'Admin' || user.role === 'S' || authUtils.isAdmin()) && (
+                <Link href="/admin" className={`block px-3 py-2 rounded text-white ${scheme.primaryBg} ${scheme.primaryHoverBg} text-center font-semibold`}>
+                  Trang Admin
+                </Link>
+              )}
+              {(user.role === 'Staff' || authUtils.isStaff()) && (
+                <Link href="/staff" className={`block px-3 py-2 rounded text-white ${scheme.primaryBg} ${scheme.primaryHoverBg} text-center font-semibold`}>
+                  Trang Staff
+                </Link>
+              )}
               <Link href="/profile" className="block px-3 py-2 rounded hover:bg-gray-100">Tài khoản của tôi</Link>
               <Link href="/my-bookings" className="block px-3 py-2 rounded hover:bg-gray-100">Đơn hàng của tôi</Link>
               <button

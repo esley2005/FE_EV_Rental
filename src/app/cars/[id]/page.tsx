@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import { notFound, useRouter } from "next/navigation";
-import Image from "next/image";
 import Link from "next/link";
 import { Spin, message, notification, Modal, Button } from "antd";
 import { StarOutlined, ShareAltOutlined, HeartOutlined, SafetyOutlined, EnvironmentOutlined, QuestionCircleOutlined, InfoCircleOutlined } from "@ant-design/icons";
@@ -41,6 +40,8 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   const resolvedParams = React.use(params);
   const router = useRouter();
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   //2
   // car: xe hiện tại
   // otherCars: các xe khác để hiển thị bên dưới
@@ -253,29 +254,51 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
         <div className="bg-white rounded-lg shadow-lg p-4 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Ảnh chính - chiếm 2 cột */}
-            <div className="md:col-span-2">
+            <div 
+              className="md:col-span-2 cursor-pointer group relative overflow-hidden rounded-lg"
+              onClick={() => {
+                setSelectedImageIndex(0);
+                setIsImageModalOpen(true);
+              }}
+            >
               <img
                 src={car.imageUrl || '/logo_ev.png'}
                 alt={car.name}
-                className="w-full h-full md:h-96 object-cover rounded-lg"
+                className="w-full h-full md:h-96 object-cover rounded-lg transition-transform duration-300 group-hover:scale-105"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = '/logo_ev.png';
                 }}
               />
+              {/* <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white bg-opacity-90 rounded-full p-3">
+                  <Camera className="w-6 h-6 text-gray-800" />
+                </div>
+              </div> */}
             </div>
             
             {/* Ảnh phụ 1 và 2 - chia đều chiều cao */}
             <div className="grid grid-cols-1 gap-4 h-full md:h-96">
               {car.imageUrl2 ? (
-                <div className="flex-1">
+                <div 
+                  className="flex-1 cursor-pointer group relative overflow-hidden rounded-lg"
+                  onClick={() => {
+                    setSelectedImageIndex(1);
+                    setIsImageModalOpen(true);
+                  }}
+                >
                   <img
                     src={car.imageUrl2}
                     alt={`${car.name} - Ảnh 2`}
-                    className="w-full h-full object-cover rounded-lg"
+                    className="w-full h-full object-cover rounded-lg transition-transform duration-300 group-hover:scale-105"
                     onError={(e) => {
                       (e.target as HTMLImageElement).src = '/logo_ev.png';
                     }}
                   />
+                  {/* <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white bg-opacity-90 rounded-full p-2">
+                      <Camera className="w-5 h-5 text-gray-800" />
+                    </div>
+                  </div> */}
                 </div>
               ) : (
                 <div className="flex-1 bg-gray-100 rounded-lg flex items-center justify-center">
@@ -283,15 +306,26 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                 </div>
               )}
               {car.imageUrl3 ? (
-                <div className="flex-1">
+                <div 
+                  className="flex-1 cursor-pointer group relative overflow-hidden rounded-lg"
+                  onClick={() => {
+                    setSelectedImageIndex(2);
+                    setIsImageModalOpen(true);
+                  }}
+                >
                   <img
                     src={car.imageUrl3}
                     alt={`${car.name} - Ảnh 3`}
-                    className="w-full h-full object-cover rounded-lg"
+                    className="w-full h-full object-cover rounded-lg transition-transform duration-300 group-hover:scale-105"
                     onError={(e) => {
                       (e.target as HTMLImageElement).src = '/logo_ev.png';
                     }}
                   />
+                  {/* <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white bg-opacity-90 rounded-full p-2">
+                      <Camera className="w-5 h-5 text-gray-800" />
+                    </div>
+                  </div> */}
                 </div>
               ) : (
                 <div className="flex-1 bg-gray-100 rounded-lg flex items-center justify-center">
@@ -301,6 +335,78 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             </div>
           </div>
         </div>
+
+        {/* Modal xem ảnh chi tiết */}
+        <Modal
+          open={isImageModalOpen}
+          onCancel={() => setIsImageModalOpen(false)}
+          footer={null}
+          width="90vw"
+          style={{ top: 20 }}
+          centered
+          className="image-viewer-modal"
+        >
+          <div className="flex flex-col items-center">
+            {/* Ảnh lớn */}
+            <div className="w-full flex justify-center mb-4">
+              <img
+                src={
+                  selectedImageIndex === 0 ? (car.imageUrl || '/logo_ev.png') :
+                  selectedImageIndex === 1 ? (car.imageUrl2 || '/logo_ev.png') :
+                  (car.imageUrl3 || '/logo_ev.png')
+                }
+                alt={car.name}
+                className="max-h-[70vh] max-w-full object-contain rounded-lg"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = '/logo_ev.png';
+                }}
+              />
+            </div>
+            
+            {/* Thumbnail navigation */}
+            <div className="flex gap-3 mt-4 justify-center">
+              {car.imageUrl && (
+                <img
+                  src={car.imageUrl}
+                  alt={`${car.name} - Ảnh 1`}
+                  className={`w-20 h-20 object-cover rounded-lg cursor-pointer border-2 transition-all ${
+                    selectedImageIndex === 0 ? 'border-blue-600 scale-105 shadow-md' : 'border-transparent hover:border-gray-300'
+                  }`}
+                  onClick={() => setSelectedImageIndex(0)}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/logo_ev.png';
+                  }}
+                />
+              )}
+              {car.imageUrl2 && (
+                <img
+                  src={car.imageUrl2}
+                  alt={`${car.name} - Ảnh 2`}
+                  className={`w-20 h-20 object-cover rounded-lg cursor-pointer border-2 transition-all ${
+                    selectedImageIndex === 1 ? 'border-blue-600 scale-105 shadow-md' : 'border-transparent hover:border-gray-300'
+                  }`}
+                  onClick={() => setSelectedImageIndex(1)}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/logo_ev.png';
+                  }}
+                />
+              )}
+              {car.imageUrl3 && (
+                <img
+                  src={car.imageUrl3}
+                  alt={`${car.name} - Ảnh 3`}
+                  className={`w-20 h-20 object-cover rounded-lg cursor-pointer border-2 transition-all ${
+                    selectedImageIndex === 2 ? 'border-blue-600 scale-105 shadow-md' : 'border-transparent hover:border-gray-300'
+                  }`}
+                  onClick={() => setSelectedImageIndex(2)}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/logo_ev.png';
+                  }}
+                />
+              )}
+            </div>
+          </div>
+        </Modal>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
           {/* Phần thông tin xe chính - Chiếm 2/3 cột */}
@@ -608,9 +714,9 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
           {/* Phần booking panel - Chiếm 1/3 cột */}
           <div className="lg:col-span-1">
-            <div className="bg-gray-50 rounded-lg shadow-lg p-6 sticky top-4">
+            <div className="bg-gray-50 rounded-lg shadow-lg p-6 sticky top-8 z-10 self-start">
               {/* Status và giá */}
-              <div className="mb-6">
+              <div className="mb-8">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="line-through text-gray-500">752K</span>
                   <span className="bg-red-500 text-white px-2 py-0.5 rounded-full text-xs">-21%</span>
@@ -631,7 +737,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               <button
                 onClick={handleBookingClick}
                 disabled={car.status !== 0}
-                className={`w-full py-4 px-6 rounded-lg font-bold text-lg transition-colors mb-4 ${car.status === 0
+                className={`w-full py-4 px-6 rounded-lg font-bold text-lg transition-colors mb-5  ${car.status === 0
                   ? 'bg-blue-600 text-white hover:bg-blue-700'
                   : 'bg-gray-300 text-gray-900 cursor-not-allowed'
                   }`}

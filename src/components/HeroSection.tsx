@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { 
   CarOutlined, 
@@ -8,49 +8,84 @@ import {
   EnvironmentOutlined,
   SearchOutlined
 } from "@ant-design/icons";
-import { DatePicker, Select } from "antd";
+import { DatePicker, Select, message } from "antd";
 import type { RangePickerProps } from "antd/es/date-picker";
 import dayjs, { Dayjs } from "dayjs";
+import { rentalLocationApi } from "@/services/api";
+import type { RentalLocationData } from "@/services/api";
 
 const { RangePicker } = DatePicker;
 
 type RentalType = "self-drive" | "with-driver" | "long-term";
 
-// Danh sách các thành phố phổ biến ở Việt Nam
-const cities = [
-  { value: "Hà Nội", label: "Thành phố Hà Nội, Việt Nam" },
-  { value: "Hồ Chí Minh", label: "Thành phố Hồ Chí Minh, Việt Nam" },
-  { value: "Đà Nẵng", label: "Thành phố Đà Nẵng, Việt Nam" },
-  { value: "Hải Phòng", label: "Thành phố Hải Phòng, Việt Nam" },
-  { value: "Cần Thơ", label: "Thành phố Cần Thơ, Việt Nam" },
-  { value: "Nha Trang", label: "Thành phố Nha Trang, Việt Nam" },
-  { value: "Huế", label: "Thành phố Huế, Việt Nam" },
-  { value: "Vũng Tàu", label: "Thành phố Vũng Tàu, Việt Nam" },
-];
-
 export default function HeroSection() {
   const router = useRouter();
   const [rentalType, setRentalType] = useState<RentalType>("self-drive");
-  const [location, setLocation] = useState("Hà Nội");
+  const [locations, setLocations] = useState<RentalLocationData[]>([]);
+  const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
+  const [loadingLocations, setLoadingLocations] = useState(true);
   const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null] | null>([
     dayjs().add(1, "day").hour(21).minute(0),
     dayjs().add(2, "day").hour(20).minute(0)
   ]);
 
+  useEffect(() => {
+    loadLocations();
+  }, []);
+
+  const loadLocations = async () => {
+    try {
+      setLoadingLocations(true);
+      const response = await rentalLocationApi.getAll();
+      
+      if (response.success && response.data) {
+        const locationsData = Array.isArray(response.data)
+          ? response.data
+          : (response.data as any)?.$values || [];
+        
+        // Filter chỉ lấy địa điểm active
+        const activeLocations = locationsData.filter((loc: RentalLocationData) => loc.isActive !== false);
+        setLocations(activeLocations);
+        
+        // Set default location là địa điểm đầu tiên
+        if (activeLocations.length > 0 && !selectedLocationId) {
+          setSelectedLocationId(activeLocations[0].id);
+        }
+      }
+    } catch (error) {
+      console.error('Load locations error:', error);
+      message.error('Không thể tải danh sách địa điểm');
+    } finally {
+      setLoadingLocations(false);
+    }
+  };
+
   const handleSearch = () => {
+    if (!selectedLocationId) {
+      message.warning('Vui lòng chọn địa điểm');
+      return;
+    }
+
     // Chuyển đến trang tìm kiếm với các tham số
     const params = new URLSearchParams();
-    const selectedCity = cities.find(c => c.value === location);
-    if (selectedCity) {
-      params.set("location", selectedCity.label);
+    
+    // Thêm locationId và location info
+    const selectedLocation = locations.find(loc => loc.id === selectedLocationId);
+    if (selectedLocation) {
+      params.set("locationId", selectedLocationId.toString());
+      params.set("location", selectedLocation.name);
+      if (selectedLocation.address) {
+        params.set("locationAddress", selectedLocation.address);
+      }
     }
+    
     if (dateRange && dateRange[0] && dateRange[1]) {
       params.set("startDate", dateRange[0].format("YYYY-MM-DD HH:mm"));
       params.set("endDate", dateRange[1].format("YYYY-MM-DD HH:mm"));
     }
     params.set("type", rentalType);
     
-    // Chuyển đến trang menu hoặc cars/all với filters
+    // Chuyển đến trang cars/all với filters
     router.push(`/cars/all?${params.toString()}`);
   };
 
@@ -111,17 +146,7 @@ export default function HeroSection() {
               <CarOutlined />
               <span>Xe có tài xế</span>
             </button>
-            <button
-              onClick={() => setRentalType("long-term")}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all ${
-                rentalType === "long-term"
-                  ? "bg-blue-600 text-white shadow-md"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-            >
-              <CalendarOutlined />
-              <span>Thuê xe dài hạn</span>
-            </button>
+
           </div>
 
           {/* Input Fields */}
@@ -129,20 +154,35 @@ export default function HeroSection() {
             {/* Location Select */}
             <div className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Địa điểm
+                <EnvironmentOutlined className="mr-1" /> Địa điểm thuê xe
               </label>
               <Select
                 size="large"
-                value={location}
-                onChange={setLocation}
-                placeholder="Chọn thành phố"
+                value={selectedLocationId}
+                onChange={setSelectedLocationId}
+                placeholder="Chọn địa điểm thuê xe"
                 className="w-full"
-                options={cities}
+                loading={loadingLocations}
                 showSearch
-                filterOption={(input, option) =>
-                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                }
-              />
+                filterOption={(input, option) => {
+                  const label = option?.label?.toString() || '';
+                  return label.toLowerCase().includes(input.toLowerCase());
+                }}
+                optionFilterProp="label"
+              >
+                {locations.map((location) => (
+                  <Select.Option
+                    key={location.id}
+                    value={location.id}
+                    label={`${location.name} - ${location.address}`}
+                  >
+                    <div>
+                      <div className="font-medium">{location.name}</div>
+                      <div className="text-xs text-gray-500">{location.address}</div>
+                    </div>
+                  </Select.Option>
+                ))}
+              </Select>
             </div>
 
             {/* Date Range Picker */}
