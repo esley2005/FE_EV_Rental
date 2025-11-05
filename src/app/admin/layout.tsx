@@ -26,6 +26,7 @@ import CarList from "@/components/CarList";
 import HistoryList from "@/components/HistoryList";
 import DispatchList from "@/components/DispatchList";
 import CarManagement from "@/components/admin/CarManagement";
+import AIAnalysis from "@/components/admin/AIAnalysis";
 import CustomerCard from "@/components/admin/CustomerCard";
 
 const { Header, Sider, Content, Footer } = Layout;
@@ -61,6 +62,7 @@ const subMenus: Record<string, { key: string; label: string; icon: React.ReactNo
   reports: [
     { key: "1", label: "Doanh thu", icon: <LineChartOutlined /> },
     { key: "2", label: "Tỷ lệ sử dụng xe", icon: <ClockCircleOutlined /> },
+    { key: "3", label: "Phân tích AI", icon: <BarChartOutlined /> },
   ],
 
   settings: [{ key: "1", label: "Cấu hình hệ thống", icon: <SettingOutlined /> }],
@@ -155,6 +157,8 @@ export default function AdminLayout() {
           return <p>Báo cáo doanh thu theo điểm thuê</p>;
         case "2":
           return <p>Phân tích tỷ lệ sử dụng xe và giờ cao điểm</p>;
+        case "3":
+          return <AIAnalysis />;
         default:
           return <p>Chưa có nội dung.</p>;
       }
