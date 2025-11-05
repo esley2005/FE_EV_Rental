@@ -729,7 +729,7 @@ export const citizenIdApi = {
       BirthDate: data.birthDate, // YYYY-MM-DD format
       ImageUrl: data.imageUrl || '',
       ImageUrl2: data.imageUrl2 || '',
-      RentalOrderId: data.rentalOrderId || 0, // Use 0 if no order yet
+      RentalOrderId: data.rentalOrderId ?? 0, 
     };
     
     return apiCall<{ message: string }>('/CitizenId/Create', {
@@ -763,51 +763,87 @@ export const citizenIdApi = {
     }),
 };
 
-// Rental Order API
-export interface RentalOrderData {
-  subTotal: number;
-  total: number;
-  discount: number;
-  extraFee: number;
-  userId: number;
-  carId: number;
+// Rental Location API
+export interface RentalLocationData {
+  id: number;
+  name: string;
+  address: string;
+  coordinates: string;
+  isActive: boolean;
 }
 
-export interface RentalOrder extends RentalOrderData {
+export const rentalLocationApi = {
+  // Lấy tất cả địa điểm cho thuê
+  getAll: () =>
+    apiCall<RentalLocationData[]>('/RentalLocation/GetAll', {
+      method: 'GET',
+      skipAuth: true, // Có thể public
+    }),
+};
+
+// Rental Order API
+export interface CreateRentalOrderData {
+  phoneNumber: string;
+  pickupTime: string; 
+  expectedReturnTime: string; 
+  withDriver: boolean;
+  userId: number;
+  carId: number;
+  rentalLocationId: number;
+}
+
+export interface RentalOrderData {
   id: number;
-  status: number;
+  phoneNumber: string;
   orderDate: string;
+  pickupTime: string;
+  expectedReturnTime: string;
+  actualReturnTime?: string;
+  subTotal?: number;
+  total?: number;
+  discount?: number;
+  extraFee?: number;
+  damageFee?: number;
+  damageNotes?: string;
+  withDriver: boolean;
+  status: string;
   createdAt: string;
   updatedAt?: string;
+  userId: number;
+  carId: number;
+  rentalLocationId: number;
+  rentalContactId?: number;
+  citizenId?: number;
+  driverLicenseId?: number;
+  paymentId?: number;
 }
 
 export const rentalOrderApi = {
   // Tạo đơn hàng mới
-  create: (orderData: RentalOrderData) =>
-    apiCall<RentalOrder>('/RentalOrder', {
+  create: (orderData: CreateRentalOrderData) =>
+    apiCall<RentalOrderData>('/RentalOrder/Create', {
       method: 'POST',
-      body: JSON.stringify(orderData),
+      body: JSON.stringify({
+        PhoneNumber: orderData.phoneNumber,
+        PickupTime: orderData.pickupTime,
+        ExpectedReturnTime: orderData.expectedReturnTime,
+        WithDriver: orderData.withDriver,
+        UserId: orderData.userId,
+        CarId: orderData.carId,
+        RentalLocationId: orderData.rentalLocationId,
+      }),
     }),
 
   // Lấy đơn hàng theo ID
   getById: (id: number) =>
-    apiCall<RentalOrder>(`/RentalOrder/${id}`),
-
-  // Cập nhật trạng thái đơn hàng
-  updateStatus: (id: number, status: number) =>
-    apiCall<RentalOrder>(`/RentalOrder/${id}/status`, {
-      method: 'PUT',
-      body: JSON.stringify({ status }),
+    apiCall<RentalOrderData>(`/RentalOrder/GetById?id=${id}`, {
+      method: 'GET',
     }),
 
   // Lấy đơn hàng của user
   getByUserId: (userId: number) =>
-    apiCall<RentalOrder[]>(`/RentalOrder/user/${userId}`),
-
-  // Xóa đơn hàng
-  delete: (id: number) =>
-    apiCall(`/RentalOrder/${id}`, {
-      method: 'DELETE',
+    apiCall<RentalOrderData[]>(`/RentalOrder/GetByUserId?userId=${userId}`, {
+      method: 'GET',
     }),
 };
 
