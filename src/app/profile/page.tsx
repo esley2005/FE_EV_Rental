@@ -135,16 +135,12 @@ export default function ProfilePage() {
                 licenseName: licenseData.name,
                 licenseNumber: licenseData.licenseNumber || "",
               });
-              // Parse imageUrl if it's JSON string containing both sides
-              try {
-                const images = JSON.parse(licenseData.imageUrl);
-                if (Array.isArray(images) && images.length >= 2) {
-                  setLicenseImageFront(images[0]);
-                  setLicenseImageBack(images[1]);
-                }
-              } catch {
-                // If not JSON, use as single image
+              // Load imageUrl và imageUrl2 từ backend
+              if (licenseData.imageUrl) {
                 setLicenseImageFront(licenseData.imageUrl);
+              }
+              if (licenseData.imageUrl2) {
+                setLicenseImageBack(licenseData.imageUrl2);
               }
             }
           } catch (error) {
@@ -162,16 +158,12 @@ export default function ProfilePage() {
                 citizenIdNumber: citizenData.citizenIdNumber,
                 citizenBirthDate: citizenData.birthDate ? dayjs(citizenData.birthDate) : null,
               });
-              // Parse imageUrl if it's JSON string containing both sides
-              try {
-                const images = JSON.parse(citizenData.imageUrl);
-                if (Array.isArray(images) && images.length >= 2) {
-                  setCitizenIdImageFront(images[0]);
-                  setCitizenIdImageBack(images[1]);
-                }
-              } catch {
-                // If not JSON, use as single image
+              // Load imageUrl và imageUrl2 từ backend
+              if (citizenData.imageUrl) {
                 setCitizenIdImageFront(citizenData.imageUrl);
+              }
+              if (citizenData.imageUrl2) {
+                setCitizenIdImageBack(citizenData.imageUrl2);
               }
             }
           } catch (error) {
@@ -270,29 +262,88 @@ export default function ProfilePage() {
   // helper because passwordForm is declared above
   const password_form_reset = () => passwordForm.resetFields();
 
-  // ================== GPLX upload logic ==================
-  const beforeUploadLicenseFront = (file: File) => {
-    const isImage = file.type.startsWith("image/");
-    if (!isImage) {
-      message.error("Chỉ được tải ảnh (jpg/png).");
-      return Upload.LIST_IGNORE;
+  // ================== Upload to Cloudinary ==================
+  const handleUploadToCloudinary = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'your-cloud-name';
+    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'ev_rental_cars';
+    
+    formData.append('upload_preset', uploadPreset);
+    
+    try {
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        {
+          method: 'POST',
+          body: formData,
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        const errorMsg = data.error?.message || `Upload failed with status: ${response.status}`;
+        throw new Error(errorMsg);
+      }
+      
+      if (data.secure_url) {
+        return data.secure_url;
+      }
+      throw new Error('No secure_url in response');
+    } catch (error) {
+      console.error('[Upload] Cloudinary upload failed:', error);
+      throw error;
     }
-    const reader = new FileReader();
-    reader.onload = (e) => setLicenseImageFront(e.target?.result as string);
-    reader.readAsDataURL(file);
-    return false;
   };
 
-  const beforeUploadLicenseBack = (file: File) => {
-    const isImage = file.type.startsWith("image/");
-    if (!isImage) {
-      message.error("Chỉ được tải ảnh (jpg/png).");
-      return Upload.LIST_IGNORE;
+  // ================== GPLX upload logic ==================
+  const handleLicenseImageUpload = async (options: any, side: 'front' | 'back') => {
+    const { file, onSuccess, onError } = options;
+    
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      message.error('Chỉ chấp nhận file ảnh (JPG, PNG, GIF, WEBP)!');
+      onError(new Error('Invalid file type'));
+      return;
     }
-    const reader = new FileReader();
-    reader.onload = (e) => setLicenseImageBack(e.target?.result as string);
-    reader.readAsDataURL(file);
-    return false;
+    
+    // Validate file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      message.error('Kích thước file không được vượt quá 5MB!');
+      onError(new Error('File too large'));
+      return;
+    }
+    
+    setLicenseUploading(true);
+    
+    try {
+      const imageUrl = await handleUploadToCloudinary(file);
+      if (side === 'front') {
+        setLicenseImageFront(imageUrl);
+      } else {
+        setLicenseImageBack(imageUrl);
+      }
+      api.success({
+        message: 'Upload ảnh thành công!',
+        description: 'Ảnh đã được tải lên Cloudinary.',
+        placement: 'topRight',
+        icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+      });
+      onSuccess(imageUrl);
+    } catch (error) {
+      api.error({
+        message: 'Upload ảnh thất bại!',
+        description: error instanceof Error ? error.message : 'Vui lòng kiểm tra config Cloudinary và thử lại.',
+        placement: 'topRight',
+      });
+      onError(error);
+    } finally {
+      setLicenseUploading(false);
+    }
   };
 
   const handleSubmitLicense = async (values: any) => {
@@ -303,13 +354,14 @@ export default function ProfilePage() {
 
     setLicenseUploading(true);
     try {
-      // Combine 2 images as JSON string
-      const imageUrl = JSON.stringify([licenseImageFront, licenseImageBack]);
-      
+      // Gửi ImageUrl và ImageUrl2 riêng biệt (theo backend)
+      // Mỗi lần thuê xe sẽ upload lại giấy tờ với RentalOrderId mới
       const licenseData: DriverLicenseData = {
         name: values.licenseName,
-        imageUrl: imageUrl,
-        rentalOrderId: null,
+        licenseNumber: values.licenseNumber || '',
+        imageUrl: licenseImageFront, // Mặt trước
+        imageUrl2: licenseImageBack, // Mặt sau
+        rentalOrderId: 0, // 0 = chưa có đơn thuê, sẽ được gán khi đặt xe
       };
 
       const response = hasLicense && licenseId !== null
@@ -346,28 +398,51 @@ export default function ProfilePage() {
   };
 
   // ================== CCCD upload logic ==================
-  const beforeUploadCitizenIdFront = (file: File) => {
-    const isImage = file.type.startsWith("image/");
-    if (!isImage) {
-      message.error("Chỉ được tải ảnh (jpg/png).");
-      return Upload.LIST_IGNORE;
+  const handleCitizenIdImageUpload = async (options: any, side: 'front' | 'back') => {
+    const { file, onSuccess, onError } = options;
+    
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      message.error('Chỉ chấp nhận file ảnh (JPG, PNG, GIF, WEBP)!');
+      onError(new Error('Invalid file type'));
+      return;
     }
-    const reader = new FileReader();
-    reader.onload = (e) => setCitizenIdImageFront(e.target?.result as string);
-    reader.readAsDataURL(file);
-    return false;
-  };
-
-  const beforeUploadCitizenIdBack = (file: File) => {
-    const isImage = file.type.startsWith("image/");
-    if (!isImage) {
-      message.error("Chỉ được tải ảnh (jpg/png).");
-      return Upload.LIST_IGNORE;
+    
+    // Validate file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      message.error('Kích thước file không được vượt quá 5MB!');
+      onError(new Error('File too large'));
+      return;
     }
-    const reader = new FileReader();
-    reader.onload = (e) => setCitizenIdImageBack(e.target?.result as string);
-    reader.readAsDataURL(file);
-    return false;
+    
+    setCitizenIdUploading(true);
+    
+    try {
+      const imageUrl = await handleUploadToCloudinary(file);
+      if (side === 'front') {
+        setCitizenIdImageFront(imageUrl);
+      } else {
+        setCitizenIdImageBack(imageUrl);
+      }
+      api.success({
+        message: 'Upload ảnh thành công!',
+        description: 'Ảnh đã được tải lên Cloudinary.',
+        placement: 'topRight',
+        icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+      });
+      onSuccess(imageUrl);
+    } catch (error) {
+      api.error({
+        message: 'Upload ảnh thất bại!',
+        description: error instanceof Error ? error.message : 'Vui lòng kiểm tra config Cloudinary và thử lại.',
+        placement: 'topRight',
+      });
+      onError(error);
+    } finally {
+      setCitizenIdUploading(false);
+    }
   };
 
   const handleSubmitCitizenId = async (values: any) => {
@@ -378,15 +453,15 @@ export default function ProfilePage() {
 
     setCitizenIdUploading(true);
     try {
-      // Combine 2 images as JSON string
-      const imageUrl = JSON.stringify([citizenIdImageFront, citizenIdImageBack]);
-      
+      // Gửi ImageUrl và ImageUrl2 riêng biệt (theo backend)
+      // Mỗi lần thuê xe sẽ upload lại giấy tờ với RentalOrderId mới
       const citizenIdData: CitizenIdData = {
         name: values.citizenName,
         citizenIdNumber: values.citizenIdNumber,
         birthDate: values.citizenBirthDate ? values.citizenBirthDate.format("YYYY-MM-DD") : "",
-        imageUrl: imageUrl,
-        rentalOrderId: null,
+        imageUrl: citizenIdImageFront, // Mặt trước
+        imageUrl2: citizenIdImageBack, // Mặt sau
+        rentalOrderId: 0, // 0 = chưa có đơn thuê, sẽ được gán khi đặt xe
       };
 
       const response = hasCitizenId && citizenIdDocId !== null
@@ -627,7 +702,7 @@ export default function ProfilePage() {
 
               <div className="bg-blue-50 border border-blue-100 p-3 rounded mb-4 text-blue-700 text-sm">
                 <strong>Lưu ý:</strong> Vui lòng tải lên cả 2 mặt (mặt trước và mặt sau) của giấy phép lái xe. 
-                Mỗi lần thuê xe sẽ yêu cầu cập nhật lại.
+                Mỗi lần thuê xe sẽ yêu cầu upload lại giấy tờ mới.
               </div>
 
               <Form form={licenseForm} layout="vertical" onFinish={handleSubmitLicense}>
@@ -638,8 +713,8 @@ export default function ProfilePage() {
                       <Upload
                         listType="picture-card"
                         showUploadList={false}
-                        beforeUpload={beforeUploadLicenseFront}
-                        accept="image/*"
+                        customRequest={(options) => handleLicenseImageUpload(options, 'front')}
+                        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
                       >
                         {licenseImageFront ? (
                           <img src={licenseImageFront} alt="GPLX mặt trước" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
@@ -659,8 +734,8 @@ export default function ProfilePage() {
                       <Upload
                         listType="picture-card"
                         showUploadList={false}
-                        beforeUpload={beforeUploadLicenseBack}
-                        accept="image/*"
+                        customRequest={(options) => handleLicenseImageUpload(options, 'back')}
+                        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
                       >
                         {licenseImageBack ? (
                           <img src={licenseImageBack} alt="GPLX mặt sau" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
@@ -678,6 +753,10 @@ export default function ProfilePage() {
                 {/* Info fields */}
                 <Form.Item label="Họ và tên (trên GPLX)" name="licenseName" rules={[{ required: true, message: "Nhập họ tên trên GPLX" }]}>
                   <Input placeholder="Nhập đầy đủ họ tên" />
+                </Form.Item>
+
+                <Form.Item label="Số bằng lái xe" name="licenseNumber">
+                  <Input placeholder="Nhập số bằng lái xe" />
                 </Form.Item>
 
                 <div className="flex gap-3 mt-4">
@@ -707,7 +786,7 @@ export default function ProfilePage() {
 
               <div className="bg-blue-50 border border-blue-100 p-3 rounded mb-4 text-blue-700 text-sm">
                 <strong>Lưu ý:</strong> Vui lòng tải lên cả 2 mặt (mặt trước và mặt sau) của căn cước công dân. 
-                Mỗi lần thuê xe sẽ yêu cầu cập nhật lại.
+                Mỗi lần thuê xe sẽ yêu cầu upload lại giấy tờ mới.
               </div>
 
               <Form form={citizenIdForm} layout="vertical" onFinish={handleSubmitCitizenId}>
@@ -718,8 +797,8 @@ export default function ProfilePage() {
                       <Upload
                         listType="picture-card"
                         showUploadList={false}
-                        beforeUpload={beforeUploadCitizenIdFront}
-                        accept="image/*"
+                        customRequest={(options) => handleCitizenIdImageUpload(options, 'front')}
+                        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
                       >
                         {citizenIdImageFront ? (
                           <img src={citizenIdImageFront} alt="CCCD mặt trước" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
@@ -739,8 +818,8 @@ export default function ProfilePage() {
                       <Upload
                         listType="picture-card"
                         showUploadList={false}
-                        beforeUpload={beforeUploadCitizenIdBack}
-                        accept="image/*"
+                        customRequest={(options) => handleCitizenIdImageUpload(options, 'back')}
+                        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
                       >
                         {citizenIdImageBack ? (
                           <img src={citizenIdImageBack} alt="CCCD mặt sau" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />

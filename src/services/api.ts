@@ -559,7 +559,9 @@ export interface ChangePasswordData {
 // Driver License API
 export interface DriverLicenseData {
   name: string;
-  imageUrl: string; // Combined URL for both sides or JSON string of both URLs
+  licenseNumber?: string;
+  imageUrl: string; // Mặt trước
+  imageUrl2?: string; // Mặt sau
   rentalOrderId?: number | null;
 }
 
@@ -568,7 +570,8 @@ export interface CitizenIdData {
   name: string;
   citizenIdNumber: string;
   birthDate: string; // YYYY-MM-DD format
-  imageUrl: string; // Combined URL for both sides or JSON string of both URLs
+  imageUrl: string; // Mặt trước
+  imageUrl2?: string; // Mặt sau
   rentalOrderId?: number | null;
 }
 
@@ -673,22 +676,43 @@ export const authApi = {
 // Driver License API
 export const driverLicenseApi = {
   // Upload/Create driver license
-  upload: (data: DriverLicenseData) =>
-    apiCall<{ message: string }>('/DriverLicense', {
+  upload: (data: DriverLicenseData) => {
+    // Backend requires RentalOrderId as int (not nullable)
+    // Convert to PascalCase to match backend DTO
+    const createData = {
+      Name: data.name,
+      LicenseNumber: data.licenseNumber || '',
+      ImageUrl: data.imageUrl || '',
+      ImageUrl2: data.imageUrl2 || '',
+      RentalOrderId: data.rentalOrderId || 0, // Use 0 if no order yet
+    };
+    
+    return apiCall<{ message: string }>('/DriverLicense/Create', {
       method: 'POST',
-      body: JSON.stringify(data),
-    }),
+      body: JSON.stringify(createData),
+    });
+  },
 
-  // Update driver license
-  update: (data: DriverLicenseData & { id: number }) =>
-    apiCall<{ message: string }>(`/DriverLicense/${data.id}`, {
+  // Update driver license info
+  update: (data: DriverLicenseData & { id: number }) => {
+    // Backend expects [FromForm] for UpdateInfo, so we need to send FormData
+    const formData = new FormData();
+    formData.append('Id', data.id.toString());
+    formData.append('Name', data.name);
+    if (data.licenseNumber) formData.append('LicenseNumber', data.licenseNumber);
+    if (data.imageUrl) formData.append('ImageUrl', data.imageUrl);
+    if (data.imageUrl2) formData.append('ImageUrl2', data.imageUrl2);
+    
+    return apiCall<{ message: string }>('/DriverLicense/UpdateDriverLicenseInfo', {
       method: 'PUT',
-      body: JSON.stringify(data),
-    }),
+      body: formData,
+      // Don't set headers - apiCall will handle FormData correctly
+    });
+  },
 
   // Get current user's driver license
   getCurrent: () =>
-    apiCall<DriverLicenseData>('/DriverLicense/current', {
+    apiCall<DriverLicenseData>('/DriverLicense/GetById', {
       method: 'GET',
     }),
 };
@@ -696,22 +720,45 @@ export const driverLicenseApi = {
 // Citizen ID API
 export const citizenIdApi = {
   // Upload/Create citizen ID
-  upload: (data: CitizenIdData) =>
-    apiCall<{ message: string }>('/CitizenId', {
+  upload: (data: CitizenIdData) => {
+    // Backend requires RentalOrderId as int (not nullable)
+    // Convert to PascalCase to match backend DTO
+    const createData = {
+      Name: data.name,
+      CitizenIdNumber: data.citizenIdNumber,
+      BirthDate: data.birthDate, // YYYY-MM-DD format
+      ImageUrl: data.imageUrl || '',
+      ImageUrl2: data.imageUrl2 || '',
+      RentalOrderId: data.rentalOrderId || 0, // Use 0 if no order yet
+    };
+    
+    return apiCall<{ message: string }>('/CitizenId/Create', {
       method: 'POST',
-      body: JSON.stringify(data),
-    }),
+      body: JSON.stringify(createData),
+    });
+  },
 
-  // Update citizen ID
-  update: (data: CitizenIdData & { id: number }) =>
-    apiCall<{ message: string }>(`/CitizenId/${data.id}`, {
+  // Update citizen ID info
+  update: (data: CitizenIdData & { id: number }) => {
+    // Backend expects [FromBody] for UpdateInfo, so we send JSON
+    const updateData = {
+      Id: data.id,
+      Name: data.name,
+      CitizenIdNumber: data.citizenIdNumber,
+      BirthDate: data.birthDate,
+      ImageUrl: data.imageUrl,
+      ImageUrl2: data.imageUrl2 || '',
+    };
+    
+    return apiCall<{ message: string }>('/CitizenId/UpdateCitizenIdInfo', {
       method: 'PUT',
-      body: JSON.stringify(data),
-    }),
+      body: JSON.stringify(updateData),
+    });
+  },
 
   // Get current user's citizen ID
   getCurrent: () =>
-    apiCall<CitizenIdData>('/CitizenId/current', {
+    apiCall<CitizenIdData>('/CitizenId/GetById', {
       method: 'GET',
     }),
 };
