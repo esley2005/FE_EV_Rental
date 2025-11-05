@@ -725,7 +725,7 @@ export default function BookingModal({ car, isOpen, onClose }: BookingModalProps
                         // Đóng modal booking trước
                         onClose();
                         // Chuyển đến trang profile
-                        router.push('/profile');
+                        router.push('/profile/documents');
                         message.info("Đang chuyển đến trang hồ sơ để cập nhật giấy tờ...");
                       }}
                       className="w-full bg-blue-600"

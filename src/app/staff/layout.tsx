@@ -433,7 +433,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
         {/* ⚙️ FOOTER */}
         <Footer style={{ textAlign: "center", background: "#f0f2f5" }}>
-          EV Rental Staff Portal ©{new Date().getFullYear()} Created by Duy
+          EV Rental Staff ©{new Date().getFullYear()} 
         </Footer>
       </Layout>
     </Layout>

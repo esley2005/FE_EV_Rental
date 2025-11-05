@@ -15,7 +15,9 @@ import {
   FilterOutlined,
   SearchOutlined,
   EyeOutlined,
-  WarningOutlined
+  WarningOutlined,
+  PhoneOutlined,
+  EnvironmentOutlined
 } from "@ant-design/icons";
 import { 
   Card, 
@@ -28,112 +30,41 @@ import {
   Descriptions,
   Modal,
   Timeline,
+  Image,
   notification as antdNotification
 } from "antd";
+import { rentalOrderApi, carsApi, rentalLocationApi, authApi } from "@/services/api";
+import type { RentalOrderData, Car, RentalLocationData, User } from "@/services/api";
+import dayjs from "dayjs";
 
-// Interface cho đơn hàng
-interface Booking {
-  id: string;
-  carName: string;
-  carImage: string;
-  carModel: string;
-  startDate: string;
-  endDate: string;
-  totalDays: number;
-  totalPrice: number;
-  status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
-  pickupLocation: string;
-  returnLocation: string;
-  bookingDate: string;
-  paymentStatus: 'unpaid' | 'paid' | 'refunded';
-  notes?: string;
+// Extended interface với thông tin car và location
+interface BookingWithDetails extends RentalOrderData {
+  car?: Car;
+  location?: RentalLocationData;
+  user?: User;
 }
-
-// Mock data mẫu (sẽ thay bằng API call sau)
-const mockBookings: Booking[] = [
-  {
-    id: "BK001",
-    carName: "VinFast VF 8",
-    carImage: "/xe_vf6.png",
-    carModel: "VF 8 Plus",
-    startDate: "2024-11-01",
-    endDate: "2024-11-05",
-    totalDays: 4,
-    totalPrice: 4800000,
-    status: "confirmed",
-    pickupLocation: "Sân bay Tân Sơn Nhất",
-    returnLocation: "Sân bay Tân Sơn Nhất",
-    bookingDate: "2024-10-20",
-    paymentStatus: "paid"
-  },
-  {
-    id: "BK002",
-    carName: "Tesla Model 3",
-    carImage: "/Xe_TeslaMD3.png",
-    carModel: "Model 3 Standard Range",
-    startDate: "2024-10-15",
-    endDate: "2024-10-17",
-    totalDays: 2,
-    totalPrice: 2600000,
-    status: "completed",
-    pickupLocation: "Quận 1, TP.HCM",
-    returnLocation: "Quận 1, TP.HCM",
-    bookingDate: "2024-10-10",
-    paymentStatus: "paid"
-  },
-  {
-    id: "BK003",
-    carName: "VinFast VF 3",
-    carImage: "/xe_vf3.png",
-    carModel: "VF 3 Standard",
-    startDate: "2024-11-15",
-    endDate: "2024-11-20",
-    totalDays: 5,
-    totalPrice: 3500000,
-    status: "pending",
-    pickupLocation: "Quận 7, TP.HCM",
-    returnLocation: "Quận 7, TP.HCM",
-    bookingDate: "2024-10-25",
-    paymentStatus: "unpaid"
-  },
-  {
-    id: "BK004",
-    carName: "BYD Atto 3",
-    carImage: "/xe_byd.png",
-    carModel: "Atto 3 Extended Range",
-    startDate: "2024-09-10",
-    endDate: "2024-09-12",
-    totalDays: 2,
-    totalPrice: 2200000,
-    status: "cancelled",
-    pickupLocation: "Quận 3, TP.HCM",
-    returnLocation: "Quận 3, TP.HCM",
-    bookingDate: "2024-09-05",
-    paymentStatus: "refunded",
-    notes: "Khách hàng hủy do thay đổi lịch trình"
-  }
-];
 
 export default function MyBookingsPage() {
   const router = useRouter();
   const [api, contextHolder] = antdNotification.useNotification();
   const [loading, setLoading] = useState(true);
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [filteredBookings, setFilteredBookings] = useState<Booking[]>([]);
+  const [bookings, setBookings] = useState<BookingWithDetails[]>([]);
+  const [filteredBookings, setFilteredBookings] = useState<BookingWithDetails[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [searchText, setSearchText] = useState("");
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [selectedBooking, setSelectedBooking] = useState<BookingWithDetails | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    loadBookings();
+    loadUserAndBookings();
   }, []);
 
   useEffect(() => {
     filterBookings();
   }, [selectedStatus, searchText, bookings]);
 
-  const loadBookings = async () => {
+  const loadUserAndBookings = async () => {
     setLoading(true);
     try {
       // Kiểm tra đăng nhập
@@ -149,16 +80,80 @@ export default function MyBookingsPage() {
         return;
       }
 
-      // TODO: Thay bằng API call thực tế
-      // const response = await bookingsApi.getMyBookings();
-      // setBookings(response.data);
-      
-      // Mock data tạm thời
-      setTimeout(() => {
-        setBookings(mockBookings);
-        setLoading(false);
-      }, 1000);
+      // Load user profile
+      const userResponse = await authApi.getProfile();
+      if (userResponse.success && userResponse.data) {
+        setUser(userResponse.data);
+        await loadBookings(userResponse.data.id);
+      } else {
+        // Fallback: lấy từ localStorage
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const userData = JSON.parse(userStr);
+          setUser(userData);
+          await loadBookings(userData.id);
+        }
+      }
+    } catch (error) {
+      console.error('Load user error:', error);
+      api.error({
+        message: 'Có lỗi xảy ra',
+        description: 'Không thể tải thông tin người dùng!',
+        placement: 'topRight',
+      });
+      setLoading(false);
+    }
+  };
 
+  const loadBookings = async (userId: number) => {
+    try {
+      // Load orders
+      const ordersResponse = await rentalOrderApi.getByUserId(userId);
+      
+      if (!ordersResponse.success || !ordersResponse.data) {
+        setBookings([]);
+        setLoading(false);
+        return;
+      }
+
+      const orders = Array.isArray(ordersResponse.data)
+        ? ordersResponse.data
+        : (ordersResponse.data as any)?.$values || [];
+
+      // Load all cars and locations for mapping
+      const [carsResponse, locationsResponse] = await Promise.all([
+        carsApi.getAll(),
+        rentalLocationApi.getAll()
+      ]);
+
+      const cars: Car[] = carsResponse.success && carsResponse.data
+        ? (Array.isArray(carsResponse.data) ? carsResponse.data : (carsResponse.data as any)?.$values || [])
+        : [];
+      
+      const locations: RentalLocationData[] = locationsResponse.success && locationsResponse.data
+        ? (Array.isArray(locationsResponse.data) ? locationsResponse.data : (locationsResponse.data as any)?.$values || [])
+        : [];
+
+      // Map orders with car and location info
+      const bookingsWithDetails: BookingWithDetails[] = orders.map((order: RentalOrderData) => {
+        const car = cars.find((c) => c.id === order.carId);
+        const location = locations.find((l) => l.id === order.rentalLocationId);
+        return {
+          ...order,
+          car,
+          location,
+          user,
+        };
+      });
+
+      // Sort by orderDate descending (newest first)
+      bookingsWithDetails.sort((a, b) => {
+        const dateA = new Date(a.orderDate || a.createdAt || '').getTime();
+        const dateB = new Date(b.orderDate || b.createdAt || '').getTime();
+        return dateB - dateA;
+      });
+
+      setBookings(bookingsWithDetails);
     } catch (error) {
       console.error('Load bookings error:', error);
       api.error({
@@ -167,6 +162,7 @@ export default function MyBookingsPage() {
         placement: 'topRight',
         icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
       });
+    } finally {
       setLoading(false);
     }
   };
@@ -176,22 +172,38 @@ export default function MyBookingsPage() {
 
     // Filter theo status
     if (selectedStatus !== "all") {
-      filtered = filtered.filter(b => b.status === selectedStatus);
+      filtered = filtered.filter(b => {
+        const status = normalizeStatus(b.status);
+        return status === selectedStatus;
+      });
     }
 
     // Filter theo search text
     if (searchText) {
+      const searchLower = searchText.toLowerCase();
       filtered = filtered.filter(b => 
-        b.id.toLowerCase().includes(searchText.toLowerCase()) ||
-        b.carName.toLowerCase().includes(searchText.toLowerCase()) ||
-        b.carModel.toLowerCase().includes(searchText.toLowerCase())
+        String(b.id).toLowerCase().includes(searchLower) ||
+        b.car?.name?.toLowerCase().includes(searchLower) ||
+        b.car?.model?.toLowerCase().includes(searchLower) ||
+        b.location?.name?.toLowerCase().includes(searchLower)
       );
     }
 
     setFilteredBookings(filtered);
   };
 
-  const getStatusTag = (status: string) => {
+  const normalizeStatus = (status?: string): string => {
+    if (!status) return 'pending';
+    const statusLower = status.toLowerCase();
+    if (statusLower.includes('pending') || statusLower.includes('chờ')) return 'pending';
+    if (statusLower.includes('confirmed') || statusLower.includes('xác nhận')) return 'confirmed';
+    if (statusLower.includes('completed') || statusLower.includes('hoàn thành')) return 'completed';
+    if (statusLower.includes('cancelled') || statusLower.includes('hủy')) return 'cancelled';
+    return 'pending';
+  };
+
+  const getStatusTag = (status?: string) => {
+    const normalized = normalizeStatus(status);
     const statusConfig: Record<string, { color: string; text: string; icon: any }> = {
       pending: { color: 'gold', text: 'Chờ xác nhận', icon: <ClockCircleOutlined /> },
       confirmed: { color: 'blue', text: 'Đã xác nhận', icon: <CheckCircleOutlined /> },
@@ -199,7 +211,7 @@ export default function MyBookingsPage() {
       cancelled: { color: 'red', text: 'Đã hủy', icon: <CloseCircleOutlined /> }
     };
 
-    const config = statusConfig[status] || statusConfig.pending;
+    const config = statusConfig[normalized] || statusConfig.pending;
     return (
       <Tag color={config.color} icon={config.icon}>
         {config.text}
@@ -207,32 +219,31 @@ export default function MyBookingsPage() {
     );
   };
 
-  const getPaymentTag = (status: string) => {
-    const paymentConfig: Record<string, { color: string; text: string }> = {
-      paid: { color: 'success', text: 'Đã thanh toán' },
-      unpaid: { color: 'warning', text: 'Chưa thanh toán' },
-      refunded: { color: 'default', text: 'Đã hoàn tiền' }
-    };
-
-    const config = paymentConfig[status] || paymentConfig.unpaid;
-    return <Tag color={config.color}>{config.text}</Tag>;
-  };
-
-  const showBookingDetail = (booking: Booking) => {
+  const showBookingDetail = (booking: BookingWithDetails) => {
     setSelectedBooking(booking);
     setDetailModalOpen(true);
   };
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount?: number) => {
+    if (!amount) return '0 VNĐ';
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
   };
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('vi-VN', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return '-';
+    return dayjs(dateStr).format('DD/MM/YYYY HH:mm');
+  };
+
+  const formatDateOnly = (dateStr?: string) => {
+    if (!dateStr) return '-';
+    return dayjs(dateStr).format('DD/MM/YYYY');
+  };
+
+  const calculateDays = (startDate?: string, endDate?: string) => {
+    if (!startDate || !endDate) return 0;
+    const start = dayjs(startDate);
+    const end = dayjs(endDate);
+    return end.diff(start, 'day') || 1; // Minimum 1 day
   };
 
   if (loading) {
@@ -263,7 +274,7 @@ export default function MyBookingsPage() {
           <Card className="mb-6 shadow-md">
             <div className="flex flex-col md:flex-row md:items-center gap-4">
               <Input
-                placeholder="Tìm kiếm theo mã đơn, tên xe..."
+                placeholder="Tìm kiếm theo mã đơn, tên xe, địa điểm..."
                 prefix={<SearchOutlined />}
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
@@ -312,83 +323,97 @@ export default function MyBookingsPage() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {filteredBookings.map((booking) => (
-                <Card 
-                  key={booking.id}
-                  className="shadow-md hover:shadow-lg transition-shadow"
-                >
-                  <div className="flex flex-col md:flex-row gap-4">
-                    {/* Car Image */}
-                    <div className="md:w-48 h-32 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
-                      <img 
-                        src={booking.carImage} 
-                        alt={booking.carName}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = '/logo_ev.png';
-                        }}
-                      />
-                    </div>
+              {filteredBookings.map((booking) => {
+                const totalDays = calculateDays(booking.pickupTime, booking.expectedReturnTime);
+                const carImage = booking.car?.imageUrl || '/logo_ev.png';
+                const carName = booking.car?.name || 'Không xác định';
+                const carModel = booking.car?.model || '';
+                const locationName = booking.location?.name || booking.location?.address || 'Không xác định';
 
-                    {/* Booking Info */}
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <h3 className="text-xl font-semibold text-gray-800">
-                            {booking.carName}
-                          </h3>
-                          <p className="text-gray-600 text-sm">{booking.carModel}</p>
-                          <p className="text-xs text-gray-500 mt-1">Mã đơn: {booking.id}</p>
-                        </div>
-                        <div className="text-right">
-                          {getStatusTag(booking.status)}
-                          <div className="mt-1">{getPaymentTag(booking.paymentStatus)}</div>
-                        </div>
+                return (
+                  <Card 
+                    key={booking.id}
+                    className="shadow-md hover:shadow-lg transition-shadow"
+                  >
+                    <div className="flex flex-col md:flex-row gap-4">
+                      {/* Car Image */}
+                      <div className="md:w-48 h-32 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                        <Image
+                          src={carImage}
+                          alt={carName}
+                          className="w-full h-full object-cover"
+                          fallback="/logo_ev.png"
+                          preview={false}
+                        />
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-                        <div className="flex items-center gap-2 text-sm">
-                          <CalendarOutlined className="text-blue-600" />
+                      {/* Booking Info */}
+                      <div className="flex-1">
+                        <div className="flex justify-between items-start mb-3">
                           <div>
-                            <div className="text-gray-500">Nhận xe</div>
-                            <div className="font-medium">{formatDate(booking.startDate)}</div>
+                            <h3 className="text-xl font-semibold text-gray-800">
+                              {carName}
+                            </h3>
+                            <p className="text-gray-600 text-sm">{carModel}</p>
+                            <p className="text-xs text-gray-500 mt-1">Mã đơn: #{booking.id}</p>
+                          </div>
+                          <div className="text-right">
+                            {getStatusTag(booking.status)}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <CalendarOutlined className="text-red-600" />
-                          <div>
-                            <div className="text-gray-500">Trả xe</div>
-                            <div className="font-medium">{formatDate(booking.endDate)}</div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                          <div className="flex items-center gap-2 text-sm">
+                            <CalendarOutlined className="text-blue-600" />
+                            <div>
+                              <div className="text-gray-500">Nhận xe</div>
+                              <div className="font-medium">{formatDate(booking.pickupTime)}</div>
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <DollarOutlined className="text-green-600" />
-                          <div>
-                            <div className="text-gray-500">Tổng tiền</div>
-                            <div className="font-semibold text-lg text-green-600">
-                              {formatCurrency(booking.totalPrice)}
+                          <div className="flex items-center gap-2 text-sm">
+                            <CalendarOutlined className="text-red-600" />
+                            <div>
+                              <div className="text-gray-500">Trả xe</div>
+                              <div className="font-medium">{formatDate(booking.expectedReturnTime)}</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <DollarOutlined className="text-green-600" />
+                            <div>
+                              <div className="text-gray-500">Tổng tiền</div>
+                              <div className="font-semibold text-lg text-green-600">
+                                {formatCurrency(booking.total || booking.subTotal)}
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="flex items-center justify-between pt-3 border-t">
-                        <div className="text-sm text-gray-600">
-                          <InfoCircleOutlined /> Đặt ngày: {formatDate(booking.bookingDate)}
+                        <div className="flex items-center justify-between pt-3 border-t">
+                          <div className="text-sm text-gray-600 flex items-center gap-4 flex-wrap">
+                            <span>
+                              <InfoCircleOutlined /> Đặt ngày: {formatDateOnly(booking.orderDate || booking.createdAt)}
+                            </span>
+                            {booking.withDriver && (
+                              <Tag color="blue">Có tài xế</Tag>
+                            )}
+                            <span>
+                              <EnvironmentOutlined /> {locationName}
+                            </span>
+                          </div>
+                          <Button
+                            type="primary"
+                            icon={<EyeOutlined />}
+                            onClick={() => showBookingDetail(booking)}
+                            className="bg-blue-600"
+                          >
+                            Xem chi tiết
+                          </Button>
                         </div>
-                        <Button
-                          type="primary"
-                          icon={<EyeOutlined />}
-                          onClick={() => showBookingDetail(booking)}
-                          className="bg-blue-600"
-                        >
-                          Xem chi tiết
-                        </Button>
                       </div>
                     </div>
-                  </div>
-                </Card>
-              ))}
+                  </Card>
+                );
+              })}
             </div>
           )}
         </div>
@@ -404,7 +429,7 @@ export default function MyBookingsPage() {
             Đóng
           </Button>
         ]}
-        width={700}
+        width={800}
       >
         {selectedBooking && (
           <div>
@@ -412,43 +437,112 @@ export default function MyBookingsPage() {
               <div className="flex justify-between items-center">
                 <div>
                   <span className="text-gray-600">Mã đơn hàng:</span>
-                  <span className="ml-2 font-semibold text-lg">{selectedBooking.id}</span>
+                  <span className="ml-2 font-semibold text-lg">#{selectedBooking.id}</span>
                 </div>
                 {getStatusTag(selectedBooking.status)}
               </div>
             </div>
 
+            {/* Car Image */}
+            {selectedBooking.car?.imageUrl && (
+              <div className="mb-4">
+                <Image
+                  src={selectedBooking.car.imageUrl}
+                  alt={selectedBooking.car.name}
+                  className="w-full rounded-lg"
+                  style={{ maxHeight: 300, objectFit: 'cover' }}
+                  fallback="/logo_ev.png"
+                />
+              </div>
+            )}
+
             <Descriptions bordered column={1}>
               <Descriptions.Item label={<><CarOutlined /> Xe thuê</>}>
-                <div className="font-medium">{selectedBooking.carName}</div>
-                <div className="text-sm text-gray-600">{selectedBooking.carModel}</div>
+                <div className="font-medium text-lg">{selectedBooking.car?.name || 'Không xác định'}</div>
+                <div className="text-sm text-gray-600">{selectedBooking.car?.model || ''}</div>
+                {selectedBooking.car && (
+                  <div className="mt-2 text-xs text-gray-500">
+                    <Space>
+                      <span>Số chỗ: {selectedBooking.car.seats}</span>
+                      <span>•</span>
+                      <span>Pin: {selectedBooking.car.batteryType}</span>
+                      <span>•</span>
+                      <span>Giá/ngày: {formatCurrency(selectedBooking.car.rentPricePerDay)}</span>
+                    </Space>
+                  </div>
+                )}
               </Descriptions.Item>
-              <Descriptions.Item label="Ngày nhận xe">
-                {formatDate(selectedBooking.startDate)}
+              
+              <Descriptions.Item label={<><PhoneOutlined /> Số điện thoại</>}>
+                {selectedBooking.phoneNumber || '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="Ngày trả xe">
-                {formatDate(selectedBooking.endDate)}
+
+              <Descriptions.Item label={<><CalendarOutlined /> Ngày nhận xe</>}>
+                {formatDate(selectedBooking.pickupTime)}
               </Descriptions.Item>
+              
+              <Descriptions.Item label={<><CalendarOutlined /> Ngày trả xe (dự kiến)</>}>
+                {formatDate(selectedBooking.expectedReturnTime)}
+              </Descriptions.Item>
+
+              {selectedBooking.actualReturnTime && (
+                <Descriptions.Item label={<><CheckCircleOutlined /> Ngày trả xe (thực tế)</>}>
+                  {formatDate(selectedBooking.actualReturnTime)}
+                </Descriptions.Item>
+              )}
+
               <Descriptions.Item label="Số ngày thuê">
-                {selectedBooking.totalDays} ngày
+                {calculateDays(selectedBooking.pickupTime, selectedBooking.expectedReturnTime)} ngày
               </Descriptions.Item>
-              <Descriptions.Item label="Địa điểm nhận xe">
-                {selectedBooking.pickupLocation}
+
+              <Descriptions.Item label={<><EnvironmentOutlined /> Địa điểm nhận xe</>}>
+                {selectedBooking.location?.name || selectedBooking.location?.address || 'Không xác định'}
+                {selectedBooking.location?.address && (
+                  <div className="text-sm text-gray-600 mt-1">{selectedBooking.location.address}</div>
+                )}
               </Descriptions.Item>
-              <Descriptions.Item label="Địa điểm trả xe">
-                {selectedBooking.returnLocation}
+
+              <Descriptions.Item label="Có tài xế">
+                {selectedBooking.withDriver ? (
+                  <Tag color="blue">Có</Tag>
+                ) : (
+                  <Tag color="default">Không</Tag>
+                )}
               </Descriptions.Item>
-              <Descriptions.Item label="Trạng thái thanh toán">
-                {getPaymentTag(selectedBooking.paymentStatus)}
-              </Descriptions.Item>
+
+              {selectedBooking.subTotal && (
+                <Descriptions.Item label="Tổng tiền (chưa giảm)">
+                  {formatCurrency(selectedBooking.subTotal)}
+                </Descriptions.Item>
+              )}
+
+              {selectedBooking.discount && selectedBooking.discount > 0 && (
+                <Descriptions.Item label="Giảm giá">
+                  <span className="text-red-600">- {formatCurrency(selectedBooking.discount)}</span>
+                </Descriptions.Item>
+              )}
+
+              {selectedBooking.extraFee && selectedBooking.extraFee > 0 && (
+                <Descriptions.Item label="Phí phát sinh">
+                  <span className="text-orange-600">+ {formatCurrency(selectedBooking.extraFee)}</span>
+                </Descriptions.Item>
+              )}
+
+              {selectedBooking.damageFee && selectedBooking.damageFee > 0 && (
+                <Descriptions.Item label="Phí hư hỏng">
+                  <span className="text-red-600">+ {formatCurrency(selectedBooking.damageFee)}</span>
+                </Descriptions.Item>
+              )}
+
               <Descriptions.Item label="Tổng tiền">
                 <span className="text-xl font-bold text-green-600">
-                  {formatCurrency(selectedBooking.totalPrice)}
+                  {formatCurrency(selectedBooking.total || selectedBooking.subTotal)}
                 </span>
               </Descriptions.Item>
-              {selectedBooking.notes && (
-                <Descriptions.Item label="Ghi chú">
-                  {selectedBooking.notes}
+
+              {selectedBooking.damageNotes && (
+                <Descriptions.Item label="Ghi chú hư hỏng">
+                  <div className="text-red-600">{selectedBooking.damageNotes}</div>
                 </Descriptions.Item>
               )}
             </Descriptions>
@@ -459,18 +553,24 @@ export default function MyBookingsPage() {
                 items={[
                   {
                     color: 'green',
-                    children: `Đặt hàng ngày ${formatDate(selectedBooking.bookingDate)}`
+                    children: `Đặt hàng ngày ${formatDate(selectedBooking.orderDate || selectedBooking.createdAt)}`
                   },
                   {
-                    color: selectedBooking.status === 'cancelled' ? 'red' : 'blue',
-                    children: selectedBooking.status === 'cancelled' 
+                    color: normalizeStatus(selectedBooking.status) === 'cancelled' ? 'red' : 
+                           normalizeStatus(selectedBooking.status) === 'completed' ? 'green' :
+                           normalizeStatus(selectedBooking.status) === 'confirmed' ? 'blue' : 'orange',
+                    children: normalizeStatus(selectedBooking.status) === 'cancelled' 
                       ? 'Đơn hàng đã bị hủy'
-                      : selectedBooking.status === 'confirmed'
+                      : normalizeStatus(selectedBooking.status) === 'confirmed'
                       ? 'Đơn hàng đã được xác nhận'
-                      : selectedBooking.status === 'completed'
+                      : normalizeStatus(selectedBooking.status) === 'completed'
                       ? 'Đơn hàng đã hoàn thành'
                       : 'Đang chờ xác nhận'
-                  }
+                  },
+                  ...(selectedBooking.actualReturnTime ? [{
+                    color: 'green',
+                    children: `Đã trả xe ngày ${formatDate(selectedBooking.actualReturnTime)}`
+                  }] : [])
                 ]}
               />
             </div>
@@ -480,4 +580,3 @@ export default function MyBookingsPage() {
     </>
   );
 }
-

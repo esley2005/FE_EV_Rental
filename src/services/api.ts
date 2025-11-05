@@ -558,21 +558,29 @@ export interface ChangePasswordData {
 
 // Driver License API
 export interface DriverLicenseData {
+  id?: number;
   name: string;
   licenseNumber?: string;
   imageUrl: string; // Mặt trước
   imageUrl2?: string; // Mặt sau
   rentalOrderId?: number | null;
+  status?: string; // Pending, Approved, Rejected hoặc 0, 1, 2
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // Citizen ID API
 export interface CitizenIdData {
+  id?: number;
   name: string;
   citizenIdNumber: string;
   birthDate: string; // YYYY-MM-DD format
   imageUrl: string; // Mặt trước
   imageUrl2?: string; // Mặt sau
   rentalOrderId?: number | null;
+  status?: string; // Pending, Approved, Rejected hoặc 0, 1, 2
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export const authApi = {
@@ -715,6 +723,25 @@ export const driverLicenseApi = {
     apiCall<DriverLicenseData>('/DriverLicense/GetById', {
       method: 'GET',
     }),
+
+  // Get all driver licenses (Admin/Staff only)
+  getAll: () =>
+    apiCall<DriverLicenseData[]>('/DriverLicense/GetAll', {
+      method: 'GET',
+    }),
+
+  // Update driver license status (Admin/Staff only)
+  // Status: 0 = Pending, 1 = Approved, 2 = Rejected
+  updateStatus: (driverLicenseId: number, status: 0 | 1 | 2) => {
+    const formData = new FormData();
+    formData.append('DriverLicenseId', driverLicenseId.toString());
+    formData.append('Status', status.toString());
+    
+    return apiCall<{ message: string }>('/DriverLicense/UpdateDriverLicenseStatus', {
+      method: 'PUT',
+      body: formData,
+    });
+  },
 };
 
 // Citizen ID API
@@ -740,7 +767,7 @@ export const citizenIdApi = {
 
   // Update citizen ID info
   update: (data: CitizenIdData & { id: number }) => {
-    // Backend expects [FromBody] for UpdateInfo, so we send JSON
+
     const updateData = {
       Id: data.id,
       Name: data.name,
@@ -761,6 +788,25 @@ export const citizenIdApi = {
     apiCall<CitizenIdData>('/CitizenId/GetById', {
       method: 'GET',
     }),
+
+  // Get all citizen IDs (Admin/Staff only)
+  getAll: () =>
+    apiCall<CitizenIdData[]>('/CitizenId/GetAll', {
+      method: 'GET',
+    }),
+
+  // Update citizen ID status (Admin/Staff only)
+  // Status: 0 = Pending, 1 = Approved, 2 = Rejected
+  updateStatus: (citizenIdId: number, status: 0 | 1 | 2) => {
+    const formData = new FormData();
+    formData.append('CitizenIdId', citizenIdId.toString());
+    formData.append('Status', status.toString());
+    
+    return apiCall<{ message: string }>('/CitizenId/UpdateCitizenIdStatus', {
+      method: 'PUT',
+      body: formData,
+    });
+  },
 };
 
 // Rental Location API
@@ -819,6 +865,12 @@ export interface RentalOrderData {
 }
 
 export const rentalOrderApi = {
+  // Lấy tất cả đơn hàng (Admin/Staff only)
+  getAll: () =>
+    apiCall<RentalOrderData[]>('/RentalOrder/GetAll', {
+      method: 'GET',
+    }),
+
   // Tạo đơn hàng mới
   create: (orderData: CreateRentalOrderData) =>
     apiCall<RentalOrderData>('/RentalOrder/Create', {

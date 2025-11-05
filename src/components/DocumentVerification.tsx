@@ -1,296 +1,630 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { Card, Form, Input, Button, Upload, message, Descriptions, Alert, Space, Tag, Table, Typography } from 'antd';
-import { authApi, type User } from '@/services/api';
-import SystemVerification from './SystemVerification';
+import React, { useEffect, useState } from 'react';
+import { 
+  Card, 
+  Button, 
+  message, 
+  Space, 
+  Tag, 
+  Table, 
+  Typography, 
+  Image, 
+  Modal,
+  Descriptions,
+  Tabs,
+  Badge,
+  Spin
+} from 'antd';
+import { driverLicenseApi, citizenIdApi, authApi, rentalOrderApi } from '@/services/api';
+import type { DriverLicenseData, CitizenIdData, User, RentalOrderData } from '@/services/api';
 import { 
   IdcardOutlined, 
   CarOutlined, 
   CheckCircleOutlined, 
   CloseCircleOutlined,
-  UploadOutlined,
-  SearchOutlined
+  EyeOutlined,
+  UserOutlined
 } from '@ant-design/icons';
+import dayjs from 'dayjs';
 
-const { TextArea } = Input;
 const { Title } = Typography;
-
-interface CustomerInfo {
-  id: string;
-  fullName: string;
-  phone: string;
-  email: string;
-  licenseNumber: string;
-  idCardNumber: string;
-  address: string;
-  dateOfBirth: string;
-  licenseExpiry: string;
-}
 
 interface DocumentVerificationProps {
   mode?: 'check-documents' | 'verify-system';
 }
 
 export default function DocumentVerification({ mode = 'check-documents' }: DocumentVerificationProps) {
-  const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
-  const [verificationStatus, setVerificationStatus] = useState<'pending' | 'verified' | 'rejected'>('pending');
-  const [form] = Form.useForm();
-  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
-  const [customers, setCustomers] = useState<CustomerInfo[]>([]);
+  const [driverLicenses, setDriverLicenses] = useState<DriverLicenseData[]>([]);
+  const [citizenIds, setCitizenIds] = useState<CitizenIdData[]>([]);
+  const [users, setUsers] = useState<Record<number, User>>({});
+  const [orders, setOrders] = useState<Record<number, RentalOrderData>>({});
+  const [selectedLicense, setSelectedLicense] = useState<DriverLicenseData | null>(null);
+  const [selectedCitizenId, setSelectedCitizenId] = useState<CitizenIdData | null>(null);
+  const [licenseModalVisible, setLicenseModalVisible] = useState(false);
+  const [citizenIdModalVisible, setCitizenIdModalVisible] = useState(false);
+  const [processingId, setProcessingId] = useState<number | null>(null);
 
-  // Mock data - trong thực tế sẽ gọi API
-  const mockCustomerData: CustomerInfo = {
-    id: 'KH-001',
-    fullName: 'Nguyễn Văn A',
-    phone: '0901234567',
-    email: 'nguyenvana@email.com',
-    licenseNumber: 'B1-123456789',
-    idCardNumber: '123456789012',
-    address: '123 Đường ABC, Quận 1, TP.HCM',
-    dateOfBirth: '1990-01-15',
-    licenseExpiry: '2025-12-31'
-  };
-
-  // Tải danh sách khách hàng từ API sẵn có (userService)
+  // Load all documents
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        setLoading(true);
-        // Lấy từ auth API chuẩn
-        const res = await authApi.getAllUsers();
-        const users: any[] = Array.isArray((res as any)?.data) ? (res as any).data : [];
-        if (!mounted) return;
-        const mapped: CustomerInfo[] = users.map((u: any, idx: number) => ({
-          id: String(u.userId ?? u.id ?? idx + 1),
-          fullName: u.fullName || u.name || u.username || 'Chưa rõ',
-          phone: u.phone || u.phoneNumber || '',
-          email: u.email || u.mail || '',
-          licenseNumber: '',
-          idCardNumber: '',
-          address: u.address || u.homeAddress || '',
-          dateOfBirth: u.dateOfBirth || u.dob || '',
-          licenseExpiry: '',
-        }));
-        setCustomers(mapped);
-      } catch (e) {
-        // fallback: dùng mock nếu API không sẵn
-        setCustomers([mockCustomerData]);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
-    return () => { mounted = false; };
+    loadDocuments();
   }, []);
 
-  const handleDocumentUpload = (info: any) => {
-    if (info.file.status === 'done') {
-      message.success('Tải lên thành công');
-    } else if (info.file.status === 'error') {
-      message.error('Tải lên thất bại');
+  const loadDocuments = async () => {
+    setLoading(true);
+    try {
+      // Load driver licenses and citizen IDs in parallel
+      const [licenseRes, citizenRes, usersRes] = await Promise.all([
+        driverLicenseApi.getAll(),
+        citizenIdApi.getAll(),
+        authApi.getAllUsers()
+      ]);
+
+      // Process driver licenses
+      if (licenseRes.success && licenseRes.data) {
+        const licenses = Array.isArray(licenseRes.data) 
+          ? licenseRes.data 
+          : (licenseRes.data as any)?.$values || [];
+        setDriverLicenses(licenses);
+      }
+
+      // Process citizen IDs
+      if (citizenRes.success && citizenRes.data) {
+        const citizenIdsData = Array.isArray(citizenRes.data)
+          ? citizenRes.data
+          : (citizenRes.data as any)?.$values || [];
+        setCitizenIds(citizenIdsData);
+      }
+
+      // Process users for lookup
+      if (usersRes.success && usersRes.data) {
+        const usersData = Array.isArray(usersRes.data) ? usersRes.data : [];
+        const usersMap: Record<number, User> = {};
+        usersData.forEach((user: any) => {
+          const userId = user.id || user.userId;
+          if (userId) {
+            usersMap[userId] = user;
+          }
+        });
+        setUsers(usersMap);
+      }
+
+      // Load all rental orders to get userId from rentalOrderId
+      // Collect unique rentalOrderIds from documents
+      const allRentalOrderIds = new Set<number>();
+      if (licenseRes.success && licenseRes.data) {
+        const licenses = Array.isArray(licenseRes.data) 
+          ? licenseRes.data 
+          : (licenseRes.data as any)?.$values || [];
+        licenses.forEach((license: DriverLicenseData) => {
+          if (license.rentalOrderId) {
+            allRentalOrderIds.add(license.rentalOrderId);
+          }
+        });
+      }
+      if (citizenRes.success && citizenRes.data) {
+        const citizenIdsData = Array.isArray(citizenRes.data)
+          ? citizenRes.data
+          : (citizenRes.data as any)?.$values || [];
+        citizenIdsData.forEach((citizenId: CitizenIdData) => {
+          if (citizenId.rentalOrderId) {
+            allRentalOrderIds.add(citizenId.rentalOrderId);
+          }
+        });
+      }
+
+      // Load orders by their IDs
+      const ordersMap: Record<number, RentalOrderData> = {};
+      await Promise.all(
+        Array.from(allRentalOrderIds).map(async (orderId) => {
+          try {
+            const orderRes = await rentalOrderApi.getById(orderId);
+            if (orderRes.success && orderRes.data) {
+              ordersMap[orderId] = orderRes.data;
+            }
+          } catch (error) {
+            console.error(`Error loading order ${orderId}:`, error);
+          }
+        })
+      );
+      setOrders(ordersMap);
+    } catch (error) {
+      console.error('Error loading documents:', error);
+      message.error('Không thể tải danh sách giấy tờ');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleVerifyDocuments = () => {
-    // Mock verification process
-    setVerificationStatus('verified');
-    message.success('Xác thực giấy tờ thành công');
+  const getStatusTag = (status: string) => {
+    const statusLower = status?.toLowerCase() || '';
+    if (statusLower === 'approved' || statusLower === '1') {
+      return <Tag color="success">Đã xác thực</Tag>;
+    }
+    if (statusLower === 'rejected' || statusLower === '2') {
+      return <Tag color="error">Đã từ chối</Tag>;
+    }
+    return <Tag color="warning">Chờ xác thực</Tag>;
   };
 
-  const handleRejectDocuments = () => {
-    setVerificationStatus('rejected');
-    message.error('Giấy tờ không hợp lệ');
+  const handleApproveLicense = async (licenseId: number) => {
+    setProcessingId(licenseId);
+    try {
+      const response = await driverLicenseApi.updateStatus(licenseId, 1);
+      if (response.success) {
+        message.success('Xác thực giấy phép lái xe thành công');
+        loadDocuments();
+        setLicenseModalVisible(false);
+      } else {
+        message.error(response.error || 'Không thể xác thực giấy phép lái xe');
+      }
+    } catch (error) {
+      message.error('Có lỗi xảy ra khi xác thực');
+    } finally {
+      setProcessingId(null);
+    }
   };
 
-  const filteredCustomers = useMemo(() => {
-    const key = search.trim().toLowerCase();
-    if (!key) return customers;
-    return customers.filter((c) =>
-      [c.phone, c.fullName, c.email, c.idCardNumber].some((v) => (v || '').toLowerCase().includes(key))
-    );
-  }, [search, customers]);
+  const handleRejectLicense = async (licenseId: number) => {
+    setProcessingId(licenseId);
+    try {
+      const response = await driverLicenseApi.updateStatus(licenseId, 2);
+      if (response.success) {
+        message.success('Đã từ chối giấy phép lái xe');
+        loadDocuments();
+        setLicenseModalVisible(false);
+      } else {
+        message.error(response.error || 'Không thể từ chối giấy phép lái xe');
+      }
+    } catch (error) {
+      message.error('Có lỗi xảy ra khi từ chối');
+    } finally {
+      setProcessingId(null);
+    }
+  };
 
-  const customersColumns = [
-    { title: 'Mã KH', dataIndex: 'id', key: 'id', width: 100 },
-    { title: 'Họ tên', dataIndex: 'fullName', key: 'fullName' },
-    { title: 'SĐT', dataIndex: 'phone', key: 'phone', width: 160 },
-    { title: 'Email', dataIndex: 'email', key: 'email' },
+  const handleApproveCitizenId = async (citizenIdId: number) => {
+    setProcessingId(citizenIdId);
+    try {
+      const response = await citizenIdApi.updateStatus(citizenIdId, 1);
+      if (response.success) {
+        message.success('Xác thực căn cước công dân thành công');
+        loadDocuments();
+        setCitizenIdModalVisible(false);
+      } else {
+        message.error(response.error || 'Không thể xác thực căn cước công dân');
+      }
+    } catch (error) {
+      message.error('Có lỗi xảy ra khi xác thực');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleRejectCitizenId = async (citizenIdId: number) => {
+    setProcessingId(citizenIdId);
+    try {
+      const response = await citizenIdApi.updateStatus(citizenIdId, 2);
+      if (response.success) {
+        message.success('Đã từ chối căn cước công dân');
+        loadDocuments();
+        setCitizenIdModalVisible(false);
+      } else {
+        message.error(response.error || 'Không thể từ chối căn cước công dân');
+      }
+    } catch (error) {
+      message.error('Có lỗi xảy ra khi từ chối');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const openLicenseModal = (license: DriverLicenseData) => {
+    setSelectedLicense(license);
+    setLicenseModalVisible(true);
+  };
+
+  const openCitizenIdModal = (citizenId: CitizenIdData) => {
+    setSelectedCitizenId(citizenId);
+    setCitizenIdModalVisible(true);
+  };
+
+  // Get user info from rentalOrderId
+  const getUserFromOrder = (rentalOrderId?: number | null): User | null => {
+    if (!rentalOrderId) return null;
+    const order = orders[rentalOrderId];
+    if (!order) return null;
+    return users[order.userId] || null;
+  };
+
+  // Driver License columns
+  const licenseColumns = [
+    {
+      title: 'ID',
+      dataIndex: 'id',
+      key: 'id',
+      width: 80,
+    },
+    {
+      title: 'Họ tên (trên GPLX)',
+      dataIndex: 'name',
+      key: 'name',
+    },
+    {
+      title: 'Người upload',
+      key: 'user',
+      render: (_: any, record: DriverLicenseData) => {
+        const user = getUserFromOrder(record.rentalOrderId);
+        if (!user) return '-';
+        return (
+          <div>
+            <div className="font-medium">{user.fullName || user.email}</div>
+            <div className="text-xs text-gray-500">{user.email}</div>
+          </div>
+        );
+      },
+    },
+    {
+      title: 'Mã đơn hàng',
+      key: 'rentalOrderId',
+      render: (_: any, record: DriverLicenseData) => 
+        record.rentalOrderId ? `#${record.rentalOrderId}` : '-',
+    },
+    {
+      title: 'Số bằng lái',
+      dataIndex: 'licenseNumber',
+      key: 'licenseNumber',
+    },
+    {
+      title: 'Trạng thái',
+      key: 'status',
+      render: (_: any, record: DriverLicenseData) => getStatusTag(record.status || ''),
+    },
+    {
+      title: 'Ngày tạo',
+      key: 'createdAt',
+      render: (_: any, record: DriverLicenseData) => 
+        record.createdAt ? dayjs(record.createdAt).format('DD/MM/YYYY HH:mm') : '-',
+    },
     {
       title: 'Thao tác',
       key: 'action',
-      width: 140,
-      render: (_: any, record: CustomerInfo) => (
-        <Button type="link" onClick={() => setCustomerInfo(record)}>Chọn</Button>
+      width: 120,
+      render: (_: any, record: DriverLicenseData) => (
+        <Button 
+          type="link" 
+          icon={<EyeOutlined />}
+          onClick={() => openLicenseModal(record)}
+        >
+          Xem
+        </Button>
       ),
     },
   ];
 
-  const renderCustomerInfo = () => (
-    <Card title="👤 Thông tin khách hàng" className="mb-4">
-      <Descriptions column={2} bordered>
-        <Descriptions.Item label="Mã khách hàng">{customerInfo?.id}</Descriptions.Item>
-        <Descriptions.Item label="Họ tên">{customerInfo?.fullName}</Descriptions.Item>
-        <Descriptions.Item label="Số điện thoại">{customerInfo?.phone}</Descriptions.Item>
-        <Descriptions.Item label="Email">{customerInfo?.email}</Descriptions.Item>
-        <Descriptions.Item label="Số CCCD">{customerInfo?.idCardNumber}</Descriptions.Item>
-        <Descriptions.Item label="Ngày sinh">{customerInfo?.dateOfBirth}</Descriptions.Item>
-        <Descriptions.Item label="Số GPLX">{customerInfo?.licenseNumber}</Descriptions.Item>
-        <Descriptions.Item label="Hạn GPLX">{customerInfo?.licenseExpiry}</Descriptions.Item>
-        <Descriptions.Item label="Địa chỉ" span={2}>{customerInfo?.address}</Descriptions.Item>
-      </Descriptions>
-    </Card>
-  );
-
-  const renderDocumentCheck = () => (
-    <Card title="📄 Kiểm tra giấy tờ" className="mb-4">
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
-        
-        {/* CCCD/CMND */}
-        <Card size="small" title={<><IdcardOutlined /> CCCD/CMND</>}>
-          <Space direction="vertical" style={{ width: '100%' }}>
-            <Alert 
-              message="Yêu cầu: CCCD/CMND còn hạn sử dụng, ảnh rõ nét, đầy đủ thông tin"
-              type="info" 
-              showIcon 
-            />
-            <Upload
-              name="idCard"
-              listType="picture-card"
-              onChange={handleDocumentUpload}
-              beforeUpload={() => false}
-            >
-              <div>
-                <UploadOutlined />
-                <div>Tải lên CCCD/CMND</div>
-              </div>
-            </Upload>
-            <div>
-              <Tag color="green">✅ Số CCCD: {customerInfo?.idCardNumber}</Tag>
-              <Tag color="blue">📅 Còn hạn sử dụng</Tag>
-            </div>
-          </Space>
-        </Card>
-
-        {/* Giấy phép lái xe */}
-        <Card size="small" title={<><CarOutlined /> Giấy phép lái xe</>}>
-          <Space direction="vertical" style={{ width: '100%' }}>
-            <Alert 
-              message="Yêu cầu: GPLX còn hạn sử dụng, đúng hạng lái xe, ảnh rõ nét"
-              type="info" 
-              showIcon 
-            />
-            <Upload
-              name="license"
-              listType="picture-card"
-              onChange={handleDocumentUpload}
-              beforeUpload={() => false}
-            >
-              <div>
-                <UploadOutlined />
-                <div>Tải lên GPLX</div>
-              </div>
-            </Upload>
-            <div>
-              <Tag color="green">✅ Số GPLX: {customerInfo?.licenseNumber}</Tag>
-              <Tag color="orange">📅 Hạn đến: {customerInfo?.licenseExpiry}</Tag>
-              <Tag color="blue">🚗 Hạng B1</Tag>
-            </div>
-          </Space>
-        </Card>
-
-        {/* Ghi chú */}
-        <Form.Item label="Ghi chú (nếu có)">
-          <TextArea rows={3} placeholder="Ghi chú về giấy tờ, lưu ý đặc biệt..." />
-        </Form.Item>
-
-        {/* Nút xác thực */}
-        <Space size="middle">
-          <Button 
-            type="primary" 
-            size="large"
-            icon={<CheckCircleOutlined />}
-            onClick={handleVerifyDocuments}
-          >
-            Xác thực thành công
-          </Button>
-          <Button 
-            danger 
-            size="large"
-            icon={<CloseCircleOutlined />}
-            onClick={handleRejectDocuments}
-          >
-            Từ chối giấy tờ
-          </Button>
-        </Space>
-      </Space>
-    </Card>
-  );
-
-  const renderVerificationResult = () => (
-    <Card title="📋 Kết quả xác thực" className="mb-4">
-      {verificationStatus === 'verified' ? (
-        <Alert
-          message="Xác thực thành công"
-          description="Giấy tờ hợp lệ, khách hàng có thể tiến hành thuê xe."
-          type="success"
-          showIcon
-          icon={<CheckCircleOutlined />}
-        />
-      ) : (
-        <Alert
-          message="Xác thực thất bại"
-          description="Giấy tờ không hợp lệ, vui lòng kiểm tra lại."
-          type="error"
-          showIcon
-          icon={<CloseCircleOutlined />}
-        />
-      )}
-      
-      <div className="mt-4">
-        <Button type="primary" onClick={() => {
-          setCustomerInfo(null);
-          setVerificationStatus('pending');
-          form.resetFields();
-        }}>
-          Xác thực khách hàng khác
+  // Citizen ID columns
+  const citizenIdColumns = [
+    {
+      title: 'ID',
+      dataIndex: 'id',
+      key: 'id',
+      width: 80,
+    },
+    {
+      title: 'Họ tên (trên CCCD)',
+      dataIndex: 'name',
+      key: 'name',
+    },
+    {
+      title: 'Người upload',
+      key: 'user',
+      render: (_: any, record: CitizenIdData) => {
+        const user = getUserFromOrder(record.rentalOrderId);
+        if (!user) return '-';
+        return (
+          <div>
+            <div className="font-medium">{user.fullName || user.email}</div>
+            <div className="text-xs text-gray-500">{user.email}</div>
+          </div>
+        );
+      },
+    },
+    {
+      title: 'Mã đơn hàng',
+      key: 'rentalOrderId',
+      render: (_: any, record: CitizenIdData) => 
+        record.rentalOrderId ? `#${record.rentalOrderId}` : '-',
+    },
+    {
+      title: 'Số CCCD',
+      dataIndex: 'citizenIdNumber',
+      key: 'citizenIdNumber',
+    },
+    {
+      title: 'Ngày sinh',
+      key: 'birthDate',
+      render: (_: any, record: CitizenIdData) => 
+        record.birthDate ? dayjs(record.birthDate).format('DD/MM/YYYY') : '-',
+    },
+    {
+      title: 'Trạng thái',
+      key: 'status',
+      render: (_: any, record: CitizenIdData) => getStatusTag(record.status || ''),
+    },
+    {
+      title: 'Ngày tạo',
+      key: 'createdAt',
+      render: (_: any, record: CitizenIdData) => 
+        record.createdAt ? dayjs(record.createdAt).format('DD/MM/YYYY HH:mm') : '-',
+    },
+    {
+      title: 'Thao tác',
+      key: 'action',
+      width: 120,
+      render: (_: any, record: CitizenIdData) => (
+        <Button 
+          type="link" 
+          icon={<EyeOutlined />}
+          onClick={() => openCitizenIdModal(record)}
+        >
+          Xem
         </Button>
-      </div>
-    </Card>
-  );
+      ),
+    },
+  ];
 
-  if (mode === 'verify-system') {
-    return <SystemVerification customerInfo={customerInfo || undefined} />;
-  }
+  // Filter pending documents
+  const pendingLicenses = driverLicenses.filter(
+    (l) => !l.status || l.status.toLowerCase() === 'pending' || l.status === '0'
+  );
+  const pendingCitizenIds = citizenIds.filter(
+    (c) => !c.status || c.status.toLowerCase() === 'pending' || c.status === '0'
+  );
 
   return (
     <div>
-      <Card className="mb-4">
-        <Title level={5} style={{ marginBottom: 12 }}>Danh sách khách hàng</Title>
-        <Input.Search
-          placeholder="Tìm theo số điện thoại"
-          allowClear
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ maxWidth: 360, marginBottom: 12 }}
-        />
-        <Table
-          loading={loading}
-          columns={customersColumns as any}
-          dataSource={filteredCustomers}
-          rowKey={(r) => r.id}
-          pagination={{ pageSize: 8 }}
+      <Card>
+        <Title level={4}>Xác thực giấy tờ khách hàng</Title>
+        <Tabs 
+          defaultActiveKey="license"
+          items={[
+            {
+              key: 'license',
+              label: (
+                <span>
+                  <CarOutlined /> Giấy phép lái xe
+                  {pendingLicenses.length > 0 && (
+                    <Badge count={pendingLicenses.length} style={{ marginLeft: 8 }} />
+                  )}
+                </span>
+              ),
+              children: (
+                <Table
+                  loading={loading}
+                  columns={licenseColumns}
+                  dataSource={driverLicenses}
+                  rowKey={(record) => record.id || Math.random()}
+                  pagination={{ pageSize: 10 }}
+                />
+              ),
+            },
+            {
+              key: 'citizenId',
+              label: (
+                <span>
+                  <IdcardOutlined /> Căn cước công dân
+                  {pendingCitizenIds.length > 0 && (
+                    <Badge count={pendingCitizenIds.length} style={{ marginLeft: 8 }} />
+                  )}
+                </span>
+              ),
+              children: (
+                <Table
+                  loading={loading}
+                  columns={citizenIdColumns}
+                  dataSource={citizenIds}
+                  rowKey={(record) => record.id || Math.random()}
+                  pagination={{ pageSize: 10 }}
+                />
+              ),
+            },
+          ]}
         />
       </Card>
 
-      {customerInfo && (
-        <>
-          {renderCustomerInfo()}
-          {renderDocumentCheck()}
-          {verificationStatus !== 'pending' && renderVerificationResult()}
-        </>
-      )}
+      {/* Driver License Modal */}
+      <Modal
+        title={
+          <Space>
+            <CarOutlined /> Chi tiết giấy phép lái xe
+            {selectedLicense && getStatusTag(selectedLicense.status || '')}
+          </Space>
+        }
+        open={licenseModalVisible}
+        onCancel={() => setLicenseModalVisible(false)}
+        footer={null}
+        width={800}
+      >
+        {selectedLicense && (
+          <div>
+            <Descriptions column={2} bordered className="mb-4">
+              <Descriptions.Item label="Họ tên (trên GPLX)">{selectedLicense.name}</Descriptions.Item>
+              <Descriptions.Item label="Số bằng lái">{selectedLicense.licenseNumber || '-'}</Descriptions.Item>
+              <Descriptions.Item label="ID Giấy phép">{selectedLicense.id}</Descriptions.Item>
+              <Descriptions.Item label="Mã đơn hàng">
+                {selectedLicense.rentalOrderId ? (
+                  <Tag color="blue">#{selectedLicense.rentalOrderId}</Tag>
+                ) : '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label={<><UserOutlined /> Người upload</>}>
+                {(() => {
+                  const user = getUserFromOrder(selectedLicense.rentalOrderId);
+                  if (!user) return '-';
+                  return (
+                    <div>
+                      <div className="font-medium">{user.fullName || 'Chưa có tên'}</div>
+                      <div className="text-sm text-gray-600">{user.email}</div>
+                      {user.phone && (
+                        <div className="text-sm text-gray-600">{user.phone}</div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </Descriptions.Item>
+              <Descriptions.Item label="Trạng thái">
+                {getStatusTag(selectedLicense.status || '')}
+              </Descriptions.Item>
+              <Descriptions.Item label="Ngày tạo">
+                {selectedLicense.createdAt ? dayjs(selectedLicense.createdAt).format('DD/MM/YYYY HH:mm') : '-'}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <Title level={5}>Mặt trước</Title>
+                <Image
+                  src={selectedLicense.imageUrl}
+                  alt="Mặt trước GPLX"
+                  width="100%"
+                  style={{ maxHeight: 300, objectFit: 'contain' }}
+                  fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23ddd' width='400' height='300'/%3E%3Ctext fill='%23999' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Image%3C/text%3E%3C/svg%3E"
+                />
+              </div>
+              <div>
+                <Title level={5}>Mặt sau</Title>
+                <Image
+                  src={selectedLicense.imageUrl2}
+                  alt="Mặt sau GPLX"
+                  width="100%"
+                  style={{ maxHeight: 300, objectFit: 'contain' }}
+                  fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23ddd' width='400' height='300'/%3E%3Ctext fill='%23999' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Image%3C/text%3E%3C/svg%3E"
+                />
+              </div>
+            </div>
+
+            {(selectedLicense.status?.toLowerCase() === 'pending' || selectedLicense.status === '0') && selectedLicense.id && (
+              <Space size="large" className="w-full justify-end">
+                <Button
+                  danger
+                  icon={<CloseCircleOutlined />}
+                  onClick={() => selectedLicense.id && handleRejectLicense(selectedLicense.id)}
+                  loading={processingId === selectedLicense.id}
+                >
+                  Từ chối
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => selectedLicense.id && handleApproveLicense(selectedLicense.id)}
+                  loading={processingId === selectedLicense.id}
+                  className="bg-green-600"
+                >
+                  Xác thực
+                </Button>
+              </Space>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* Citizen ID Modal */}
+      <Modal
+        title={
+          <Space>
+            <IdcardOutlined /> Chi tiết căn cước công dân
+            {selectedCitizenId && getStatusTag(selectedCitizenId.status || '')}
+          </Space>
+        }
+        open={citizenIdModalVisible}
+        onCancel={() => setCitizenIdModalVisible(false)}
+        footer={null}
+        width={800}
+      >
+        {selectedCitizenId && (
+          <div>
+            <Descriptions column={2} bordered className="mb-4">
+              <Descriptions.Item label="Họ tên (trên CCCD)">{selectedCitizenId.name}</Descriptions.Item>
+              <Descriptions.Item label="Số CCCD">{selectedCitizenId.citizenIdNumber}</Descriptions.Item>
+              <Descriptions.Item label="Ngày sinh">
+                {selectedCitizenId.birthDate ? dayjs(selectedCitizenId.birthDate).format('DD/MM/YYYY') : '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="ID CCCD">{selectedCitizenId.id}</Descriptions.Item>
+              <Descriptions.Item label="Mã đơn hàng">
+                {selectedCitizenId.rentalOrderId ? (
+                  <Tag color="blue">#{selectedCitizenId.rentalOrderId}</Tag>
+                ) : '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label={<><UserOutlined /> Người upload</>}>
+                {(() => {
+                  const user = getUserFromOrder(selectedCitizenId.rentalOrderId);
+                  if (!user) return '-';
+                  return (
+                    <div>
+                      <div className="font-medium">{user.fullName || 'Chưa có tên'}</div>
+                      <div className="text-sm text-gray-600">{user.email}</div>
+                      {user.phone && (
+                        <div className="text-sm text-gray-600">{user.phone}</div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </Descriptions.Item>
+              <Descriptions.Item label="Trạng thái">
+                {getStatusTag(selectedCitizenId.status || '')}
+              </Descriptions.Item>
+              <Descriptions.Item label="Ngày tạo">
+                {selectedCitizenId.createdAt ? dayjs(selectedCitizenId.createdAt).format('DD/MM/YYYY HH:mm') : '-'}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <Title level={5}>Mặt trước</Title>
+                <Image
+                  src={selectedCitizenId.imageUrl}
+                  alt="Mặt trước CCCD"
+                  width="100%"
+                  style={{ maxHeight: 300, objectFit: 'contain' }}
+                  fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23ddd' width='400' height='300'/%3E%3Ctext fill='%23999' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Image%3C/text%3E%3C/svg%3E"
+                />
+              </div>
+              <div>
+                <Title level={5}>Mặt sau</Title>
+                <Image
+                  src={selectedCitizenId.imageUrl2}
+                  alt="Mặt sau CCCD"
+                  width="100%"
+                  style={{ maxHeight: 300, objectFit: 'contain' }}
+                  fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23ddd' width='400' height='300'/%3E%3Ctext fill='%23999' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Image%3C/text%3E%3C/svg%3E"
+                />
+              </div>
+            </div>
+
+            {(selectedCitizenId.status?.toLowerCase() === 'pending' || selectedCitizenId.status === '0') && selectedCitizenId.id && (
+              <Space size="large" className="w-full justify-end">
+                <Button
+                  danger
+                  icon={<CloseCircleOutlined />}
+                  onClick={() => selectedCitizenId.id && handleRejectCitizenId(selectedCitizenId.id)}
+                  loading={processingId === selectedCitizenId.id}
+                >
+                  Từ chối
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => selectedCitizenId.id && handleApproveCitizenId(selectedCitizenId.id)}
+                  loading={processingId === selectedCitizenId.id}
+                  className="bg-green-600"
+                >
+                  Xác thực
+                </Button>
+              </Space>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

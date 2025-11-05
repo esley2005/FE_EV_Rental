@@ -126,7 +126,15 @@ export default function Header({ colorScheme = "blue" }: HeaderProps) {
                     )}
                   </div>
 
-
+                  {(user.role === 'Staff') && (
+                    <Link
+                      href="/staff"
+                      className={`block px-4 py-2 text-sm font-semibold text-white ${scheme.primaryBg} ${scheme.primaryHoverBg} rounded-md mx-2 my-1 text-center`}
+                      onClick={() => setUserMenuOpen(false)}
+                    >
+                      Trang Staff
+                    </Link>
+                  )}
 
                   {/* Nút Admin - */}
                   {(user.role === 'Admin') && (
