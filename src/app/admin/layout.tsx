@@ -156,7 +156,7 @@ export default function AdminLayout() {
         case "1":
           return <p>Báo cáo doanh thu theo điểm thuê</p>;
         case "2":
-          return <p>Phân tích tỷ lệ sử dụng xe và giờ cao điểm</p>;
+          return <AIAnalysis variant="car-usage" />;
         case "3":
           return <AIAnalysis />;
         default:
