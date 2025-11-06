@@ -5,12 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   CarOutlined,
-  EnvironmentOutlined,
   HistoryOutlined,
   SwapOutlined,
   UserOutlined,
   TeamOutlined,
-  SettingOutlined,
   LogoutOutlined,
   DownOutlined,
   BarChartOutlined,
@@ -22,12 +20,10 @@ import { Layout, Menu, Dropdown, Space, Avatar, Breadcrumb, message, Result, But
 import { authUtils } from "@/utils/auth";
 
 // Các component nội dung mẫu
-import CarList from "@/components/CarList";
 import HistoryList from "@/components/HistoryList";
 import DispatchList from "@/components/DispatchList";
 import CarManagement from "@/components/admin/CarManagement";
 import AIAnalysis from "@/components/admin/AIAnalysis";
-import CustomerCard from "@/components/admin/CustomerCard";
 
 const { Header, Sider, Content, Footer } = Layout;
 
@@ -37,7 +33,6 @@ const mainMenu = [
   { key: "customers", label: "Khách hàng", icon: <UserOutlined /> },
   { key: "staff", label: "Nhân viên", icon: <TeamOutlined /> },
   { key: "reports", label: "Báo cáo & Phân tích", icon: <BarChartOutlined /> },
-  { key: "settings", label: "Cài đặt", icon: <SettingOutlined /> },
 ];
 
 // Submenu trái (sidebar)
@@ -65,7 +60,6 @@ const subMenus: Record<string, { key: string; label: string; icon: React.ReactNo
     { key: "3", label: "Phân tích AI", icon: <BarChartOutlined /> },
   ],
 
-  settings: [{ key: "1", label: "Cấu hình hệ thống", icon: <SettingOutlined /> }],
 };
 
 // Menu người dùng (dropdown admin)
