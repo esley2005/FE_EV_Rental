@@ -3,12 +3,14 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Car } from "@/types/car";
-import { rentalOrderApi, rentalLocationApi, driverLicenseApi, citizenIdApi, authApi } from "@/services/api";
+import { rentalOrderApi, rentalLocationApi, driverLicenseApi, citizenIdApi, authApi, carsApi } from "@/services/api";
 import type { CreateRentalOrderData, RentalLocationData, User, DriverLicenseData, CitizenIdData } from "@/services/api";
 import { Form, Input, DatePicker, Select, Switch, Button, message, notification, Upload, Modal, ConfigProvider } from "antd";
-import { CheckCircleOutlined, CloseCircleOutlined, UploadOutlined, IdcardOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, CloseCircleOutlined, UploadOutlined, IdcardOutlined, EnvironmentOutlined } from "@ant-design/icons";
 import dayjs, { Dayjs } from "dayjs";
 import { authUtils } from "@/utils/auth";
+import { geocodeAddress } from "@/utils/geocode";
+import CarMap from "@/components/CarMap";
 
 
 const { TextArea } = Input;
@@ -16,6 +18,8 @@ const { RangePicker } = DatePicker;
 
 interface BookingModalProps {
   car: Car;
+  carAddress?: string | null;
+  carCoords?: { lat: number; lng: number } | null;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -442,7 +446,7 @@ function DocumentUploadModal({ visible, rentalOrderId, onComplete, onCancel }: D
   );
 }
 
-export default function BookingModal({ car, isOpen, onClose }: BookingModalProps) {
+export default function BookingModal({ car, carAddress: initialCarAddress, carCoords: initialCarCoords, isOpen, onClose }: BookingModalProps) {
   const router = useRouter();
   const [form] = Form.useForm();
   const [api, contextHolder] = notification.useNotification({
@@ -456,6 +460,11 @@ export default function BookingModal({ car, isOpen, onClose }: BookingModalProps
   const [showDocumentModal, setShowDocumentModal] = useState(false);
   const [createdOrderId, setCreatedOrderId] = useState<number | null>(null);
   const [orderCreated, setOrderCreated] = useState(false); // Track xem đã tạo đơn hàng thành công chưa
+  const [carCoords, setCarCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [carAddress, setCarAddress] = useState<string | null>(null);
+  const [selectedLocationCoords, setSelectedLocationCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
+  const [loadingCarLocation, setLoadingCarLocation] = useState(false);
 
   // Debug: Track state changes
   useEffect(() => {
@@ -469,11 +478,64 @@ export default function BookingModal({ car, isOpen, onClose }: BookingModalProps
       setOrderCreated(false);
       setCreatedOrderId(null);
       setShowDocumentModal(false);
+      setCarCoords(null);
+      setCarAddress(null);
+      setSelectedLocationCoords(null);
+      setSelectedLocationId(null);
       form.resetFields();
     }
   }, [isOpen, form]);
 
-  // Load user và rental locations
+  // Helper: Parse coordinates từ string
+  const parseCoordinates = (coordsString: string | null | undefined): { lat: number; lng: number } | null => {
+    if (!coordsString || typeof coordsString !== 'string') return null;
+    try {
+      const parts = coordsString.trim().split(/[,\s]+/);
+      if (parts.length >= 2) {
+        const lat = parseFloat(parts[0]);
+        const lng = parseFloat(parts[1]);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          return { lat, lng };
+        }
+      }
+    } catch (error) {
+      console.error('Parse coordinates error:', error);
+    }
+    return null;
+  };
+
+  // Helper: Lấy địa chỉ và tọa độ từ car
+  const getCarLocation = async (carData: any): Promise<{ address: string | null; coords: { lat: number; lng: number } | null }> => {
+    try {
+      const rl = carData?.carRentalLocations;
+      if (!rl) return { address: null, coords: null };
+
+      const list = Array.isArray(rl) ? rl : rl.$values || [];
+      if (!Array.isArray(list) || list.length === 0) return { address: null, coords: null };
+
+      const active = list.find((l: any) => (l?.isActive ?? l?.IsActive) && !(l?.isDeleted ?? l?.IsDeleted)) || list[0];
+      
+      const address = active?.address ?? active?.Address ?? active?.rentalLocation?.address ?? active?.rentalLocation?.Address;
+      const addressStr = typeof address === 'string' && address.trim() ? address.trim() : null;
+
+      let coords: { lat: number; lng: number } | null = null;
+      const coordsString = active?.coordinates ?? active?.Coordinates ?? active?.rentalLocation?.coordinates ?? active?.rentalLocation?.Coordinates;
+      if (coordsString) {
+        coords = parseCoordinates(coordsString);
+      }
+
+      if (!coords && addressStr) {
+        coords = await geocodeAddress(addressStr);
+      }
+
+      return { address: addressStr, coords };
+    } catch (error) {
+      console.error('Get car location error:', error);
+      return { address: null, coords: null };
+    }
+  };
+
+  // Load user, rental locations và car location
   useEffect(() => {
     if (!isOpen) return;
 
@@ -492,9 +554,25 @@ export default function BookingModal({ car, isOpen, onClose }: BookingModalProps
         // Load rental locations
         const locationsResponse = await rentalLocationApi.getAll();
         if (locationsResponse.success && locationsResponse.data) {
-          const locations = Array.isArray(locationsResponse.data)
-            ? locationsResponse.data
-            : (locationsResponse.data as any)?.$values || [];
+          // Xử lý nhiều format: trực tiếp array, { $values: [...] }, hoặc { data: { $values: [...] } }
+          const raw = locationsResponse.data as any;
+          let locations: RentalLocationData[] = [];
+          
+          if (Array.isArray(raw)) {
+            // Format: [...]
+            locations = raw;
+          } else if (Array.isArray(raw.$values)) {
+            // Format: { $values: [...] }
+            locations = raw.$values;
+          } else if (raw.data && Array.isArray(raw.data.$values)) {
+            // Format: { data: { $values: [...] } }
+            locations = raw.data.$values;
+          } else if (raw.data && Array.isArray(raw.data)) {
+            // Format: { data: [...] }
+            locations = raw.data;
+          }
+          
+          console.log('[BookingModal] Processed locations:', locations);
           const activeLocations = locations.filter((loc: any) => loc.isActive !== false);
           setRentalLocations(activeLocations);
           
@@ -504,6 +582,44 @@ export default function BookingModal({ car, isOpen, onClose }: BookingModalProps
         } else {
           message.error("Không thể tải danh sách địa điểm. Vui lòng thử lại sau.");
         }
+
+        // Load car location (vị trí xe)
+        // Nếu đã có từ props, sử dụng luôn (tránh fetch lại)
+        if (initialCarAddress) {
+          setCarAddress(initialCarAddress);
+        }
+        if (initialCarCoords) {
+          setCarCoords(initialCarCoords);
+        }
+
+        // Nếu chưa có, mới fetch
+        if (!initialCarAddress || !initialCarCoords) {
+          setLoadingCarLocation(true);
+          try {
+            let carWithLocation = car;
+            // Nếu không có carRentalLocations, gọi getById để lấy đầy đủ
+            if (!car.carRentalLocations || 
+                (Array.isArray(car.carRentalLocations) && car.carRentalLocations.length === 0) ||
+                (car.carRentalLocations.$values && car.carRentalLocations.$values.length === 0)) {
+              const detailResponse = await carsApi.getById(String(car.id));
+              if (detailResponse.success && detailResponse.data) {
+                carWithLocation = detailResponse.data;
+              }
+            }
+
+            const location = await getCarLocation(carWithLocation);
+            if (location.address && !initialCarAddress) {
+              setCarAddress(location.address);
+            }
+            if (location.coords && !initialCarCoords) {
+              setCarCoords(location.coords);
+            }
+          } catch (error) {
+            console.error('Load car location error:', error);
+          } finally {
+            setLoadingCarLocation(false);
+          }
+        }
       } catch (error) {
         console.error("Load data error:", error);
         message.error("Có lỗi xảy ra khi tải dữ liệu. Vui lòng thử lại sau.");
@@ -511,7 +627,7 @@ export default function BookingModal({ car, isOpen, onClose }: BookingModalProps
     };
 
     loadData();
-  }, [isOpen, form]);
+  }, [isOpen, form, car]);
 
   const handleSubmit = async (values: any) => {
     if (!user) {
@@ -672,6 +788,22 @@ export default function BookingModal({ car, isOpen, onClose }: BookingModalProps
                   }
                   getPopupContainer={(trigger) => document.body}
                   dropdownStyle={{ zIndex: 10001 }}
+                  onChange={(value) => {
+                    setSelectedLocationId(value);
+                    // Lấy tọa độ của địa điểm được chọn
+                    const selectedLocation = rentalLocations.find(loc => loc.id === value);
+                    if (selectedLocation?.coordinates) {
+                      const coords = parseCoordinates(selectedLocation.coordinates);
+                      setSelectedLocationCoords(coords);
+                    } else if (selectedLocation?.address) {
+                      // Geocode từ address nếu không có coordinates
+                      geocodeAddress(selectedLocation.address).then(coords => {
+                        setSelectedLocationCoords(coords);
+                      });
+                    } else {
+                      setSelectedLocationCoords(null);
+                    }
+                  }}
                 >
                   {rentalLocations.map((location) => (
                     <Select.Option key={location.id} value={location.id}>
@@ -680,6 +812,65 @@ export default function BookingModal({ car, isOpen, onClose }: BookingModalProps
                   ))}
                 </Select>
               </Form.Item>
+
+              {/* Hiển thị vị trí xe và bản đồ */}
+              {(carCoords || carAddress) && (
+                <div className="mb-4">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-3">
+                    <div className="flex items-start gap-2 mb-2">
+                      <EnvironmentOutlined className="text-blue-600 mt-1" />
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-gray-900 mb-1">Vị trí xe hiện tại:</p>
+                        <p className="text-sm text-gray-700">{carAddress || "Đang tải địa chỉ..."}</p>
+                      </div>
+                    </div>
+                  </div>
+                  {carCoords && (
+                    <div className="rounded-lg overflow-hidden border border-gray-200">
+                      <CarMap
+                        cars={[{
+                          ...car,
+                          coords: carCoords,
+                          primaryAddress: carAddress || undefined
+                        }]}
+                        center={[carCoords.lat, carCoords.lng]}
+                        zoom={14}
+                        height={250}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Hiển thị bản đồ khi đã chọn địa điểm nhận xe */}
+              {selectedLocationId && selectedLocationCoords && (
+                <div className="mb-4">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-3">
+                    <div className="flex items-start gap-2">
+                      <EnvironmentOutlined className="text-green-600 mt-1" />
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-gray-900 mb-1">Địa điểm nhận xe đã chọn:</p>
+                        <p className="text-sm text-gray-700">
+                          {rentalLocations.find(loc => loc.id === selectedLocationId)?.name} - {rentalLocations.find(loc => loc.id === selectedLocationId)?.address}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-lg overflow-hidden border border-gray-200">
+                    <CarMap
+                      cars={[{
+                        id: 0,
+                        name: 'Địa điểm nhận xe',
+                        coords: selectedLocationCoords,
+                        primaryAddress: rentalLocations.find(loc => loc.id === selectedLocationId)?.address || undefined
+                      } as any]}
+                      center={[selectedLocationCoords.lat, selectedLocationCoords.lng]}
+                      zoom={14}
+                      height={250}
+                    />
+                  </div>
+                </div>
+              )}
 
               <Form.Item
                 label="Thuê kèm tài xế"

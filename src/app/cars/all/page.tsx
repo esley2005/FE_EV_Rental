@@ -79,9 +79,19 @@ export default function AllCarsPage() {
     try {
       const response = await rentalLocationApi.getAll();
       if (response.success && response.data) {
-        const locationsData = Array.isArray(response.data)
-          ? response.data
-          : (response.data as any)?.$values || [];
+        // Xử lý nhiều format: trực tiếp array, { $values: [...] }, hoặc { data: { $values: [...] } }
+        const raw = response.data as any;
+        let locationsData: RentalLocationData[] = [];
+        
+        if (Array.isArray(raw)) {
+          locationsData = raw;
+        } else if (Array.isArray(raw.$values)) {
+          locationsData = raw.$values;
+        } else if (raw.data && Array.isArray(raw.data.$values)) {
+          locationsData = raw.data.$values;
+        } else if (raw.data && Array.isArray(raw.data)) {
+          locationsData = raw.data;
+        }
         const location = locationsData.find((loc: RentalLocationData) => loc.id === locationId);
         if (location) {
           setSelectedLocation(location);
