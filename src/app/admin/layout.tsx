@@ -24,6 +24,7 @@ import HistoryList from "@/components/HistoryList";
 import DispatchList from "@/components/DispatchList";
 import CarManagement from "@/components/admin/CarManagement";
 import CustomerManagement from "@/components/admin/CustomerManagement";
+import StaffManagement from "@/components/admin/StaffManagement";
 import AIAnalysis from "@/components/admin/AIAnalysis";
 
 const { Header, Sider, Content, Footer } = Layout;
@@ -138,7 +139,7 @@ export default function AdminLayout() {
     if (selectedModule === "staff") {
       switch (selectedSubMenu) {
         case "1":
-          return <p>Danh sách nhân viên tại các điểm</p>;
+          return <StaffManagement />;
 
         default:
           return <p>Chưa có nội dung.</p>;

@@ -12,6 +12,11 @@ import {
   notification as antdNotification,
   Spin,
   Empty,
+  Modal,
+  Image,
+  Descriptions,
+  Tabs,
+  Typography,
 } from "antd";
 import {
   UserOutlined,
@@ -20,10 +25,17 @@ import {
   PhoneOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
+  EnvironmentOutlined,
+  ClockCircleOutlined,
+  EyeOutlined,
+  IdcardOutlined,
+  CarOutlined,
 } from "@ant-design/icons";
-import { authApi } from "@/services/api";
-import type { User } from "@/services/api";
+import { authApi, driverLicenseApi, citizenIdApi, rentalOrderApi } from "@/services/api";
+import type { User, DriverLicenseData, CitizenIdData, RentalOrderData } from "@/services/api";
 import dayjs from "dayjs";
+
+const { Title } = Typography;
 
 const { Search } = Input;
 
@@ -33,6 +45,13 @@ export default function CustomerManagement() {
   const [filteredCustomers, setFilteredCustomers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState("");
+  
+  // Document modal states
+  const [documentsModalVisible, setDocumentsModalVisible] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<User | null>(null);
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
+  const [driverLicenses, setDriverLicenses] = useState<DriverLicenseData[]>([]);
+  const [citizenIds, setCitizenIds] = useState<CitizenIdData[]>([]);
 
   useEffect(() => {
     loadCustomers();
@@ -83,6 +102,85 @@ export default function CustomerManagement() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadCustomerDocuments = async (customer: User) => {
+    if (!customer.id) return;
+    
+    setLoadingDocuments(true);
+    try {
+      // Lấy tất cả orders của customer
+      const ordersResponse = await rentalOrderApi.getByUserId(customer.id);
+      if (!ordersResponse.success || !ordersResponse.data) {
+        setDriverLicenses([]);
+        setCitizenIds([]);
+        return;
+      }
+
+      const orders = Array.isArray(ordersResponse.data)
+        ? ordersResponse.data
+        : (ordersResponse.data as any)?.$values || [];
+      
+      const orderIds = orders.map((order: RentalOrderData) => order.id);
+
+      // Lấy tất cả documents
+      const [licenseRes, citizenRes] = await Promise.all([
+        driverLicenseApi.getAll(),
+        citizenIdApi.getAll(),
+      ]);
+
+      // Filter documents theo orderIds của customer
+      let customerLicenses: DriverLicenseData[] = [];
+      let customerCitizenIds: CitizenIdData[] = [];
+
+      if (licenseRes.success && licenseRes.data) {
+        const allLicenses = Array.isArray(licenseRes.data)
+          ? licenseRes.data
+          : (licenseRes.data as any)?.$values || [];
+        customerLicenses = allLicenses.filter((license: DriverLicenseData) =>
+          license.rentalOrderId && orderIds.includes(license.rentalOrderId)
+        );
+      }
+
+      if (citizenRes.success && citizenRes.data) {
+        const allCitizenIds = Array.isArray(citizenRes.data)
+          ? citizenRes.data
+          : (citizenRes.data as any)?.$values || [];
+        customerCitizenIds = allCitizenIds.filter((citizenId: CitizenIdData) =>
+          citizenId.rentalOrderId && orderIds.includes(citizenId.rentalOrderId)
+        );
+      }
+
+      setDriverLicenses(customerLicenses);
+      setCitizenIds(customerCitizenIds);
+    } catch (error) {
+      console.error("Load customer documents error:", error);
+      api.error({
+        message: "Lỗi tải giấy tờ",
+        description: "Không thể tải giấy tờ của khách hàng. Vui lòng thử lại!",
+        placement: "topRight",
+        icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+      });
+    } finally {
+      setLoadingDocuments(false);
+    }
+  };
+
+  const handleViewDocuments = (customer: User) => {
+    setSelectedCustomer(customer);
+    setDocumentsModalVisible(true);
+    loadCustomerDocuments(customer);
+  };
+
+  const getStatusTag = (status?: string) => {
+    const statusLower = status?.toLowerCase() || '';
+    if (statusLower === 'approved' || statusLower === '1') {
+      return <Tag color="success">Đã xác thực</Tag>;
+    }
+    if (statusLower === 'rejected' || statusLower === '2') {
+      return <Tag color="error">Đã từ chối</Tag>;
+    }
+    return <Tag color="warning">Chờ xác thực</Tag>;
   };
 
   const columns = [
@@ -143,6 +241,26 @@ export default function CustomerManagement() {
         text ? dayjs(text).format("DD/MM/YYYY") : "Chưa cập nhật",
     },
     {
+      title: "Trạng thái",
+      key: "status",
+      render: (_: any, record: User) => (
+        <Space direction="vertical" size="small">
+          {record.isEmailConfirmed ? (
+            <Tag color="success" icon={<CheckCircleOutlined />}>
+              Email đã xác thực
+            </Tag>
+          ) : (
+            <Tag color="warning">Email chưa xác thực</Tag>
+          )}
+          {record.isActive !== false ? (
+            <Tag color="success">Đang hoạt động</Tag>
+          ) : (
+            <Tag color="error">Đã khóa</Tag>
+          )}
+        </Space>
+      ),
+    },
+    {
       title: "Trạng thái xác thực",
       key: "verification",
       render: (_: any, record: User) => (
@@ -161,11 +279,45 @@ export default function CustomerManagement() {
           ) : (
             <Tag color="default">CCCD: Chưa xác thực</Tag>
           )}
+          <Button
+            type="link"
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => handleViewDocuments(record)}
+            style={{ padding: 0 }}
+          >
+            Xem giấy tờ
+          </Button>
         </Space>
       ),
     },
     {
-      title: "Ngày tham gia",
+      title: "Điểm thuê",
+      key: "rentalLocation",
+      render: (_: any, record: User) => {
+        const location = record.rentalLocation;
+        const locationId = record.rentalLocationId || record.locationId;
+        if (location) {
+          return (
+            <Space>
+              <EnvironmentOutlined style={{ color: "#52c41a" }} />
+              <div>
+                <div style={{ fontWeight: 500 }}>{location.name}</div>
+                {location.address && (
+                  <div style={{ fontSize: 12, color: "#8c8c8c" }}>{location.address}</div>
+                )}
+              </div>
+            </Space>
+          );
+        }
+        if (locationId) {
+          return <Tag color="default">ID: {locationId}</Tag>;
+        }
+        return <Tag color="default">Chưa có</Tag>;
+      },
+    },
+    {
+      title: "Ngày tạo",
       dataIndex: "createdAt",
       key: "createdAt",
       sorter: (a: User, b: User) => {
@@ -174,7 +326,26 @@ export default function CustomerManagement() {
         return dateA - dateB;
       },
       render: (text: string) =>
-        text ? dayjs(text).format("DD/MM/YYYY") : "N/A",
+        text ? dayjs(text).format("DD/MM/YYYY HH:mm") : "N/A",
+    },
+    {
+      title: "Ngày cập nhật",
+      dataIndex: "updatedAt",
+      key: "updatedAt",
+      sorter: (a: User, b: User) => {
+        const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        return dateA - dateB;
+      },
+      render: (text: string) =>
+        text ? (
+          <Space>
+            <ClockCircleOutlined />
+            <span>{dayjs(text).format("DD/MM/YYYY HH:mm")}</span>
+          </Space>
+        ) : (
+          "Chưa cập nhật"
+        ),
     },
   ];
 
@@ -219,6 +390,165 @@ export default function CustomerManagement() {
           />
         </Spin>
       </Card>
+
+      {/* Documents Modal */}
+      <Modal
+        title={
+          <Space>
+            <IdcardOutlined />
+            <span>Giấy tờ của {selectedCustomer?.fullName || selectedCustomer?.email}</span>
+          </Space>
+        }
+        open={documentsModalVisible}
+        onCancel={() => {
+          setDocumentsModalVisible(false);
+          setSelectedCustomer(null);
+          setDriverLicenses([]);
+          setCitizenIds([]);
+        }}
+        footer={null}
+        width={900}
+      >
+        <Spin spinning={loadingDocuments}>
+          <Tabs
+            items={[
+              {
+                key: 'license',
+                label: (
+                  <span>
+                    <CarOutlined /> Giấy phép lái xe ({driverLicenses.length})
+                  </span>
+                ),
+                children: (
+                  <div>
+                    {driverLicenses.length === 0 ? (
+                      <Empty description="Khách hàng chưa upload GPLX" />
+                    ) : (
+                      <div className="space-y-4">
+                        {driverLicenses.map((license, index) => (
+                          <Card key={license.id || index} size="small" className="mb-4">
+                            <Descriptions column={2} bordered size="small" className="mb-4">
+                              <Descriptions.Item label="Họ tên">{license.name}</Descriptions.Item>
+                              <Descriptions.Item label="Số bằng lái">
+                                {license.licenseNumber || "-"}
+                              </Descriptions.Item>
+                              <Descriptions.Item label="Trạng thái">
+                                {getStatusTag(license.status)}
+                              </Descriptions.Item>
+                              <Descriptions.Item label="Ngày tạo">
+                                {license.createdAt
+                                  ? dayjs(license.createdAt).format("DD/MM/YYYY HH:mm")
+                                  : "-"}
+                              </Descriptions.Item>
+                            </Descriptions>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <Title level={5}>Mặt trước</Title>
+                                <Image
+                                  src={license.imageUrl}
+                                  alt="Mặt trước GPLX"
+                                  width="100%"
+                                  style={{ maxHeight: 300, objectFit: "contain" }}
+                                  fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23ddd' width='400' height='300'/%3E%3Ctext fill='%23999' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Image%3C/text%3E%3C/svg%3E"
+                                />
+                              </div>
+                              <div>
+                                <Title level={5}>Mặt sau</Title>
+                                {license.imageUrl2 ? (
+                                  <Image
+                                    src={license.imageUrl2}
+                                    alt="Mặt sau GPLX"
+                                    width="100%"
+                                    style={{ maxHeight: 300, objectFit: "contain" }}
+                                    fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23ddd' width='400' height='300'/%3E%3Ctext fill='%23999' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Image%3C/text%3E%3C/svg%3E"
+                                  />
+                                ) : (
+                                  <div className="flex items-center justify-center h-[300px] bg-gray-100 rounded">
+                                    <span className="text-gray-400">Chưa có ảnh</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ),
+              },
+              {
+                key: 'citizenId',
+                label: (
+                  <span>
+                    <IdcardOutlined /> Căn cước công dân ({citizenIds.length})
+                  </span>
+                ),
+                children: (
+                  <div>
+                    {citizenIds.length === 0 ? (
+                      <Empty description="Khách hàng chưa upload CCCD" />
+                    ) : (
+                      <div className="space-y-4">
+                        {citizenIds.map((citizenId, index) => (
+                          <Card key={citizenId.id || index} size="small" className="mb-4">
+                            <Descriptions column={2} bordered size="small" className="mb-4">
+                              <Descriptions.Item label="Họ tên">{citizenId.name}</Descriptions.Item>
+                              <Descriptions.Item label="Số CCCD">
+                                {citizenId.citizenIdNumber}
+                              </Descriptions.Item>
+                              <Descriptions.Item label="Ngày sinh">
+                                {citizenId.birthDate
+                                  ? dayjs(citizenId.birthDate).format("DD/MM/YYYY")
+                                  : "-"}
+                              </Descriptions.Item>
+                              <Descriptions.Item label="Trạng thái">
+                                {getStatusTag(citizenId.status)}
+                              </Descriptions.Item>
+                              <Descriptions.Item label="Ngày tạo">
+                                {citizenId.createdAt
+                                  ? dayjs(citizenId.createdAt).format("DD/MM/YYYY HH:mm")
+                                  : "-"}
+                              </Descriptions.Item>
+                            </Descriptions>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <Title level={5}>Mặt trước</Title>
+                                <Image
+                                  src={citizenId.imageUrl}
+                                  alt="Mặt trước CCCD"
+                                  width="100%"
+                                  style={{ maxHeight: 300, objectFit: "contain" }}
+                                  fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23ddd' width='400' height='300'/%3E%3Ctext fill='%23999' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Image%3C/text%3E%3C/svg%3E"
+                                />
+                              </div>
+                              <div>
+                                <Title level={5}>Mặt sau</Title>
+                                {citizenId.imageUrl2 ? (
+                                  <Image
+                                    src={citizenId.imageUrl2}
+                                    alt="Mặt sau CCCD"
+                                    width="100%"
+                                    style={{ maxHeight: 300, objectFit: "contain" }}
+                                    fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23ddd' width='400' height='300'/%3E%3Ctext fill='%23999' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Image%3C/text%3E%3C/svg%3E"
+                                  />
+                                ) : (
+                                  <div className="flex items-center justify-center h-[300px] bg-gray-100 rounded">
+                                    <span className="text-gray-400">Chưa có ảnh</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ),
+              },
+            ]}
+          />
+        </Spin>
+      </Modal>
     </div>
   );
 }
