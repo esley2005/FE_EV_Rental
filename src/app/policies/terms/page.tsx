@@ -1,17 +1,19 @@
 "use client";
 
 import Image from "next/image";
-import { Card } from "@/components/ui/card";
-import { Tabs } from "antd";
-import { ShieldCheck, FileText, InfoCircle } from "lucide-react";
+import { Card, Tabs } from "antd";
+import { ShieldCheck, FileText, Info } from "lucide-react";
+import Header from "@/components/Header";
 
 const { TabPane } = Tabs;
 
 export default function PolicyPage() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* ẢNH BANNER ĐẦU TRANG */}
-      <div className="relative w-full h-60 md:h-72 rounded-xl overflow-hidden mb-10">
+    <>
+      <Header />
+      <div className="min-h-screen bg-gray-50 pt-24">
+      {/* 🖼️ BANNER */}
+      <div className="relative w-full h-60 md:h-72 overflow-hidden mb-10 rounded-2xl shadow-md">
         <Image
           src="/ev-2-edit.min_.jpg"
           alt="Chính sách & Quy định - EV Rental"
@@ -19,21 +21,31 @@ export default function PolicyPage() {
           className="object-cover"
           priority
         />
-        <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center">
-          <h1 className="text-white text-2xl md:text-4xl font-bold">
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/40 to-transparent flex items-center justify-center">
+          <h1 className="text-white text-3xl md:text-5xl font-bold drop-shadow-lg">
             Chính sách & Quy định
           </h1>
         </div>
       </div>
 
-      {/* NỘI DUNG CHÍNH */}
+      {/* 📄 NỘI DUNG */}
       <div className="max-w-5xl mx-auto px-4 md:px-8 pb-16">
-        <Card className="p-6 shadow-sm border border-gray-200">
-          <Tabs defaultActiveKey="1" size="large">
+        <Card
+         
+          className="shadow-lg rounded-2xl overflow-hidden bg-white"
+        >
+          <Tabs
+            defaultActiveKey="1"
+            size="large"
+            tabBarGutter={40}
+            animated={{ inkBar: true, tabPane: true }}
+          >
+            {/* CHÍNH SÁCH BẢO MẬT */}
             <TabPane
               tab={
                 <span className="flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4" /> Chính sách bảo mật
+                  <ShieldCheck size={18} />
+                  Chính sách bảo mật
                 </span>
               }
               key="1"
@@ -56,59 +68,22 @@ export default function PolicyPage() {
               />
             </TabPane>
 
-            <TabPane
-              tab={
-                <span className="flex items-center gap-2">
-                  <FileText className="w-4 h-4" /> Quy chế hoạt động
-                </span>
-              }
-              key="2"
-            >
-              <Section
-                title="I. Mục tiêu"
-                content="Đảm bảo hoạt động minh bạch, công bằng và an toàn giữa chủ xe và khách thuê trên nền tảng EV Rental."
-              />
-              <Section
-                title="II. Quyền và nghĩa vụ"
-                content="Các bên tham gia có quyền và nghĩa vụ rõ ràng: chủ xe cung cấp xe đạt chuẩn; khách thuê sử dụng đúng mục đích và tuân thủ quy định; EV Rental chịu trách nhiệm trung gian và hỗ trợ kỹ thuật."
-              />
-              <Section
-                title="III. Giải quyết tranh chấp"
-                content="Mọi khiếu nại hoặc tranh chấp được EV Rental tiếp nhận qua email và hotline, xử lý công khai, minh bạch và đúng pháp luật."
-              />
-            </TabPane>
+          
 
-            <TabPane
-              tab={
-                <span className="flex items-center gap-2">
-                  <InfoCircle className="w-4 h-4" /> Liên hệ hỗ trợ
-                </span>
-              }
-              key="3"
-            >
-              <div className="text-gray-700 space-y-3">
-                <p>
-                  <strong>Email:</strong> support@evrental.vn
-                </p>
-                <p>
-                  <strong>Hotline:</strong> 1900 6868
-                </p>
-                <p>
-                  <strong>Địa chỉ:</strong> EV Rental Việt Nam, Quận 7, TP.HCM
-                </p>
-              </div>
-            </TabPane>
           </Tabs>
         </Card>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 
 function Section({ title, content }: { title: string; content: string }) {
   return (
-    <div className="mb-6">
-      <h2 className="text-xl font-semibold text-gray-800 mb-2">{title}</h2>
+    <div className="mb-8">
+      <h2 className="text-lg md:text-xl font-semibold text-gray-800 mb-2">
+        {title}
+      </h2>
       <p className="text-gray-600 leading-relaxed">{content}</p>
     </div>
   );

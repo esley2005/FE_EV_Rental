@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { notFound, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Spin, message, notification, Modal, Button } from "antd";
-import { StarOutlined, ShareAltOutlined, HeartOutlined, SafetyOutlined, EnvironmentOutlined, QuestionCircleOutlined, InfoCircleOutlined } from "@ant-design/icons";
+// Removed @ant-design/icons to standardize on lucide-react icons
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import BookingModal from "@/components/BookingModal";
@@ -30,6 +30,13 @@ import {
   Lightbulb,
   Armchair,
   AlertTriangle,
+  Star,
+  Share2,
+  Heart,
+  Shield,
+  HelpCircle,
+  Info,
+  Phone,
 } from "lucide-react";
 
 //1
@@ -435,7 +442,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
         <Header />
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex-1 flex items-center justify-center pt-24">
           <div className="flex flex-col items-center gap-4">
             <Spin size="large" />
             <p className="text-gray-600">Đang tải thông tin xe...</p>
@@ -481,7 +488,8 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header />
 
-      <main className="flex-1 container mx-auto px-4 py-8">
+      {/* Add top padding to prevent content being hidden behind fixed header */}
+      <main className="flex-1 container mx-auto px-4 pt-24 pb-8">
         {/* Breadcrumb */}
         <nav className="mb-6">
           <ol className="flex items-center space-x-2 text-sm text-gray-500">
@@ -673,7 +681,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                   {/* Rating và số chuyến */}
                   <div className="flex items-center gap-3 mb-2">
                     <div className="flex items-center gap-1">
-                      <StarOutlined className="text-yellow-400 text-lg" />
+                      <Star className="text-yellow-400 text-lg" />
                       <span className="font-semibold text-gray-900">5.0</span>
                     </div>
                     <span className="text-sm text-gray-500">100+ chuyến</span>
@@ -683,7 +691,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                   <p className="text-sm text-gray-500 mb-4">
                     {carAddress ? (
                       <span className="flex items-center gap-2">
-                        <EnvironmentOutlined className="text-blue-600" />
+                        <MapPin className="text-blue-600" />
                         <span>{carAddress}</span>
                       </span>
                     ) : (
@@ -707,21 +715,21 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                               if (nameStr && addrStr) {
                                 return (
                                   <span className="flex items-center gap-2">
-                                    <EnvironmentOutlined className="text-blue-600" />
+                                    <MapPin className="text-blue-600" />
                                     <span>{nameStr} - {addrStr}</span>
                                   </span>
                                 );
                               } else if (addrStr) {
                                 return (
                                   <span className="flex items-center gap-2">
-                                    <EnvironmentOutlined className="text-blue-600" />
+                                    <MapPin className="text-blue-600" />
                                     <span>{addrStr}</span>
                                   </span>
                                 );
                               } else if (nameStr) {
                                 return (
                                   <span className="flex items-center gap-2">
-                                    <EnvironmentOutlined className="text-blue-600" />
+                                    <MapPin className="text-blue-600" />
                                     <span>{nameStr}</span>
                                   </span>
                                 );
@@ -730,7 +738,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                           }
                           return (
                             <span className="text-gray-400">
-                              <EnvironmentOutlined className="mr-2" />
+                              <MapPin className="mr-2" />
                               Đang tải thông tin địa chỉ...
                             </span>
                           );
@@ -742,7 +750,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                   {/* Badges */}
                   <div className="flex items-center gap-3 flex-wrap">
                     <div className="flex items-center gap-2 bg-green-500 text-white px-3 py-1.5 rounded-full text-sm">
-                      <SafetyOutlined className="text-white" />
+                      <Shield className="text-white" />
                       <span>Miễn thế chấp</span>
                     </div>
                     {/* <div className="flex items-center gap-2 bg-red-500 text-white px-3 py-1.5 rounded-full text-sm">
@@ -755,14 +763,14 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                 {/* Action Icons */}
                 <div className="flex items-center gap-3">
                   <button className="p-2 rounded-full hover:bg-gray-100 transition-colors">
-                    <ShareAltOutlined className="text-gray-600 text-lg" />
+                    <Share2 className="text-gray-600 text-lg" />
                   </button>
                   <button
                     onClick={() => setIsFavorite(!isFavorite)}
                     className={`p-2 rounded-full transition-colors ${isFavorite ? 'text-red-500' : 'text-gray-600 hover:bg-gray-100'
                       }`}
                   >
-                    <HeartOutlined className={`text-lg ${isFavorite ? 'fill-current' : ''}`} />
+                    <Heart className={`text-lg ${isFavorite ? 'fill-current' : ''}`} />
                   </button>
                 </div>
               </div>
@@ -784,7 +792,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                   {carAddress && (
                     <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                       <p className="text-sm text-gray-700">
-                        <EnvironmentOutlined className="mr-2 text-blue-600" />
+                        <MapPin className="mr-2 text-blue-600" />
                         <strong>Địa chỉ:</strong> {carAddress}
                       </p>
                     </div>
@@ -807,7 +815,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               {!loading && !carCoords && carAddress && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                   <p className="text-sm text-gray-700 mb-2">
-                    <EnvironmentOutlined className="mr-2 text-yellow-600" />
+                    <MapPin className="mr-2 text-yellow-600" />
                     <strong>Địa chỉ:</strong> {carAddress}
                   </p>
                   <p className="text-xs text-gray-500">
@@ -822,7 +830,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               {!loading && !carCoords && !carAddress && (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                   <p className="text-sm text-gray-500 mb-2">
-                    <EnvironmentOutlined className="mr-2" />
+                    <MapPin className="mr-2" />
                     Đang tải thông tin vị trí xe...
                   </p>
                   <p className="text-xs text-gray-400">
@@ -966,7 +974,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             <div className="bg-white rounded-lg shadow-lg p-6">
               <div className="flex items-center gap-2 mb-2">
                 <h2 className="text-xl font-bold text-gray-900">Giấy tờ thuê xe</h2>
-                <QuestionCircleOutlined className="text-gray-400 cursor-help" />
+                <HelpCircle className="text-gray-400 cursor-help" />
               </div>
               <p className="text-sm text-gray-500 mb-4">Chọn 1 trong 2 hình thức</p>
 
@@ -999,7 +1007,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             <div className="bg-white rounded-lg shadow-lg p-6">
               <div className="flex items-center gap-2 mb-4">
                 <h2 className="text-xl font-bold text-gray-900">Tài sản thế chấp</h2>
-                <QuestionCircleOutlined className="text-gray-400 cursor-help" />
+                <HelpCircle className="text-gray-400 cursor-help" />
               </div>
 
               <div className="bg-orange-100 border border-orange-200 rounded-lg p-4">
@@ -1015,7 +1023,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               <div className="space-y-4">
                 {/* Phí vượt giới hạn */}
                 <div className="flex items-start gap-3 p-3 border-b border-gray-100 last:border-b-0">
-                  <InfoCircleOutlined className="text-blue-500 text-lg mt-1 flex-shrink-0" />
+                  <Info className="text-blue-500 text-lg mt-1 flex-shrink-0" />
                   <div className="flex-1">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
@@ -1031,7 +1039,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
                 {/* Phí quá giờ */}
                 <div className="flex items-start gap-3 p-3 border-b border-gray-100 last:border-b-0">
-                  <InfoCircleOutlined className="text-blue-500 text-lg mt-1 flex-shrink-0" />
+                  <Info className="text-blue-500 text-lg mt-1 flex-shrink-0" />
                   <div className="flex-1">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
@@ -1047,7 +1055,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
                 {/* Phí vệ sinh */}
                 <div className="flex items-start gap-3 p-3 border-b border-gray-100 last:border-b-0">
-                  <InfoCircleOutlined className="text-blue-500 text-lg mt-1 flex-shrink-0" />
+                  <Info className="text-blue-500 text-lg mt-1 flex-shrink-0" />
                   <div className="flex-1">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
@@ -1063,7 +1071,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
                 {/* Phí khử mùi */}
                 <div className="flex items-start gap-3 p-3">
-                  <InfoCircleOutlined className="text-blue-500 text-lg mt-1 flex-shrink-0" />
+                  <Info className="text-blue-500 text-lg mt-1 flex-shrink-0" />
                   <div className="flex-1">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
@@ -1129,13 +1137,11 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                 </div>
               </div>
 
-              <div className="mt-6 grid grid-cols-2 gap-3">
-                <button className="border border-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-50 transition-colors text-sm">
-                  📞 Gọi tư vấn
-                </button>
-                <button className="border border-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-50 transition-colors text-sm">
-                  💬 Chat hỗ trợ
-                </button>
+              <div className="mt-6 flex justify-center">
+                <a href="tel:1900000" className="inline-flex items-center gap-2 border border-gray-300 text-gray-700 py-2 px-5 rounded-lg hover:bg-gray-50 transition-colors text-sm">
+                  <Phone size={16} />
+                  Gọi tư vấn
+                </a>
               </div>
             </div>
           </div>

@@ -4,18 +4,18 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  CarOutlined,
-  HistoryOutlined,
-  SwapOutlined,
-  UserOutlined,
-  TeamOutlined,
-  LogoutOutlined,
-  DownOutlined,
-  BarChartOutlined,
-  ClockCircleOutlined,
-  LineChartOutlined,
-  FileTextOutlined,
-} from "@ant-design/icons";
+  Car,
+  History,
+  Shuffle,
+  User,
+  Users,
+  LogOut,
+  BarChart3,
+  Clock,
+  LineChart,
+  FileText,
+  ChevronDown,
+} from "lucide-react";
 import { Layout, Menu, Dropdown, Space, Avatar, Breadcrumb, message, Result, Button } from "antd";
 import { authUtils } from "@/utils/auth";
 
@@ -29,35 +29,35 @@ const { Header, Sider, Content, Footer } = Layout;
 
 // Menu chính (navbar trên cùng)
 const mainMenu = [
-  { key: "cars", label: "Đội xe & Điểm thuê", icon: <CarOutlined /> },
-  { key: "customers", label: "Khách hàng", icon: <UserOutlined /> },
-  { key: "staff", label: "Nhân viên", icon: <TeamOutlined /> },
-  { key: "reports", label: "Báo cáo & Phân tích", icon: <BarChartOutlined /> },
+  { key: "cars", label: "Đội xe & Điểm thuê", icon: <Car /> },
+  { key: "customers", label: "Khách hàng", icon: <User /> },
+  { key: "staff", label: "Nhân viên", icon: <Users /> },
+  { key: "reports", label: "Báo cáo & Phân tích", icon: <BarChart3 /> },
 ];
 
 // Submenu trái (sidebar)
 const subMenus: Record<string, { key: string; label: string; icon: React.ReactNode }[]> = {
   cars: [
-    { key: "1", label: "Danh sách xe", icon: <CarOutlined /> },
-    { key: "2", label: "Lịch sử giao nhận", icon: <HistoryOutlined /> },
-    { key: "3", label: "Điều phối xe", icon: <SwapOutlined /> },
+    { key: "1", label: "Danh sách xe", icon: <Car /> },
+    { key: "2", label: "Lịch sử giao nhận", icon: <History /> },
+    { key: "3", label: "Điều phối xe", icon: <Shuffle /> },
   ],
 
   customers: [
-    { key: "1", label: "Hồ sơ khách hàng", icon: <UserOutlined /> },
-    { key: "2", label: "Khiếu nại", icon: <FileTextOutlined /> },
-    { key: "3", label: "Danh sách khách hàng có rủi ro", icon: <TeamOutlined /> },
+    { key: "1", label: "Hồ sơ khách hàng", icon: <User /> },
+    { key: "2", label: "Khiếu nại", icon: <FileText /> },
+    { key: "3", label: "Danh sách khách hàng có rủi ro", icon: <Users /> },
   ],
 
   staff: [
-    { key: "1", label: "Danh sách nhân viên tại các điểm", icon: <TeamOutlined /> },
+    { key: "1", label: "Danh sách nhân viên tại các điểm", icon: <Users /> },
   
   ],
 
   reports: [
-    { key: "1", label: "Doanh thu", icon: <LineChartOutlined /> },
-    { key: "2", label: "Tỷ lệ sử dụng xe", icon: <ClockCircleOutlined /> },
-    { key: "3", label: "Phân tích AI", icon: <BarChartOutlined /> },
+    { key: "1", label: "Doanh thu", icon: <LineChart /> },
+    { key: "2", label: "Tỷ lệ sử dụng xe", icon: <Clock /> },
+    { key: "3", label: "Phân tích AI", icon: <BarChart3 /> },
   ],
 
 };
@@ -66,7 +66,7 @@ const subMenus: Record<string, { key: string; label: string; icon: React.ReactNo
 const userMenu = {
   items: [
     { key: "1", label: "Thông tin cá nhân" },
-    { key: "2", label: "Đăng xuất", icon: <LogoutOutlined /> },
+    { key: "2", label: "Đăng xuất", icon: <LogOut /> },
   ],
 };
 
@@ -272,7 +272,7 @@ export default function AdminLayout() {
                 {userInitial}
               </Avatar>
               <span>{userName}</span>
-              <DownOutlined />
+              <ChevronDown />
             </Space>
           </Dropdown>
         </Header>

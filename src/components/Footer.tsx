@@ -2,12 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { 
-  FacebookOutlined, 
-  MessageOutlined,
-  CustomerServiceOutlined,
-  MailOutlined
-} from "@ant-design/icons";
+import { Facebook, MessageCircle, Headphones, Mail } from "lucide-react";
 
 export default function Footer() {
   return (
@@ -48,7 +43,7 @@ export default function Footer() {
                 href="mailto:contact@evrental.vn" 
                 className="text-gray-900 hover:text-green-600 transition-colors flex items-center gap-2"
               >
-                <MailOutlined className="text-green-600" />
+                <Mail className="text-green-600" />
                 <span>contact@evrental.vn</span>
               </a>
               <p className="text-sm text-gray-500 mt-1">
@@ -65,7 +60,7 @@ export default function Footer() {
                 className="w-10 h-10 rounded-full border-2 border-gray-300 flex items-center justify-center hover:border-green-600 hover:text-green-600 transition-colors"
                 aria-label="Facebook"
               >
-                <FacebookOutlined className="text-lg" />
+                <Facebook className="text-lg" />
               </a>
               <a 
                 href="https://tiktok.com" 
@@ -85,7 +80,7 @@ export default function Footer() {
                 className="w-10 h-10 rounded-full border-2 border-gray-300 flex items-center justify-center hover:border-green-600 hover:text-green-600 transition-colors"
                 aria-label="Zalo"
               >
-                <MessageOutlined className="text-lg font-bold" />
+                <MessageCircle className="text-lg font-bold" />
               </a>
             </div>
           </div>

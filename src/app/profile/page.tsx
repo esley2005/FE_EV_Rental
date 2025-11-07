@@ -3,21 +3,21 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  UserOutlined,
-  MailOutlined,
-  PhoneOutlined,
-  HomeOutlined,
-  CalendarOutlined,
-  LockOutlined,
-  EditOutlined,
-  SaveOutlined,
-  CloseOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  WarningOutlined,
-  HeartOutlined,
-  IdcardOutlined,
-} from "@ant-design/icons";
+  User as UserIcon,
+  Mail,
+  Phone,
+  Home,
+  Calendar,
+  Lock,
+  Edit,
+  Save,
+  X,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
+  Heart,
+  IdCard,
+} from "lucide-react";
 import {
   Layout,
   Card,
@@ -62,7 +62,7 @@ export default function ProfilePage() {
               message: "Chưa đăng nhập",
               description: "Vui lòng đăng nhập để xem thông tin tài khoản!",
               placement: "topRight",
-              icon: <WarningOutlined style={{ color: "#faad14" }} />,
+              icon: <AlertTriangle color="#faad14" />,
             });
           }, 0);
           router.push("/login");
@@ -129,7 +129,7 @@ export default function ProfilePage() {
           message: "Cập nhật thành công!",
           description: "Thông tin tài khoản đã được cập nhật.",
           placement: "topRight",
-          icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
+          icon: <CheckCircle color="#52c41a" />,
         });
 
         if (response.data) {
@@ -142,7 +142,7 @@ export default function ProfilePage() {
           message: "Cập nhật thất bại",
           description: response.error || "Không thể cập nhật thông tin!",
           placement: "topRight",
-          icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+          icon: <XCircle color="#ff4d4f" />,
         });
       }
     } catch (error) {
@@ -151,7 +151,7 @@ export default function ProfilePage() {
         message: "Có lỗi xảy ra",
         description: "Không thể cập nhật thông tin. Vui lòng thử lại!",
         placement: "topRight",
-        icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+        icon: <XCircle color="#ff4d4f" />,
       });
     } finally {
       setLoading(false);
@@ -168,7 +168,7 @@ export default function ProfilePage() {
           message: "Đổi mật khẩu thành công!",
           description: "Mật khẩu của bạn đã được cập nhật.",
           placement: "topRight",
-          icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
+          icon: <CheckCircle color="#52c41a" />,
         });
         passwordForm.resetFields();
       } else {
@@ -176,7 +176,7 @@ export default function ProfilePage() {
           message: "Đổi mật khẩu thất bại",
           description: response.error || "Mật khẩu cũ không đúng hoặc có lỗi xảy ra!",
           placement: "topRight",
-          icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+          icon: <XCircle color="#ff4d4f" />,
         });
       }
     } catch (error) {
@@ -185,7 +185,7 @@ export default function ProfilePage() {
         message: "Có lỗi xảy ra",
         description: "Không thể đổi mật khẩu. Vui lòng thử lại!",
         placement: "topRight",
-        icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+        icon: <XCircle color="#ff4d4f" />,
       });
     } finally {
       setLoading(false);
@@ -214,15 +214,15 @@ export default function ProfilePage() {
           <h2 className="text-2xl font-bold mb-4">Xin chào bạn!</h2>
           <nav className="flex flex-col space-y-2">
             <button className="flex items-center gap-3 px-3 py-2 rounded-lg text-green-600 bg-green-50 font-medium">
-              <UserOutlined />
+              <User />
               <span>Tài khoản của tôi</span>
             </button>
             <button className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100">
-              <HomeOutlined />
+              <Home />
               <span>Quản lý cho thuê</span>
             </button>
             <button className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100">
-              <HeartOutlined />
+              <Heart />
               <span>Xe yêu thích</span>
             </button>
           </nav>
@@ -237,7 +237,7 @@ export default function ProfilePage() {
                 <div>
                   <Avatar
                     size={96}
-                    icon={<UserOutlined />}
+                    icon={<User />}
                     src={user.avatar}
                     className="border"
                   />
@@ -296,7 +296,7 @@ export default function ProfilePage() {
                     key: "1",
                     label: (
                       <span>
-                        <UserOutlined /> Thông tin cá nhân
+                        <User /> Thông tin cá nhân
                       </span>
                     ),
                     children: (
@@ -328,13 +328,13 @@ export default function ProfilePage() {
                         ) : (
                           <Form form={profileForm} layout="vertical" onFinish={handleUpdateProfile}>
                             <Form.Item label="Họ và tên" name="fullName" rules={[{ required: true }]}>
-                              <Input size="large" prefix={<UserOutlined />} />
+                              <Input size="large" prefix={<User />} />
                             </Form.Item>
                             <Form.Item label="Email" name="email">
-                              <Input size="large" prefix={<MailOutlined />} disabled />
+                              <Input size="large" prefix={<Mail />} disabled />
                             </Form.Item>
                             <Form.Item label="Số điện thoại" name="phone">
-                              <Input size="large" prefix={<PhoneOutlined />} />
+                              <Input size="large" prefix={<Phone />} />
                             </Form.Item>
                             <Form.Item label="Địa chỉ" name="address">
                               <Input.TextArea rows={2} />
@@ -343,10 +343,10 @@ export default function ProfilePage() {
                               <DatePicker size="large" className="w-full" format="DD/MM/YYYY" />
                             </Form.Item>
                             <Space>
-                              <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading} className="bg-blue-600">
+                              <Button type="primary" htmlType="submit" icon={<Save />} loading={loading} className="bg-blue-600">
                                 Lưu thay đổi
                               </Button>
-                              <Button icon={<CloseOutlined />} onClick={() => { setEditing(false); profileForm.resetFields(); }}>
+                              <Button icon={<X />} onClick={() => { setEditing(false); profileForm.resetFields(); }}>
                                 Hủy
                               </Button>
                             </Space>
@@ -359,16 +359,16 @@ export default function ProfilePage() {
                     key: "2",
                     label: (
                       <span>
-                        <LockOutlined /> Đổi mật khẩu
+                        <Lock /> Đổi mật khẩu
                       </span>
                     ),
                     children: (
                       <Form form={passwordForm} layout="vertical" onFinish={handleChangePassword}>
                         <Form.Item label="Mật khẩu hiện tại" name="oldPassword" rules={[{ required: true }]}>
-                          <Input.Password size="large" prefix={<LockOutlined />} />
+                          <Input.Password size="large" prefix={<Lock />} />
                         </Form.Item>
                         <Form.Item label="Mật khẩu mới" name="newPassword" rules={[{ required: true, min: 6 }]}>
-                          <Input.Password size="large" prefix={<LockOutlined />} />
+                          <Input.Password size="large" prefix={<Lock />} />
                         </Form.Item>
                         <Form.Item
                           label="Xác nhận mật khẩu mới"
@@ -384,9 +384,9 @@ export default function ProfilePage() {
                             }),
                           ]}
                         >
-                          <Input.Password size="large" prefix={<LockOutlined />} />
+                          <Input.Password size="large" prefix={<Lock />} />
                         </Form.Item>
-                        <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading} className="bg-blue-600">
+                        <Button type="primary" htmlType="submit" icon={<Save />} loading={loading} className="bg-blue-600">
                           Đổi mật khẩu
                         </Button>
                       </Form>

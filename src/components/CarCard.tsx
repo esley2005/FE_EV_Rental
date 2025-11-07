@@ -2,14 +2,7 @@
 import React from "react";
 import { useRouter } from "next/navigation";
 import { Car } from "@/types/car";
-import {
-  ThunderboltOutlined,
-  TeamOutlined,
-  EnvironmentOutlined,
-  StarFilled,
-  CarOutlined
-} from "@ant-design/icons";
-import { Zap } from "lucide-react";
+import { Zap, Users, MapPin, Star, Car as CarIcon } from "lucide-react";
 interface CarCardProps {
   car: Car;
 }
@@ -95,7 +88,7 @@ export default function CarCard({ car }: CarCardProps) {
         <div className="mb-2">
           <div className="inline-flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-lg px-2 py-1">
             <div className="w-4 h-4 bg-green-600 rounded-full flex items-center justify-center">
-              <CarOutlined className="text-white text-[10px]" />
+              <CarIcon className="text-white" size={10} />
             </div>
             <span className="text-green-700 font-medium text-xs">Miễn thế chấp</span>
           </div>
@@ -115,7 +108,7 @@ export default function CarCard({ car }: CarCardProps) {
             <span className="text-xs">{getTransmissionType()}</span>
           </div>
           <div className="flex items-center gap-1">
-            <TeamOutlined className="text-gray-500 text-sm" />
+            <Users className="text-gray-500" size={14} />
             <span className="text-xs">{car.seats} chỗ</span>
           </div>
           <div className="flex items-center gap-1">
@@ -128,14 +121,14 @@ export default function CarCard({ car }: CarCardProps) {
 
         {/* Địa điểm */}
         <div className="flex items-center gap-1.5 mb-2 text-gray-600">
-          <EnvironmentOutlined className="text-gray-500 text-xs" />
+          <MapPin className="text-gray-500" size={12} />
           <span className="text-xs line-clamp-1">Phường Hiệp Bình Chánh, Quận Thủ Đức</span>
         </div>
 
         {/* Đánh giá & Số chuyến */}
         <div className="flex items-center gap-3 mb-3">
           <div className="flex items-center gap-1">
-            <StarFilled className="text-yellow-400 text-sm" />
+            <Star className="text-yellow-400" size={14} />
             <span className="font-semibold text-gray-900 text-sm">{rating.toFixed(1)}</span>
           </div>
           <div className="flex items-center gap-1">

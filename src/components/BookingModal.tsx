@@ -6,7 +6,7 @@ import { Car } from "@/types/car";
 import { rentalOrderApi, rentalLocationApi, driverLicenseApi, citizenIdApi, authApi, carsApi } from "@/services/api";
 import type { CreateRentalOrderData, RentalLocationData, User, DriverLicenseData, CitizenIdData } from "@/services/api";
 import { Form, Input, DatePicker, Select, Switch, Button, message, notification, Upload, Modal, ConfigProvider } from "antd";
-import { CheckCircleOutlined, CloseCircleOutlined, UploadOutlined, IdcardOutlined, EnvironmentOutlined } from "@ant-design/icons";
+import { CheckCircle, XCircle, Upload as UploadIcon, IdCard, MapPin } from "lucide-react";
 import dayjs, { Dayjs } from "dayjs";
 import { authUtils } from "@/utils/auth";
 import { geocodeAddress } from "@/utils/geocode";
@@ -153,7 +153,7 @@ function DocumentUploadModal({ visible, rentalOrderId, onComplete, onCancel }: D
           description: "Giấy phép lái xe đã được gửi thành công. Vui lòng chuyển sang tab Căn cước công dân để tiếp tục.",
           placement: "topRight",
           duration: 4,
-          icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
+          icon: <CheckCircle color="#52c41a" />,
         });
         message.success("GPLX đã được gửi thành công!");
         // Chuyển sang tab CCCD
@@ -166,7 +166,7 @@ function DocumentUploadModal({ visible, rentalOrderId, onComplete, onCancel }: D
           description: response.error || "Không thể tải lên giấy phép lái xe. Vui lòng kiểm tra lại thông tin và thử lại.",
           placement: "topRight",
           duration: 5,
-          icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+          icon: <XCircle color="#ff4d4f" />,
         });
         message.error("Gửi GPLX thất bại!");
       }
@@ -177,7 +177,7 @@ function DocumentUploadModal({ visible, rentalOrderId, onComplete, onCancel }: D
         description: `Lỗi: ${errorMsg}. Vui lòng thử lại sau.`,
         placement: "topRight",
         duration: 5,
-        icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+        icon: <XCircle color="#ff4d4f" />,
       });
       message.error("Có lỗi xảy ra khi tải GPLX!");
     } finally {
@@ -248,7 +248,7 @@ function DocumentUploadModal({ visible, rentalOrderId, onComplete, onCancel }: D
           description: "Căn cước công dân đã được gửi thành công. Vui lòng đợi admin xác thực.",
           placement: "topRight",
           duration: 4,
-          icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
+          icon: <CheckCircle color="#52c41a" />,
         });
         message.success("CCCD đã được gửi thành công!");
         // Cả hai đã xong
@@ -263,7 +263,7 @@ function DocumentUploadModal({ visible, rentalOrderId, onComplete, onCancel }: D
           description: response.error || "Không thể tải lên căn cước công dân. Vui lòng kiểm tra lại thông tin và thử lại.",
           placement: "topRight",
           duration: 5,
-          icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+          icon: <XCircle color="#ff4d4f" />,
         });
         message.error("Gửi CCCD thất bại!");
       }
@@ -274,7 +274,7 @@ function DocumentUploadModal({ visible, rentalOrderId, onComplete, onCancel }: D
         description: `Lỗi: ${errorMsg}. Vui lòng thử lại sau.`,
         placement: "topRight",
         duration: 5,
-        icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+        icon: <XCircle color="#ff4d4f" />,
       });
       message.error("Có lỗi xảy ra khi tải CCCD!");
     } finally {
@@ -309,16 +309,16 @@ function DocumentUploadModal({ visible, rentalOrderId, onComplete, onCancel }: D
           <Button
             type={activeTab === 'license' ? 'primary' : 'default'}
             onClick={() => setActiveTab('license')}
-            icon={<IdcardOutlined />}
+            icon={<IdCard size={16} />}
           >
-            Giấy phép lái xe {licenseDone && <CheckCircleOutlined className="ml-2 text-green-500" />}
+            Giấy phép lái xe {licenseDone && <CheckCircle className="ml-2 text-green-500" />}
           </Button>
           <Button
             type={activeTab === 'citizenId' ? 'primary' : 'default'}
             onClick={() => setActiveTab('citizenId')}
-            icon={<IdcardOutlined />}
+            icon={<IdCard size={16} />}
           >
-            Căn cước công dân {citizenIdDone && <CheckCircleOutlined className="ml-2 text-green-500" />}
+            Căn cước công dân {citizenIdDone && <CheckCircle className="ml-2 text-green-500" />}
           </Button>
         </div>
 
@@ -337,7 +337,7 @@ function DocumentUploadModal({ visible, rentalOrderId, onComplete, onCancel }: D
                       <img src={licenseImageFront} alt="GPLX mặt trước" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                        <UploadOutlined style={{ fontSize: 24 }} />
+                        <UploadIcon style={{ fontSize: 24 }} />
                         <div className="text-sm text-gray-500">Mặt trước</div>
                       </div>
                     )}
@@ -356,7 +356,7 @@ function DocumentUploadModal({ visible, rentalOrderId, onComplete, onCancel }: D
                       <img src={licenseImageBack} alt="GPLX mặt sau" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                        <UploadOutlined style={{ fontSize: 24 }} />
+                        <UploadIcon style={{ fontSize: 24 }} />
                         <div className="text-sm text-gray-500">Mặt sau</div>
                       </div>
                     )}
@@ -391,7 +391,7 @@ function DocumentUploadModal({ visible, rentalOrderId, onComplete, onCancel }: D
                       <img src={citizenIdImageFront} alt="CCCD mặt trước" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                        <UploadOutlined style={{ fontSize: 24 }} />
+                        <UploadIcon style={{ fontSize: 24 }} />
                         <div className="text-sm text-gray-500">Mặt trước</div>
                       </div>
                     )}
@@ -410,7 +410,7 @@ function DocumentUploadModal({ visible, rentalOrderId, onComplete, onCancel }: D
                       <img src={citizenIdImageBack} alt="CCCD mặt sau" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                        <UploadOutlined style={{ fontSize: 24 }} />
+                        <UploadIcon style={{ fontSize: 24 }} />
                         <div className="text-sm text-gray-500">Mặt sau</div>
                       </div>
                     )}
@@ -662,7 +662,7 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
           description: `Đơn hàng #${orderId} đã được tạo thành công. Vui lòng cập nhật giấy tờ để hoàn tất đơn hàng.`,
           placement: "topRight",
           duration: 5,
-          icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
+          icon: <CheckCircle color="#52c41a" />,
         });
         message.success("Đơn hàng đã được tạo thành công!");
       } else {
@@ -672,7 +672,7 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
           description: response.error || "Không thể tạo đơn hàng. Vui lòng kiểm tra lại thông tin và thử lại!",
           placement: "topRight",
           duration: 5,
-          icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+          icon: <XCircle color="#ff4d4f" />,
         });
         message.error("Tạo đơn hàng thất bại!");
       }
@@ -684,7 +684,7 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
         description: `Không thể tạo đơn hàng. Lỗi: ${errorMsg}. Vui lòng thử lại sau!`,
         placement: "topRight",
         duration: 5,
-        icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+  icon: <XCircle color="#ff4d4f" />,
       });
       message.error("Có lỗi xảy ra khi tạo đơn hàng!");
     } finally {
@@ -705,7 +705,7 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
       description: `Đơn hàng #${orderId} đã được tạo và giấy tờ đã được cập nhật. Admin sẽ xác thực và liên hệ với bạn sớm nhất.`,
       placement: "topRight",
       duration: 6,
-      icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
+  icon: <CheckCircle color="#52c41a" />,
     });
     message.success("Đơn hàng đã được tạo và giấy tờ đã được cập nhật thành công!");
   };
@@ -818,7 +818,7 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
                 <div className="mb-4">
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-3">
                     <div className="flex items-start gap-2 mb-2">
-                      <EnvironmentOutlined className="text-blue-600 mt-1" />
+                      <MapPin className="text-blue-600 mt-1" />
                       <div className="flex-1">
                         <p className="text-sm font-semibold text-gray-900 mb-1">Vị trí xe hiện tại:</p>
                         <p className="text-sm text-gray-700">{carAddress || "Đang tải địa chỉ..."}</p>
@@ -847,7 +847,7 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
                 <div className="mb-4">
                   <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-3">
                     <div className="flex items-start gap-2">
-                      <EnvironmentOutlined className="text-green-600 mt-1" />
+                      <MapPin className="text-green-600 mt-1" />
                       <div className="flex-1">
                         <p className="text-sm font-semibold text-gray-900 mb-1">Địa điểm nhận xe đã chọn:</p>
                         <p className="text-sm text-gray-700">
@@ -901,7 +901,7 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
                 <div className="pt-4">
                   <div className="mb-4 bg-green-50 border border-green-200 rounded-lg p-4">
                     <div className="flex items-center gap-2 mb-3">
-                      <CheckCircleOutlined className="text-green-600 text-xl" />
+                      <CheckCircle className="text-green-600 text-xl" />
                       <span className="text-green-700 font-semibold text-lg">
                         Đơn hàng đã được tạo thành công!
                       </span>
@@ -920,7 +920,7 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
                         message.info("Đang chuyển đến trang hồ sơ để cập nhật giấy tờ...");
                       }}
                       className="w-full bg-blue-600"
-                      icon={<IdcardOutlined />}
+                      icon={<IdCard size={16} />}
                     >
                       Cập nhật giấy phép
                     </Button>

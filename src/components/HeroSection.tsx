@@ -2,12 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { 
-  CarOutlined, 
-  CalendarOutlined, 
-  EnvironmentOutlined,
-  SearchOutlined
-} from "@ant-design/icons";
+import { Car, MapPin, Search } from "lucide-react";
 import { DatePicker, Select, message } from "antd";
 import type { RangePickerProps } from "antd/es/date-picker";
 import dayjs, { Dayjs } from "dayjs";
@@ -142,7 +137,7 @@ export default function HeroSection() {
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
-              <CarOutlined />
+              <Car />
               <span>Xe tự lái</span>
             </button>
             <button
@@ -153,7 +148,7 @@ export default function HeroSection() {
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
-              <CarOutlined />
+              <Car />
               <span>Xe có tài xế</span>
             </button>
 
@@ -164,7 +159,7 @@ export default function HeroSection() {
             {/* Location Select */}
             <div className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                <EnvironmentOutlined className="mr-1" /> Địa điểm thuê xe
+                <MapPin className="mr-1 inline-block" size={16} /> Địa điểm thuê xe
               </label>
               <Select
                 size="large"
@@ -221,7 +216,7 @@ export default function HeroSection() {
             onClick={handleSearch}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-lg transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
           >
-            <SearchOutlined />
+            <Search />
             <span>Tìm Xe</span>
           </button>
         </div>
