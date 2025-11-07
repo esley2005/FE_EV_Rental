@@ -586,6 +586,7 @@ export interface UpdateProfileData {
   phone?: string;
   address?: string;
   dateOfBirth?: string;
+  avatar?: string;
 }
 
 export interface ChangePasswordData {
