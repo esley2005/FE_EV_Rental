@@ -16,4 +16,23 @@ export async function analyzeAI(): Promise<{
   return result;
 }
 
+type AnalyzeCarUsageResponse = {
+  response: string;
+  // Backend có thể trả thêm summary, perCar – FE hiện tại chỉ cần response
+  summary?: unknown;
+  perCar?: unknown;
+};
+
+export async function analyzeCarUsage(): Promise<{
+  success: boolean;
+  data?: AnalyzeCarUsageResponse;
+  error?: string;
+}> {
+  const result = await apiCall<AnalyzeCarUsageResponse>('/AI/car-usage', {
+    method: 'GET',
+  });
+  return result;
+}
+
+
 

@@ -130,9 +130,20 @@ export default function MyBookingsPage() {
         ? (Array.isArray(carsResponse.data) ? carsResponse.data : (carsResponse.data as any)?.$values || [])
         : [];
       
-      const locations: RentalLocationData[] = locationsResponse.success && locationsResponse.data
-        ? (Array.isArray(locationsResponse.data) ? locationsResponse.data : (locationsResponse.data as any)?.$values || [])
-        : [];
+      // Xử lý nhiều format cho locations
+      let locations: RentalLocationData[] = [];
+      if (locationsResponse.success && locationsResponse.data) {
+        const raw = locationsResponse.data as any;
+        if (Array.isArray(raw)) {
+          locations = raw;
+        } else if (Array.isArray(raw.$values)) {
+          locations = raw.$values;
+        } else if (raw.data && Array.isArray(raw.data.$values)) {
+          locations = raw.data.$values;
+        } else if (raw.data && Array.isArray(raw.data)) {
+          locations = raw.data;
+        }
+      }
 
       // Map orders with car and location info
       const bookingsWithDetails: BookingWithDetails[] = orders.map((order: RentalOrderData) => {

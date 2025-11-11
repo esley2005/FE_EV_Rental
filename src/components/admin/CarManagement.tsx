@@ -18,15 +18,7 @@ import {
   Upload,
   Image
 } from "antd";
-import {
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  UploadOutlined,
-  CarOutlined
-} from "@ant-design/icons";
+import { Plus, Edit, Trash2, CheckCircle, Upload as UploadIcon, Car as CarIcon } from "lucide-react";
 import { carsApi } from "@/services/api";
 import type { Car } from "@/types/car";
 
@@ -89,7 +81,7 @@ export default function CarManagement() {
         api.success({
           message: 'Xóa xe thành công!',
           placement: 'topRight',
-          icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+          icon: <CheckCircle color="#52c41a" />,
         });
         // Reload danh sách xe
         await loadCars();
@@ -205,7 +197,7 @@ export default function CarManagement() {
         message: 'Upload ảnh thành công!',
         description: 'Ảnh đã được tải lên Cloudinary và link đã được cập nhật.',
         placement: 'topRight',
-        icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+        icon: <CheckCircle color="#52c41a" />,
       });
       onSuccess(imageUrl);
     } catch (error) {
@@ -264,7 +256,7 @@ export default function CarManagement() {
         api.success({
           message: editingCar ? 'Cập nhật xe thành công!' : 'Thêm xe thành công!',
           placement: 'topRight',
-          icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+          icon: <CheckCircle color="#52c41a" />,
         });
         setModalOpen(false);
         loadCars();
@@ -365,7 +357,7 @@ export default function CarManagement() {
           <Button
             type="primary"
             size="small"
-            icon={<EditOutlined />}
+            icon={<Edit />}
             onClick={() => handleEdit(record)}
           >
             Sửa
@@ -377,7 +369,7 @@ export default function CarManagement() {
             okText="Xóa"
             cancelText="Hủy"
           >
-            <Button danger size="small" icon={<DeleteOutlined />}>
+            <Button danger size="small" icon={<Trash2 />}>
               Xóa
             </Button>
           </Popconfirm>
@@ -392,13 +384,13 @@ export default function CarManagement() {
       <Card
         title={
           <div className="flex items-center gap-2">
-            <CarOutlined /> Quản lý xe
+            <CarIcon /> Quản lý xe
           </div>
         }
         extra={
           <Button
             type="primary"
-            icon={<PlusOutlined />}
+            icon={<Plus />}
             onClick={handleAdd}
             className="bg-blue-600"
           >
@@ -595,7 +587,7 @@ export default function CarManagement() {
               maxCount={1}
             >
               <Button 
-                icon={<UploadOutlined />} 
+                icon={<UploadIcon />} 
                 loading={uploading}
                 type="dashed"
                 block
@@ -643,7 +635,7 @@ export default function CarManagement() {
               maxCount={1}
             >
               <Button 
-                icon={<UploadOutlined />} 
+                icon={<UploadIcon />} 
                 loading={uploading}
                 type="dashed"
                 block
@@ -691,7 +683,7 @@ export default function CarManagement() {
               maxCount={1}
             >
               <Button 
-                icon={<UploadOutlined />} 
+                icon={<UploadIcon />} 
                 loading={uploading}
                 type="dashed"
                 block

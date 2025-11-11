@@ -157,6 +157,16 @@ export async function apiCall<T>(
       };
     }
 
+    // Xử lý 405 Method Not Allowed - endpoint có thể không tồn tại hoặc không hỗ trợ method này
+    // Không log error vì đây là expected behavior khi endpoint không tồn tại
+    if (response.status === 405) {
+  logger.warn(`[API] ⚠️ 405 Method Not Allowed: ${endpoint} - endpoint may not exist, treating as non-critical`);
+      return {
+        success: false,
+        error: `Method not allowed: ${endpoint}`
+      };
+    }
+
     // Nếu response là 401, có thể token đã hết hạn
     if (response.status === 401) {
       // Nếu là public endpoint (skipAuth), thử lại không có token
@@ -285,6 +295,13 @@ export async function apiCall<T>(
           message: 'Operation completed successfully'
         };
       } else {
+        // 405 đã được xử lý ở trên, không log error lại
+        if (response.status === 405) {
+          return {
+            success: false,
+            error: `Method not allowed: ${endpoint}`
+          };
+        }
   logger.error(`[API] Empty response with error status: ${response.status}`);
         return {
           success: false,
@@ -354,13 +371,33 @@ export async function apiCall<T>(
     }
 
     // Wrap response để đảm bảo có field success
-    // Backend C# trả về: { message: '...', data: { $id: '...', $values: [...] } }
-    // Nên cần extract data từ response.data
-    const responseData = data?.data ?? data;
+    // Backend C# có thể trả về nhiều format:
+    // 1. { isSuccess: true, data: {...} } hoặc { isSuccess: true, data: { $values: [...] } }
+    // 2. { message: '...', data: { $id: '...', $values: [...] } }
+    // 3. Trực tiếp array hoặc object
+    // Nên cần extract data từ response.data hoặc response.isSuccess
+    
+    // Kiểm tra isSuccess nếu có
+    if (data?.isSuccess === false) {
+      logger.error('[API] Backend returned isSuccess: false', data);
+      return {
+        success: false,
+        error: data.message || data.Message || 'Request failed',
+        data: data.data
+      };
+    }
+    
+    // Extract data từ nhiều format
+    let responseData = data;
+    if (data?.data !== undefined) {
+      // Format: { isSuccess: true, data: {...} } hoặc { data: {...} }
+      responseData = data.data;
+    }
     
     logger.log(`[API] Response data structure:`, {
       hasData: !!data,
       hasDataData: !!data?.data,
+      isSuccess: data?.isSuccess,
       dataType: typeof data,
       dataDataType: typeof data?.data,
       isArray: Array.isArray(responseData),
@@ -822,6 +859,13 @@ export const rentalLocationApi = {
   // Lấy tất cả địa điểm cho thuê
   getAll: () =>
     apiCall<RentalLocationData[]>('/RentalLocation/GetAll', {
+      method: 'GET',
+      skipAuth: true, // Có thể public
+    }),
+
+  // Lấy địa điểm cho thuê theo ID
+  getById: (id: number | string) =>
+    apiCall<RentalLocationData>(`/RentalLocation/GetById?id=${id}`, {
       method: 'GET',
       skipAuth: true, // Có thể public
     }),

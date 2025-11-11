@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { LockOutlined, MailOutlined, CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
+import { Lock, Mail, CheckCircle, XCircle } from "lucide-react";
 import { Card, Input, Button, Checkbox, notification as antdNotification } from "antd";
 import { authApi } from "@/services/api";
 
@@ -33,7 +33,7 @@ export default function LoginPage() {
           message: 'Đăng nhập thất bại',
           description: response.error,
           placement: 'topRight',
-          icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+          icon: <XCircle color="#ff4d4f" />,
         });
         return;
       }
@@ -61,7 +61,7 @@ export default function LoginPage() {
           message: 'Đăng nhập thành công!',
           description: `Xin chào ${fullName}. Chào mừng bạn quay trở lại!`,
           placement: 'topRight',
-          icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+          icon: <CheckCircle color="#52c41a" />,
           duration: 3,
         });
         
@@ -81,7 +81,7 @@ export default function LoginPage() {
           message: 'Đăng nhập thất bại',
           description: 'Vui lòng kiểm tra lại email và mật khẩu!',
           placement: 'topRight',
-          icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+          icon: <XCircle color="#ff4d4f" />,
         });
       }
     } catch (error) {
@@ -90,7 +90,7 @@ export default function LoginPage() {
         message: 'Có lỗi xảy ra',
         description: 'Không thể kết nối đến máy chủ. Vui lòng thử lại!',
         placement: 'topRight',
-        icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+        icon: <XCircle color="#ff4d4f" />,
       });
     } finally {
       setLoading(false);
@@ -141,7 +141,7 @@ export default function LoginPage() {
               name="email"
               type="email"
               size="large"
-              prefix={<MailOutlined />}
+              prefix={<Mail />}
               placeholder="Nhập email"
               value={formData.email}
               onChange={handleChange}
@@ -151,7 +151,7 @@ export default function LoginPage() {
             <Input.Password
               name="password"
               size="large"
-              prefix={<LockOutlined />}
+              prefix={<Lock />}
               placeholder="Nhập mật khẩu"
               value={formData.password}
               onChange={handleChange}

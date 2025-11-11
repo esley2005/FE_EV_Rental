@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { MailOutlined, LockOutlined } from "@ant-design/icons";
+import { Mail } from "lucide-react";
 import { Input, Button, message } from "antd";
 import { authApi } from "@/services/api";
 
@@ -91,7 +91,7 @@ export default function VerifyEmailPage() {
         <div className="bg-white rounded-2xl shadow-2xl p-8" style={{ borderRadius: 12 }}>
           <div className="text-center mb-6">
             <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-              <MailOutlined className="text-3xl text-blue-600" />
+              <Mail className="text-blue-600" size={28} />
             </div>
             <h2 className="text-2xl font-semibold text-gray-800">Xác nhận Email</h2>
             <p className="text-gray-600 mt-2 text-sm">
