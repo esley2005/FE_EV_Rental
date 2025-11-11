@@ -941,6 +941,18 @@ export const rentalOrderApi = {
     apiCall<RentalOrderData[]>(`/RentalOrder/GetByUserId?userId=${userId}`, {
       method: 'GET',
     }),
+
+  // Cập nhật trạng thái đơn hàng (Admin/Staff only)
+  updateStatus: (orderId: number, status: 1 | 2 | 3 | 4 | 5) => {
+    const formData = new FormData();
+    formData.append('OrderId', orderId.toString());
+    formData.append('Status', status.toString());
+    
+    return apiCall<RentalOrderData>('/RentalOrder/UpdateStatus', {
+      method: 'PUT',
+      body: formData,
+    });
+  },
 };
 
 // Export types

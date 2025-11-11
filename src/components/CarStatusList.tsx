@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Button, Input, Select, Space, Table, Tag, message, Image, Descriptions, Card, Modal } from "antd";
+import { Button, Input, Select, Space, Table, Tag, message, Image, Descriptions, Card, Modal, Popconfirm } from "antd";
 import { 
   CarOutlined, 
   UserOutlined, 
@@ -113,6 +113,29 @@ export default function CarStatusList({ onDeliver, onReturn }: CarStatusListProp
     }
   };
 
+  // Map status từ backend sang số (theo enum C#)
+  const getStatusNumber = (status: string | undefined): number => {
+    if (!status) return 0; // Pending
+    const statusLower = status.toLowerCase();
+    if (statusLower.includes('confirmed') || statusLower.includes('xác nhận')) return 1;
+    if (statusLower.includes('renting') || statusLower.includes('đang thuê')) return 2;
+    if (statusLower.includes('paymentpending') || statusLower.includes('chờ thanh toán')) return 3;
+    if (statusLower.includes('cancelled') || statusLower.includes('hủy')) return 4;
+    if (statusLower.includes('completed') || statusLower.includes('hoàn thành')) return 5;
+    return 0; // Default to Pending
+  };
+
+
+
+  
+  //         Pending,
+  //         Confirmed,
+  //         Renting,
+  //         PaymentPending,
+  //         Cancelled,
+  //         Completed
+ 
+  
   const getOrderStatus = (order: OrderWithDetails): string => {
     const status = order.status?.toLowerCase() || '';
     if (status.includes('completed') || status.includes('hoàn thành') || order.actualReturnTime) {
@@ -120,6 +143,12 @@ export default function CarStatusList({ onDeliver, onReturn }: CarStatusListProp
     }
     if (status.includes('confirmed') || status.includes('xác nhận')) {
       return 'confirmed';
+    }
+    if (status.includes('renting') || status.includes('đang thuê')) {
+      return 'renting';
+    }
+    if (status.includes('paymentpending') || status.includes('chờ thanh toán')) {
+      return 'paymentpending';
     }
     if (status.includes('cancelled') || status.includes('hủy')) {
       return 'cancelled';
@@ -132,11 +161,34 @@ export default function CarStatusList({ onDeliver, onReturn }: CarStatusListProp
     const config: Record<string, { color: string; text: string; icon: any }> = {
       pending: { color: 'gold', text: 'Chờ xác nhận', icon: <ClockCircleOutlined /> },
       confirmed: { color: 'blue', text: 'Đã xác nhận', icon: <CheckCircleOutlined /> },
+      renting: { color: 'cyan', text: 'Đang thuê', icon: <CarOutlined /> },
+      paymentpending: { color: 'orange', text: 'Chờ thanh toán', icon: <ClockCircleOutlined /> },
       completed: { color: 'green', text: 'Hoàn thành', icon: <CheckCircleOutlined /> },
       cancelled: { color: 'red', text: 'Đã hủy', icon: <CloseCircleOutlined /> },
     };
     const c = config[status] || config.pending;
     return <Tag color={c.color} icon={c.icon}>{c.text}</Tag>;
+  };
+
+  // Xử lý cập nhật status
+  const handleStatusChange = async (orderId: number, newStatus: 1 | 2 | 3 | 4 | 5) => {
+    try {
+      setLoading(true);
+      const response = await rentalOrderApi.updateStatus(orderId, newStatus);
+      
+      if (response.success) {
+        message.success('Cập nhật trạng thái đơn hàng thành công!');
+        // Reload orders để cập nhật UI
+        await loadOrders();
+      } else {
+        message.error(response.error || 'Cập nhật trạng thái thất bại');
+      }
+    } catch (error) {
+      console.error('Update status error:', error);
+      message.error('Có lỗi xảy ra khi cập nhật trạng thái');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getDocumentStatusTag = (status?: string) => {
@@ -235,8 +287,35 @@ export default function CarStatusList({ onDeliver, onReturn }: CarStatusListProp
     {
       title: "Trạng thái đơn",
       key: "orderStatus",
-      width: 150,
-      render: (_: any, record: OrderWithDetails) => getOrderStatusTag(record),
+      width: 200,
+      render: (_: any, record: OrderWithDetails) => {
+        const currentStatusNum = getStatusNumber(record.status);
+        const statusOptions = [
+          { value: 1, label: '1. Đã xác nhận' },
+          { value: 2, label: '2. Đang thuê' },
+          { value: 3, label: '3. Chờ thanh toán' },
+          { value: 4, label: '4. Đã hủy' },
+          { value: 5, label: '5. Hoàn thành' },
+        ];
+
+        return (
+          <Space direction="vertical" size="small">
+            {getOrderStatusTag(record)}
+            <Select
+              value={currentStatusNum >= 1 && currentStatusNum <= 5 ? currentStatusNum : undefined}
+              style={{ width: 180 }}
+              size="small"
+              placeholder="Chọn trạng thái"
+              options={statusOptions}
+              onChange={(value) => {
+                if (value >= 1 && value <= 5) {
+                  handleStatusChange(record.id, value as 1 | 2 | 3 | 4 | 5);
+                }
+              }}
+            />
+          </Space>
+        );
+      },
     },
     {
       title: "Ngày nhận",
@@ -245,49 +324,7 @@ export default function CarStatusList({ onDeliver, onReturn }: CarStatusListProp
       render: (_: any, record: OrderWithDetails) =>
         record.pickupTime ? dayjs(record.pickupTime).format('DD/MM/YYYY HH:mm') : '-',
     },
-    {
-      title: "Hành động",
-      key: "actions",
-      width: 200,
-      render: (_: any, record: OrderWithDetails) => {
-        const status = getOrderStatus(record);
-        return (
-          <Space>
-            <Button
-              type="link"
-              icon={<EyeOutlined />}
-              onClick={() => {
-                setSelectedOrder(record);
-                setDetailModalVisible(true);
-              }}
-            >
-              Chi tiết
-            </Button>
-            <Button
-              type="primary"
-              disabled={status !== 'confirmed'}
-              onClick={() => onDeliver?.({
-                carId: String(record.carId),
-                carName: record.car?.name || 'Xe',
-                orderId: record.id
-              })}
-            >
-              Bàn giao
-            </Button>
-            <Button
-              disabled={status !== 'confirmed' || !record.actualReturnTime}
-              onClick={() => onReturn?.({
-                carId: String(record.carId),
-                carName: record.car?.name || 'Xe',
-                orderId: record.id
-              })}
-            >
-              Nhận xe
-            </Button>
-          </Space>
-        );
-      },
-    },
+   
   ];
 
   return (
