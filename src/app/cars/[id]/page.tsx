@@ -230,10 +230,10 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header />
 
-      <main className="flex-1 container mx-auto px-4 py-8">
+      <main className="flex-1 container mx-auto px-4 pt-24 qb-8 ">
         {/* Breadcrumb */}
         <nav className="mb-6">
-          <ol className="flex items-center space-x-2 text-sm text-gray-500">
+          <ol className="flex items-center space-x-2 text-sm text-gray-500 mb-6">
             <li>
               <Link href="/" className="hover:text-blue-600">
                 Trang chủ
