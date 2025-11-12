@@ -169,7 +169,7 @@ export default function Footer() {
             <ul className="space-y-3">
               <li>
                 <Link 
-                  href="/partners/register-owner" 
+                  href="/coomingsoon" 
                   className="text-gray-700 hover:text-green-600 transition-colors"
                 >
                   Đăng ký chủ xe EV Rental
@@ -177,7 +177,7 @@ export default function Footer() {
               </li>
               <li>
                 <Link 
-                  href="/partners/register-gps" 
+                  href="/coomingsoon" 
                   className="text-gray-700 hover:text-green-600 transition-colors"
                 >
                   Đăng ký GPS Tracking
@@ -185,7 +185,7 @@ export default function Footer() {
               </li>
               <li>
                 <Link 
-                  href="/partners/long-term-rental" 
+                  href="/coomingsoon" 
                   className="text-gray-700 hover:text-green-600 transition-colors"
                 >
                   Đăng ký cho thuê xe dài hạn
