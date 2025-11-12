@@ -871,6 +871,39 @@ export const rentalLocationApi = {
     }),
 };
 
+// Car Rental Location API
+export interface CarRentalLocationData {
+  id: number;
+  carId: number;
+  locationId: number;
+  quantity: number;
+}
+
+export interface CreateCarRentalLocationData {
+  carId: number;
+  locationId: number;
+  quantity: number;
+}
+
+export const carRentalLocationApi = {
+  // Tạo mới quan hệ xe - địa điểm
+  create: (data: CreateCarRentalLocationData) =>
+    apiCall<CarRentalLocationData>('/CarRentalLocation/Create', {
+      method: 'POST',
+      body: JSON.stringify({
+        CarId: data.carId,
+        LocationId: data.locationId,
+        Quantity: data.quantity,
+      }),
+    }),
+
+  // Lấy danh sách theo carId (nếu cần)
+  getByCarId: (carId: number) =>
+    apiCall<CarRentalLocationData[]>(`/CarRentalLocation/GetByCarId?carId=${carId}`, {
+      method: 'GET',
+    }),
+};
+
 // Rental Order API
 export interface CreateRentalOrderData {
   phoneNumber: string;

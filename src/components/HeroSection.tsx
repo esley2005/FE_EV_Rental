@@ -166,7 +166,7 @@ export default function HeroSection() {
                 value={selectedLocationId}
                 onChange={setSelectedLocationId}
                 placeholder="Chọn địa điểm thuê xe"
-                className="w-full"
+                className="w-full location-select"
                 loading={loadingLocations}
                 showSearch
                 filterOption={(input, option) => {
@@ -174,6 +174,7 @@ export default function HeroSection() {
                   return label.toLowerCase().includes(input.toLowerCase());
                 }}
                 optionFilterProp="label"
+                optionLabelProp="children"
               >
                 {locations.map((location) => (
                   <Select.Option
@@ -181,9 +182,13 @@ export default function HeroSection() {
                     value={location.id}
                     label={`${location.name} - ${location.address}`}
                   >
-                    <div>
-                      <div className="font-medium">{location.name}</div>
-                      <div className="text-xs text-gray-500">{location.address}</div>
+                    <div className="flex flex-col leading-tight">
+                      <span className="text-base font-medium text-gray-900">
+                        {location.name}
+                      </span>
+                      {location.address && (
+                        <span className="text-xs text-gray-500">{location.address}</span>
+                      )}
                     </div>
                   </Select.Option>
                 ))}
@@ -205,7 +210,7 @@ export default function HeroSection() {
                 value={dateRange}
                 onChange={(dates) => setDateRange(dates as [Dayjs | null, Dayjs | null] | null)}
                 disabledDate={disabledDate}
-                className="w-full"
+                className="w-full time-range-picker"
                 placeholder={["Thời gian bắt đầu", "Thời gian kết thúc"]}
               />
             </div>
