@@ -4,7 +4,6 @@ import { Table, Spin, message } from "antd";
 import { paymentApi } from "@/services/api";
 
 interface RevenueByLocation {
-  rentalLocationId: number;
   rentalLocationName: string;
   totalRevenue: number;
 }
@@ -40,11 +39,7 @@ const RevenueByLocationComponent: React.FC = () => {
   }, []);
 
   const columns = [
-    {
-      title: "ID Location",
-      dataIndex: "rentalLocationId",
-      key: "rentalLocationId",
-    },
+ 
     {
       title: "Location Name",
       dataIndex: "rentalLocationName",
