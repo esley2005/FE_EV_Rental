@@ -51,7 +51,10 @@ export default function CarCard({ car }: CarCardProps) {
     const defaultText = "Địa điểm đang cập nhật";
     const carLocations: any = car.carRentalLocations;
     
+    console.log(`[CarCard] Car ${car.id} - carRentalLocations:`, carLocations);
+    
     if (!carLocations) {
+      console.log(`[CarCard] Car ${car.id} - No carRentalLocations`);
       return defaultText;
     }
 
@@ -59,30 +62,46 @@ export default function CarCard({ car }: CarCardProps) {
       ? carLocations
       : carLocations?.$values || [];
 
+    console.log(`[CarCard] Car ${car.id} - locationsList:`, locationsList);
+
     if (!Array.isArray(locationsList) || locationsList.length === 0) {
+      console.log(`[CarCard] Car ${car.id} - Empty locationsList`);
       return defaultText;
     }
 
     // ✅ Chỉ lấy location đầu tiên (theo yêu cầu: 1 xe = 1 location)
     const firstLocation = locationsList[0];
+    console.log(`[CarCard] Car ${car.id} - firstLocation:`, firstLocation);
 
     // Lấy từ rentalLocation nested object
     const rentalLocation = firstLocation?.rentalLocation ?? firstLocation?.RentalLocation;
+    console.log(`[CarCard] Car ${car.id} - rentalLocation:`, rentalLocation);
     
     if (rentalLocation) {
       const name = rentalLocation?.name ?? rentalLocation?.Name ?? null;
       const address = rentalLocation?.address ?? rentalLocation?.Address ?? null;
 
+      console.log(`[CarCard] Car ${car.id} - name: "${name}", address: "${address}"`);
+
       if (name && address) {
-        return `${name}, ${address}`;
+        const result = `${name}, ${address}`;
+        console.log(`[CarCard] ✅ Car ${car.id} - Display: "${result}"`);
+        return result;
       }
 
-      if (address) return address;
-      if (name) return name;
+      if (address) {
+        console.log(`[CarCard] ✅ Car ${car.id} - Display address: "${address}"`);
+        return address;
+      }
+      if (name) {
+        console.log(`[CarCard] ✅ Car ${car.id} - Display name: "${name}"`);
+        return name;
+      }
     }
 
+    console.log(`[CarCard] ❌ Car ${car.id} - No rentalLocation, using default`);
     return defaultText;
-  }, [car.carRentalLocations]);
+  }, [car.carRentalLocations, car.id]);
 
   return (
     <motion.div 
