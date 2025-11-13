@@ -24,6 +24,9 @@ import HistoryList from "@/components/HistoryList";
 import DispatchList from "@/components/DispatchList";
 import CarManagement from "@/components/admin/CarManagement";
 import AIAnalysis from "@/components/admin/AIAnalysis";
+import CustomerManagement from "@/components/admin/CustomerManagement";
+import StaffManagement from "@/components/admin/StaffManagement";
+
 
 const { Header, Sider, Content, Footer } = Layout;
 
@@ -125,7 +128,7 @@ export default function AdminLayout() {
       switch (selectedSubMenu) {
         case "1":
           // TODO: Hiển thị danh sách khách hàng từ API
-          return <p>Hồ sơ khách hàng</p>;
+          return <CustomerManagement />;
         case "2":
           return <p>Trang Khiếu nại khách hàng</p>;
         case "3":
@@ -138,7 +141,7 @@ export default function AdminLayout() {
     if (selectedModule === "staff") {
       switch (selectedSubMenu) {
         case "1":
-          return <p>Danh sách nhân viên tại các điểm</p>;
+          return <StaffManagement />;
 
         default:
           return <p>Chưa có nội dung.</p>;
