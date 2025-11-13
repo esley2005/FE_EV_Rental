@@ -69,7 +69,7 @@ export default function BookingPage() {
           }
         }
 
-        // Load rental locations
+        // Load rental locations - CHỈ lấy những location có xe
         const locationsResponse = await rentalLocationApi.getAll();
         if (locationsResponse.success && locationsResponse.data) {
           const raw = locationsResponse.data as any;
@@ -86,6 +86,8 @@ export default function BookingPage() {
           }
           
           const activeLocations = locations.filter((loc: any) => loc.isActive !== false);
+          
+          // Tạm thời set tất cả, sẽ filter sau khi có carLocationIds
           setRentalLocations(activeLocations);
           
           // Thu thập tất cả các vị trí có xe
