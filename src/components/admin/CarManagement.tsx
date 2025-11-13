@@ -654,11 +654,11 @@ export default function CarManagement() {
               <Select placeholder="Chọn loại pin">
                 <Select.Option value="LFP">LFP</Select.Option>
                 <Select.Option value="NMC">NMC</Select.Option>
-                <Select.Option value="NCA">NMC</Select.Option>
-                <Select.Option value="LTO">NMC</Select.Option>
-                <Select.Option value="Na‑Ion">NMC</Select.Option>
-                <Select.Option value="Lead‑Acid">NMC</Select.Option>
-                <Select.Option value="Other">Khác</Select.Option>
+                <Select.Option value="NCA">NCA</Select.Option>
+                <Select.Option value="LTO">LTO</Select.Option>
+                <Select.Option value="Na‑Ion">Na‑Ion</Select.Option>
+                <Select.Option value="Lead‑Acid">Lead‑Acid</Select.Option>
+                <Select.Option value="Other">Other</Select.Option>
               </Select>
             </Form.Item>
 
