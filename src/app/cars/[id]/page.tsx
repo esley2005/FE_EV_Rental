@@ -756,11 +756,11 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
             {/* Vị trí xe (Location Map) Section - LUÔN HIỂN THỊ */}
             <div className="bg-white rounded-lg shadow-lg p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">📍 Vị trí xe</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-4"><MapPin className="inline-block mr-2 text-blue-600" /> Vị trí xe</h2>
               
               {loading && (
                 <div className="flex flex-col items-center justify-center py-8 gap-4">
-                  <Spin size="large" />
+                  <MapPin className="inline-block mr-2 text-blue-600" />
                   <p className="text-gray-600">Đang tải vị trí xe...</p>
                 </div>
               )}
@@ -770,7 +770,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                   {carAddress && (
                     <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                       <p className="text-sm text-gray-700">
-                        <MapPin className="mr-2 text-blue-600" />
+                        <MapPin className="inline-block mr-2 text-blue-600" />
                         <strong>Địa chỉ:</strong> {carAddress}
                       </p>
                     </div>
@@ -795,7 +795,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               {!loading && !carCoords && carAddress && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                   <p className="text-sm text-gray-700 mb-2">
-                    <MapPin className="mr-2 text-yellow-600" />
+                    <MapPin className="inline-block mr-2 text-yellow-600" />
                     <strong>Địa chỉ:</strong> {carAddress}
                   </p>
                   <p className="text-xs text-gray-500">
@@ -810,7 +810,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               {!loading && !carCoords && !carAddress && (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                   <p className="text-sm text-gray-500 mb-2">
-                    <MapPin className="mr-2" />
+                    <MapPin className="inline-block mr-2 text-gray-500" />
                     Đang tải thông tin vị trí xe...
                   </p>
                   <p className="text-xs text-gray-400">
@@ -1067,69 +1067,72 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               <div className="mb-6">
                 <h3 className="text-lg font-bold text-gray-900 mb-4">Bảng giá thuê</h3>
                 
-                {/* Theo giờ - Tự lái */}
-                <div className="mb-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-sm text-gray-500 line-through">
-                      {formatCurrency(Math.round(car.rentPricePerHour * 1.1))}
-                    </span>
-                    <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                    <p className="text-xs text-gray-600 mb-1">Theo giờ (Tự lái)</p>
-                    <p className="text-1xl font-bold text-gray-900">
-                      {formatCurrency(car.rentPricePerHour)}/giờ
-                    </p>
-                  </div>
-                </div>
+               {/* Box chung hiển thị toàn bộ giá thuê */}
+<div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+  {/* Theo giờ - Tự lái */}
+  <div className="flex justify-between items-center mb-3">
+    <div>
+      <p className="text-xs text-gray-600">Theo giờ (Tự lái)</p>
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-gray-500 line-through">
+          {formatCurrency(Math.round(car.rentPricePerHour * 1.1))}
+        </span>
+        <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span>
+      </div>
+    </div>
+    <p className="text-lg font-bold text-gray-900 text-right">
+      {formatCurrency(car.rentPricePerHour)}/giờ
+    </p>
+  </div>
 
-                {/* Theo ngày - Tự lái */}
-                <div className="mb-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-sm text-gray-500 line-through">
-                      {formatCurrency(Math.round(car.rentPricePerDay * 1.1))}
-                    </span>
-                    <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                    <p className="text-xs text-gray-600 mb-1">Theo ngày (Tự lái)</p>
-                    <p className="text-1xl font-bold text-gray-900">
-                      {formatCurrency(car.rentPricePerDay)}/ngày
-                    </p>
-                  </div>
-                </div>
+  {/* Theo ngày - Tự lái */}
+  <div className="flex justify-between items-center mb-3">
+    <div>
+      <p className="text-xs text-gray-600">Theo ngày (Tự lái)</p>
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-gray-500 line-through">
+          {formatCurrency(Math.round(car.rentPricePerDay * 1.1))}
+        </span>
+        <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span>
+      </div>
+    </div>
+    <p className="text-lg font-bold text-gray-900 text-right">
+      {formatCurrency(car.rentPricePerDay)}/ngày
+    </p>
+  </div>
 
-                {/* Theo giờ - Có tài xế */}
-                <div className="mb-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-sm text-gray-500 line-through">
-                      {formatCurrency(Math.round(car.rentPricePerHourWithDriver * 1.1))}
-                    </span>
-                    <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                    <p className="text-xs text-gray-600 mb-1">Theo giờ (Có tài xế)</p>
-                    <p className="text-1xl font-bold text-gray-900">
-                      {formatCurrency(car.rentPricePerHourWithDriver)}/giờ
-                    </p>
-                  </div>
-                </div>
+  {/* Theo giờ - Có tài xế */}
+  <div className="flex justify-between items-center mb-3">
+    <div>
+      <p className="text-xs text-gray-600">Theo giờ (Có tài xế)</p>
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-gray-500 line-through">
+          {formatCurrency(Math.round(car.rentPricePerHourWithDriver * 1.1))}
+        </span>
+        <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span>
+      </div>
+    </div>
+    <p className="text-lg font-bold text-gray-900 text-right">
+      {formatCurrency(car.rentPricePerHourWithDriver)}/giờ
+    </p>
+  </div>
 
-                {/* Theo ngày - Có tài xế */}
-                <div className="mb-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-sm text-gray-500 line-through">
-                      {formatCurrency(Math.round(car.rentPricePerDayWithDriver * 1.1))}
-                    </span>
-                    <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                    <p className="text-xs text-gray-600 mb-1">Theo ngày (Có tài xế)</p>
-                    <p className="text-1xl font-bold text-gray-900">
-                      {formatCurrency(car.rentPricePerDayWithDriver)}/ngày
-                    </p>
-                  </div>
-                </div>
+  {/* Theo ngày - Có tài xế */}
+  <div className="flex justify-between items-center">
+    <div>
+      <p className="text-xs text-gray-600">Theo ngày (Có tài xế)</p>
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-gray-500 line-through">
+          {formatCurrency(Math.round(car.rentPricePerDayWithDriver * 1.1))}
+        </span>
+        <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span>
+      </div>
+    </div>
+    <p className="text-lg font-bold text-gray-900 text-right">
+      {formatCurrency(car.rentPricePerDayWithDriver)}/ngày
+    </p>
+  </div>
+</div>
               </div>
 
               {/* Status */}
