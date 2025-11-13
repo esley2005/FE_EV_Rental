@@ -1,10 +1,9 @@
 "use client";
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Car } from "@/types/car";
 import { Zap, Users, MapPin, Star, Car as CarIcon } from "lucide-react";
 import { motion } from "framer-motion";
-import { rentalLocationApi } from "@/services/api";
 interface CarCardProps {
   car: Car;
 }
@@ -47,61 +46,33 @@ export default function CarCard({ car }: CarCardProps) {
   const rating = 5.0;
   const tripCount = Math.floor(Math.random() * 50) + 10; // Tạm thời random
 
-  const locationDisplay = useMemo(() => {
-    const defaultText = "Địa điểm đang cập nhật";
+  const locationData = useMemo(() => {
     const carLocations: any = car.carRentalLocations;
     
-    console.log(`[CarCard] Car ${car.id} - carRentalLocations:`, carLocations);
-    
     if (!carLocations) {
-      console.log(`[CarCard] Car ${car.id} - No carRentalLocations`);
-      return defaultText;
+      return null;
     }
 
     const locationsList: any[] = Array.isArray(carLocations)
       ? carLocations
       : carLocations?.$values || [];
 
-    console.log(`[CarCard] Car ${car.id} - locationsList:`, locationsList);
-
     if (!Array.isArray(locationsList) || locationsList.length === 0) {
-      console.log(`[CarCard] Car ${car.id} - Empty locationsList`);
-      return defaultText;
+      return null;
     }
 
     // ✅ Chỉ lấy location đầu tiên (theo yêu cầu: 1 xe = 1 location)
     const firstLocation = locationsList[0];
-    console.log(`[CarCard] Car ${car.id} - firstLocation:`, firstLocation);
-
-    // Lấy từ rentalLocation nested object
     const rentalLocation = firstLocation?.rentalLocation ?? firstLocation?.RentalLocation;
-    console.log(`[CarCard] Car ${car.id} - rentalLocation:`, rentalLocation);
     
     if (rentalLocation) {
       const name = rentalLocation?.name ?? rentalLocation?.Name ?? null;
       const address = rentalLocation?.address ?? rentalLocation?.Address ?? null;
-
-      console.log(`[CarCard] Car ${car.id} - name: "${name}", address: "${address}"`);
-
-      if (name && address) {
-        const result = `${name}, ${address}`;
-        console.log(`[CarCard] ✅ Car ${car.id} - Display: "${result}"`);
-        return result;
-      }
-
-      if (address) {
-        console.log(`[CarCard] ✅ Car ${car.id} - Display address: "${address}"`);
-        return address;
-      }
-      if (name) {
-        console.log(`[CarCard] ✅ Car ${car.id} - Display name: "${name}"`);
-        return name;
-      }
+      return { name, address };
     }
 
-    console.log(`[CarCard] ❌ Car ${car.id} - No rentalLocation, using default`);
-    return defaultText;
-  }, [car.carRentalLocations, car.id]);
+    return null;
+  }, [car.carRentalLocations]);
 
   return (
     <motion.div 
@@ -223,7 +194,22 @@ export default function CarCard({ car }: CarCardProps) {
         <div className="flex items-start gap-1.5 mb-2 text-gray-600">
           <MapPin className="text-blue-600 mt-0.5 flex-shrink-0" size={14} />
           <div className="flex-1 min-w-0">
-            <span className="text-xs leading-relaxed line-clamp-2 break-words">{locationDisplay}</span>
+            {locationData ? (
+              <div className="space-y-0.5">
+                {locationData.name && (
+                  <div className="text-xs font-semibold text-gray-900 leading-tight">
+                    {locationData.name}
+                  </div>
+                )}
+                {locationData.address && (
+                  <div className="text-[10px] text-gray-500 leading-tight line-clamp-1">
+                    {locationData.address}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <span className="text-xs text-gray-400">Địa điểm đang cập nhật</span>
+            )}
           </div>
         </div>
 

@@ -153,26 +153,31 @@ async function enrichCarWithCoords(car: any) {
           
           // ✅ Chỉ lấy location đầu tiên (1 xe = 1 location)
           const firstLocation = enrichedLocations.length > 0 ? enrichedLocations[0] : null;
-          console.log(`[enrichCarWithCoords] Car ${car.id} - First location:`, firstLocation);
-          console.log(`[enrichCarWithCoords] Car ${car.id} - First location keys:`, firstLocation ? Object.keys(firstLocation) : []);
-          console.log(`[enrichCarWithCoords] Car ${car.id} - First location rentalLocation:`, firstLocation?.rentalLocation);
-          console.log(`[enrichCarWithCoords] Car ${car.id} - First location RentalLocation:`, firstLocation?.RentalLocation);
           
-          // Đảm bảo rentalLocation được set đúng
+          // Đảm bảo rentalLocation được set đúng - nếu chưa có thì fetch lại
+          let finalLocation = firstLocation;
           if (firstLocation && !firstLocation.rentalLocation && !firstLocation.RentalLocation) {
-            console.warn(`[enrichCarWithCoords] ⚠️ Car ${car.id} - First location has no rentalLocation!`);
-            console.warn(`[enrichCarWithCoords] Car ${car.id} - First location full:`, JSON.stringify(firstLocation, null, 2));
+            const locationId = firstLocation?.locationId ?? firstLocation?.LocationId ?? firstLocation?.rentalLocationId ?? firstLocation?.RentalLocationId;
+            if (locationId) {
+              try {
+                const { apiCall } = await import('@/services/api');
+                const retryResponse = await apiCall(`/RentalLocation/GetById?id=${locationId}`, {
+                  method: 'GET',
+                  skipAuth: false,
+                });
+                if (retryResponse.success && retryResponse.data) {
+                  finalLocation = { ...firstLocation, rentalLocation: retryResponse.data };
+                }
+              } catch {
+                // Ignore
+              }
+            }
           }
           
           enriched = {
             ...enriched,
-            carRentalLocations: firstLocation ? [firstLocation] : []
+            carRentalLocations: finalLocation ? [finalLocation] : []
           };
-          
-          console.log(`[enrichCarWithCoords] Car ${car.id} - Final carRentalLocations:`, enriched.carRentalLocations);
-          console.log(`[enrichCarWithCoords] Car ${car.id} - Final carRentalLocations[0]:`, enriched.carRentalLocations[0]);
-          console.log(`[enrichCarWithCoords] Car ${car.id} - Final carRentalLocations[0] keys:`, enriched.carRentalLocations[0] ? Object.keys(enriched.carRentalLocations[0]) : []);
-          console.log(`[enrichCarWithCoords] Car ${car.id} - Final carRentalLocations[0].rentalLocation:`, enriched.carRentalLocations[0]?.rentalLocation);
           
           locationInfo = getLocationInfoFromCar(enriched);
           console.log(`[enrichCarWithCoords] Car ${car.id} - Final locationInfo:`, locationInfo);
