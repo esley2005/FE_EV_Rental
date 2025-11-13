@@ -886,7 +886,7 @@ export const rentalLocationApi = {
   getById: (id: number | string) =>
     apiCall<RentalLocationData>(`/RentalLocation/GetById?id=${id}`, {
       method: 'GET',
-      skipAuth: true, // Có thể public
+      skipAuth: true, // Public endpoint - không cần auth
     }),
 
   // Lấy tất cả nhân viên theo locationId
@@ -957,6 +957,18 @@ export const carRentalLocationApi = {
   getByCarId: (carId: number) =>
     apiCall<CarRentalLocationData[]>(`/CarRentalLocation/GetByCarId?carId=${carId}`, {
       method: 'GET',
+    }),
+
+  // Xóa quan hệ xe - địa điểm
+  delete: (id: number) =>
+    apiCall(`/CarRentalLocation/${id}`, {
+      method: 'DELETE',
+    }),
+
+  // Xóa quan hệ theo carId và locationId
+  deleteByCarAndLocation: (carId: number, locationId: number) =>
+    apiCall(`/CarRentalLocation/DeleteByCarAndLocation?carId=${carId}&locationId=${locationId}`, {
+      method: 'DELETE',
     }),
 };
 

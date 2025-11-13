@@ -18,7 +18,7 @@ import {
   Upload,
   Image
 } from "antd";
-import { Plus, Edit, Trash2, CheckCircle, Upload as UploadIcon, Car as CarIcon } from "lucide-react";
+import { Plus, Edit, Trash2, CheckCircle, Upload as UploadIcon, Car as CarIcon, MapPin } from "lucide-react";
 import { carsApi, rentalLocationApi, carRentalLocationApi } from "@/services/api";
 import type { Car } from "@/types/car";
 import type { RentalLocationData, CarRentalLocationData } from "@/services/api";
@@ -94,7 +94,7 @@ type CarFormValues = {
   imageUrl2?: string;
   imageUrl3?: string;
   isActive: boolean;
-  rentalLocationIds?: number[];
+  rentalLocationId?: number;
 };
 
 export default function CarManagement() {
@@ -123,7 +123,37 @@ export default function CarManagement() {
         const listToUse = carsList.length > 0 ? carsList : fallbackList;
         // Filter out deleted cars
         const activeCars = listToUse.filter((car) => !car.isDeleted);
-        setCars(activeCars);
+        
+        // Fetch carRentalLocations cho tất cả xe để hiển thị location
+        const carsWithLocations = await Promise.all(
+          activeCars.map(async (car) => {
+            try {
+              // Nếu đã có carRentalLocations, không cần fetch lại
+              const hasLocations = car.carRentalLocations && 
+                (Array.isArray(car.carRentalLocations) || (car.carRentalLocations as any)?.$values);
+
+              if (!hasLocations) {
+                // Fetch carRentalLocations từ API
+                const locationResponse = await carRentalLocationApi.getByCarId(car.id);
+                if (locationResponse.success && locationResponse.data) {
+                  const locationsData = Array.isArray(locationResponse.data)
+                    ? locationResponse.data
+                    : (locationResponse.data as any)?.$values || [];
+                  return {
+                    ...car,
+                    carRentalLocations: locationsData
+                  };
+                }
+              }
+              return car;
+            } catch (error) {
+              console.warn(`Failed to fetch locations for car ${car.id}:`, error);
+              return car;
+            }
+          })
+        );
+        
+        setCars(carsWithLocations);
       }
     } catch (error) {
       console.error('Load cars error:', error);
@@ -148,30 +178,27 @@ export default function CarManagement() {
     }
   };
 
-  const extractRentalLocationIds = (car: Car | null): number[] => {
-    if (!car) return [];
+  const extractRentalLocationId = (car: Car | null): number | undefined => {
+    if (!car) return undefined;
     const carLocations = (car as unknown as { carRentalLocations?: unknown })?.carRentalLocations;
-    if (!carLocations) return [];
+    if (!carLocations) return undefined;
 
     const locationsList = normalizeDotNetList<RawCarRentalLocation>(carLocations);
+    if (locationsList.length === 0) return undefined;
 
-    const ids = locationsList
-      .map((loc) => {
-        const locationInfo = loc.rentalLocation ?? loc.RentalLocation ?? loc;
+    // Chỉ lấy location đầu tiên
+    const firstLocation = locationsList[0];
+    const locationInfo = firstLocation.rentalLocation ?? firstLocation.RentalLocation ?? firstLocation;
 
-        const id =
-          loc.rentalLocationId ??
-          loc.RentalLocationId ??
-          loc.locationId ??
-          loc.LocationId ??
-          locationInfo?.id ??
-          locationInfo?.Id;
+    const id =
+      firstLocation.rentalLocationId ??
+      firstLocation.RentalLocationId ??
+      firstLocation.locationId ??
+      firstLocation.LocationId ??
+      locationInfo?.id ??
+      locationInfo?.Id;
 
-        return id !== undefined && id !== null ? Number(id) : null;
-      })
-      .filter((id): id is number => id !== null);
-
-    return Array.from(new Set(ids));
+    return id !== undefined && id !== null ? Number(id) : undefined;
   };
 
   const handleAdd = () => {
@@ -180,7 +207,7 @@ export default function CarManagement() {
     form.setFieldsValue({
       status: 0,
       isActive: true,
-      rentalLocationIds: rentalLocations.length > 0 ? [rentalLocations[0].id] : []
+      rentalLocationId: rentalLocations.length > 0 ? rentalLocations[0].id : undefined
     });
     setModalOpen(true);
   };
@@ -204,7 +231,7 @@ export default function CarManagement() {
       imageUrl2: car.imageUrl2 ?? undefined,
       imageUrl3: car.imageUrl3 ?? undefined,
       isActive: car.isActive,
-      rentalLocationIds: extractRentalLocationIds(car),
+      rentalLocationId: extractRentalLocationId(car),
     });
     setModalOpen(true);
   };
@@ -393,34 +420,71 @@ export default function CarManagement() {
 
       if (response.success) {
         const carId = editingCar ? editingCar.id : extractIdFromData(response.data);
-        const selectedLocationIds: number[] = Array.isArray(values.rentalLocationIds) ? values.rentalLocationIds : [];
+        const selectedLocationId: number | undefined = values.rentalLocationId;
 
-        if (carId && selectedLocationIds.length > 0) {
-          let existingLocationIds: number[] = [];
+        if (carId) {
+          // Lấy danh sách location hiện tại của xe
+          let existingCarRentalLocations: CarRentalLocationData[] = [];
           if (editingCar) {
             const existingResponse = await carRentalLocationApi.getByCarId(carId);
             if (existingResponse.success && existingResponse.data) {
-              const existingList = normalizeDotNetList<CarRentalLocationData>(existingResponse.data);
-              existingLocationIds = existingList.map((item) => item.locationId);
+              existingCarRentalLocations = normalizeDotNetList<CarRentalLocationData>(existingResponse.data);
             }
           }
 
-          const newLocationIds = selectedLocationIds.filter((id) => !existingLocationIds.includes(id));
+          const existingLocationId = existingCarRentalLocations.length > 0 
+            ? existingCarRentalLocations[0].locationId 
+            : undefined;
 
-          if (newLocationIds.length > 0) {
-            await Promise.all(
-              newLocationIds.map(async (locationId) => {
-                try {
-                  await carRentalLocationApi.create({
-                    carId,
-                    locationId,
-                    quantity: 1,
-                  });
-                } catch (locationError) {
-                  console.error(`[CarManagement] Failed to link car ${carId} with location ${locationId}:`, locationError);
-                }
-              }),
-            );
+          // Nếu có location được chọn
+          if (selectedLocationId !== undefined && selectedLocationId !== null) {
+            // Nếu location đã thay đổi hoặc chưa có location
+            if (existingLocationId !== selectedLocationId) {
+              // Xóa tất cả location cũ (nếu có)
+              if (existingCarRentalLocations.length > 0) {
+                await Promise.all(
+                  existingCarRentalLocations.map(async (item) => {
+                    try {
+                      if (item.id) {
+                        await carRentalLocationApi.delete(item.id);
+                      } else {
+                        await carRentalLocationApi.deleteByCarAndLocation(carId, item.locationId);
+                      }
+                    } catch (deleteError) {
+                      console.error(`[CarManagement] Failed to delete location ${item.locationId}:`, deleteError);
+                    }
+                  }),
+                );
+              }
+
+              // Thêm location mới
+              try {
+                await carRentalLocationApi.create({
+                  carId,
+                  locationId: selectedLocationId,
+                  quantity: 1,
+                });
+              } catch (locationError) {
+                console.error(`[CarManagement] Failed to link car ${carId} with location ${selectedLocationId}:`, locationError);
+              }
+            }
+          } else {
+            // Nếu không chọn location, xóa tất cả location cũ
+            if (existingCarRentalLocations.length > 0) {
+              await Promise.all(
+                existingCarRentalLocations.map(async (item) => {
+                  try {
+                    if (item.id) {
+                      await carRentalLocationApi.delete(item.id);
+                    } else {
+                      await carRentalLocationApi.deleteByCarAndLocation(carId, item.locationId);
+                    }
+                  } catch (deleteError) {
+                    console.error(`[CarManagement] Failed to delete location ${item.locationId}:`, deleteError);
+                  }
+                }),
+              );
+            }
           }
         }
 
@@ -518,6 +582,74 @@ export default function CarManagement() {
           {isActive ? 'Active' : 'Inactive'}
         </Tag>
       ),
+    },
+    {
+      title: 'Địa điểm',
+      key: 'locations',
+      width: 280,
+      render: (_value: unknown, record: Car) => {
+        const carLocations = (record as unknown as { carRentalLocations?: unknown })?.carRentalLocations;
+        if (!carLocations) {
+          return (
+            <Tag color="default" className="text-xs">
+              <span className="text-gray-400">Chưa gán</span>
+            </Tag>
+          );
+        }
+
+        const locationsList = normalizeDotNetList<RawCarRentalLocation>(carLocations);
+        if (locationsList.length === 0) {
+          return (
+            <Tag color="default" className="text-xs">
+              <span className="text-gray-400">Chưa gán</span>
+            </Tag>
+          );
+        }
+
+        // Chỉ lấy location đầu tiên
+        const firstLocation = locationsList[0];
+        const locationInfo = firstLocation.rentalLocation ?? firstLocation.RentalLocation;
+        
+        let locationName = '';
+        let locationAddress = '';
+        
+        if (locationInfo) {
+          locationName = locationInfo.name ?? locationInfo.Name ?? '';
+          locationAddress = locationInfo.address ?? locationInfo.Address ?? '';
+        } else {
+          // Nếu không có locationInfo, tìm trong rentalLocations state
+          const locationId = firstLocation.rentalLocationId ?? firstLocation.RentalLocationId ?? firstLocation.locationId ?? firstLocation.LocationId;
+          if (locationId) {
+            const foundLocation = rentalLocations.find(l => l.id === locationId);
+            if (foundLocation) {
+              locationName = foundLocation.name || '';
+              locationAddress = foundLocation.address || '';
+            }
+          }
+        }
+
+        if (!locationName && !locationAddress) {
+          return (
+            <Tag color="default" className="text-xs">
+              <span className="text-gray-400">Chưa gán</span>
+            </Tag>
+          );
+        }
+
+        return (
+          <div className="flex items-start gap-1.5 bg-blue-50 border border-blue-200 rounded-lg px-2 py-1.5 max-w-[250px]">
+            <MapPin size={12} className="flex-shrink-0 text-blue-600 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              {locationName && (
+                <div className="text-xs font-medium text-gray-800 leading-tight">{locationName}</div>
+              )}
+              {locationAddress && (
+                <div className="text-xs text-gray-600 leading-tight mt-0.5">{locationAddress}</div>
+              )}
+            </div>
+          </div>
+        );
+      },
     },
     {
       title: 'Thao tác',
@@ -737,15 +869,15 @@ export default function CarManagement() {
 
             <Form.Item
               label="Địa điểm cho thuê"
-              name="rentalLocationIds"
-              rules={[{ required: true, message: 'Vui lòng chọn ít nhất một địa điểm!' }]}
+              name="rentalLocationId"
+              rules={[{ required: true, message: 'Vui lòng chọn địa điểm!' }]}
             >
               <Select
-                mode="multiple"
-                placeholder="Chọn địa điểm xe hoạt động"
+                placeholder="Chọn địa điểm cho thuê xe"
                 loading={loadingLocations}
                 optionFilterProp="label"
                 showSearch
+                allowClear
                 filterOption={(input, option) => {
                   const label = option?.label?.toString() || '';
                   return label.toLowerCase().includes(input.toLowerCase());

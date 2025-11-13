@@ -375,6 +375,43 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     }
   }, [car, loadCarLocations]);
 
+  // Khi carLocations được load và chưa có carCoords/carAddress, lấy từ location đầu tiên
+  useEffect(() => {
+    if (carLocations.length > 0 && !carCoords && !carAddress && !carLocationsLoading) {
+      const firstLocation = carLocations[0];
+      console.log('[Car Detail] Using first location from carLocations:', firstLocation);
+      
+      // Format address: name + address hoặc chỉ address/name
+      let displayAddress = '';
+      if (firstLocation.name && firstLocation.address) {
+        displayAddress = `${firstLocation.name}, ${firstLocation.address}`;
+      } else if (firstLocation.address) {
+        displayAddress = firstLocation.address;
+      } else if (firstLocation.name) {
+        displayAddress = firstLocation.name;
+      }
+      
+      if (displayAddress) {
+        setCarAddress(displayAddress);
+        console.log('[Car Detail] ✅ Set carAddress from carLocations:', displayAddress);
+      }
+      
+      // Nếu có address, thử geocode để lấy coordinates
+      const addressToGeocode = firstLocation.address || firstLocation.name;
+      if (addressToGeocode && !carCoords) {
+        console.log('[Car Detail] Geocoding address from carLocations:', addressToGeocode);
+        geocodeAddress(addressToGeocode).then((coords) => {
+          if (coords) {
+            setCarCoords(coords);
+            console.log('[Car Detail] ✅ Set carCoords from geocoding:', coords);
+          }
+        }).catch((error) => {
+          console.error('[Car Detail] Geocoding error:', error);
+        });
+      }
+    }
+  }, [carLocations, carCoords, carAddress, carLocationsLoading]);
+
   // Helper: Parse coordinates từ string "lat,lng" hoặc "{lat},{lng}"
   const parseCoordinates = (coordsString: string | null | undefined): { lat: number; lng: number } | null => {
     if (!coordsString || typeof coordsString !== 'string') return null;
@@ -1102,13 +1139,48 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
               {!loading && !carCoords && !carAddress && (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <p className="text-sm text-gray-500 mb-2">
-                    <MapPin className="inline-block mr-2 text-gray-500" />
-                    Đang tải thông tin vị trí xe...
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    Vui lòng mở Developer Console (F12) để xem logs debug
-                  </p>
+                  {carLocationsLoading ? (
+                    <>
+                      <p className="text-sm text-gray-500 mb-2">
+                        <MapPin className="inline-block mr-2 text-gray-500" />
+                        Đang tải thông tin vị trí xe...
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        Vui lòng đợi trong giây lát...
+                      </p>
+                    </>
+                  ) : carLocations.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className="text-sm text-gray-700 mb-2">
+                        <MapPin className="inline-block mr-2 text-blue-600" />
+                        <strong>Xe có sẵn tại các địa điểm sau:</strong>
+                      </p>
+                      <div className="space-y-1">
+                        {carLocations.map((loc) => (
+                          <div key={loc.id} className="text-sm text-gray-600 pl-6">
+                            • {loc.name || loc.address || `Địa điểm #${loc.id}`}
+                            {loc.address && loc.name && ` - ${loc.address}`}
+                            {loc.quantity !== null && (
+                              <span className="text-gray-500 ml-2">({loc.quantity} xe)</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-gray-400 mt-2">
+                        Đang xử lý tọa độ để hiển thị bản đồ...
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-sm text-gray-500 mb-2">
+                        <MapPin className="inline-block mr-2 text-gray-500" />
+                        Chưa có thông tin vị trí xe
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        Xe này chưa được gán vào địa điểm thuê xe nào
+                      </p>
+                    </>
+                  )}
                 </div>
               )}
 

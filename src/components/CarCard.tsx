@@ -1,9 +1,10 @@
 "use client";
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Car } from "@/types/car";
 import { Zap, Users, MapPin, Star, Car as CarIcon } from "lucide-react";
 import { motion } from "framer-motion";
+import { rentalLocationApi } from "@/services/api";
 interface CarCardProps {
   car: Car;
 }
@@ -49,7 +50,10 @@ export default function CarCard({ car }: CarCardProps) {
   const locationDisplay = useMemo(() => {
     const defaultText = "Địa điểm đang cập nhật";
     const carLocations: any = car.carRentalLocations;
-    if (!carLocations) return defaultText;
+    
+    if (!carLocations) {
+      return defaultText;
+    }
 
     const locationsList: any[] = Array.isArray(carLocations)
       ? carLocations
@@ -59,36 +63,23 @@ export default function CarCard({ car }: CarCardProps) {
       return defaultText;
     }
 
-    const activeLocation = locationsList.find((loc: any) => {
-      const isActive = loc?.isActive ?? loc?.IsActive ?? loc?.rentalLocation?.isActive ?? loc?.rentalLocation?.IsActive;
-      const isDeleted = loc?.isDeleted ?? loc?.IsDeleted ?? loc?.rentalLocation?.isDeleted ?? loc?.rentalLocation?.IsDeleted;
-      return (isActive === true || isActive === 1 || isActive === undefined) &&
-             !(isDeleted === true || isDeleted === 1);
-    }) || locationsList[0];
+    // ✅ Chỉ lấy location đầu tiên (theo yêu cầu: 1 xe = 1 location)
+    const firstLocation = locationsList[0];
 
-    const locationInfo =
-      activeLocation?.rentalLocation ??
-      activeLocation?.RentalLocation ??
-      activeLocation;
+    // Lấy từ rentalLocation nested object
+    const rentalLocation = firstLocation?.rentalLocation ?? firstLocation?.RentalLocation;
+    
+    if (rentalLocation) {
+      const name = rentalLocation?.name ?? rentalLocation?.Name ?? null;
+      const address = rentalLocation?.address ?? rentalLocation?.Address ?? null;
 
-    const name =
-      locationInfo?.name ??
-      locationInfo?.Name ??
-      activeLocation?.name ??
-      activeLocation?.Name;
+      if (name && address) {
+        return `${name}, ${address}`;
+      }
 
-    const address =
-      locationInfo?.address ??
-      locationInfo?.Address ??
-      activeLocation?.address ??
-      activeLocation?.Address;
-
-    if (name && address) {
-      return `${name}, ${address}`;
+      if (address) return address;
+      if (name) return name;
     }
-
-    if (address) return address;
-    if (name) return name;
 
     return defaultText;
   }, [car.carRentalLocations]);
@@ -210,9 +201,11 @@ export default function CarCard({ car }: CarCardProps) {
         </div>
 
         {/* Địa điểm */}
-        <div className="flex items-center gap-1.5 mb-2 text-gray-600">
-          <MapPin className="text-gray-500" size={12} />
-          <span className="text-xs line-clamp-1">{locationDisplay}</span>
+        <div className="flex items-start gap-1.5 mb-2 text-gray-600">
+          <MapPin className="text-blue-600 mt-0.5 flex-shrink-0" size={14} />
+          <div className="flex-1 min-w-0">
+            <span className="text-xs leading-relaxed line-clamp-2 break-words">{locationDisplay}</span>
+          </div>
         </div>
 
         {/* Đánh giá & Số chuyến */}
