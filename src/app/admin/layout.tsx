@@ -26,6 +26,7 @@ import CarManagement from "@/components/admin/CarManagement";
 import CustomerManagement from "@/components/admin/CustomerManagement";
 import StaffManagement from "@/components/admin/StaffManagement";
 import AIAnalysis from "@/components/admin/AIAnalysis";
+import RevenueByLocation from "@/components/admin/RevenueByLocation";
 
 const { Header, Sider, Content, Footer } = Layout;
 
@@ -149,7 +150,7 @@ export default function AdminLayout() {
     if (selectedModule === "reports") {
       switch (selectedSubMenu) {
         case "1":
-          return <p>Báo cáo doanh thu theo điểm thuê</p>;
+          return <RevenueByLocation />;
         case "2":
           return <AIAnalysis variant="car-usage" />;
         case "3":
