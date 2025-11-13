@@ -1,15 +1,8 @@
 "use client";
-import React from "react";
+import React, { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Car } from "@/types/car";
-import {
-  ThunderboltOutlined,
-  TeamOutlined,
-  EnvironmentOutlined,
-  StarFilled,
-  CarOutlined
-} from "@ant-design/icons";
-import { Zap } from "lucide-react";
+import { Zap, Users, MapPin, Star, Car as CarIcon } from "lucide-react";
 interface CarCardProps {
   car: Car;
 }
@@ -51,6 +44,53 @@ export default function CarCard({ car }: CarCardProps) {
   // Giả định đánh giá và số chuyến (có thể lấy từ API sau)
   const rating = 5.0;
   const tripCount = Math.floor(Math.random() * 50) + 10; // Tạm thời random
+
+  const locationDisplay = useMemo(() => {
+    const defaultText = "Địa điểm đang cập nhật";
+    const carLocations: any = car.carRentalLocations;
+    if (!carLocations) return defaultText;
+
+    const locationsList: any[] = Array.isArray(carLocations)
+      ? carLocations
+      : carLocations?.$values || [];
+
+    if (!Array.isArray(locationsList) || locationsList.length === 0) {
+      return defaultText;
+    }
+
+    const activeLocation = locationsList.find((loc: any) => {
+      const isActive = loc?.isActive ?? loc?.IsActive ?? loc?.rentalLocation?.isActive ?? loc?.rentalLocation?.IsActive;
+      const isDeleted = loc?.isDeleted ?? loc?.IsDeleted ?? loc?.rentalLocation?.isDeleted ?? loc?.rentalLocation?.IsDeleted;
+      return (isActive === true || isActive === 1 || isActive === undefined) &&
+             !(isDeleted === true || isDeleted === 1);
+    }) || locationsList[0];
+
+    const locationInfo =
+      activeLocation?.rentalLocation ??
+      activeLocation?.RentalLocation ??
+      activeLocation;
+
+    const name =
+      locationInfo?.name ??
+      locationInfo?.Name ??
+      activeLocation?.name ??
+      activeLocation?.Name;
+
+    const address =
+      locationInfo?.address ??
+      locationInfo?.Address ??
+      activeLocation?.address ??
+      activeLocation?.Address;
+
+    if (name && address) {
+      return `${name}, ${address}`;
+    }
+
+    if (address) return address;
+    if (name) return name;
+
+    return defaultText;
+  }, [car.carRentalLocations]);
 
   return (
     <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-200 cursor-pointer group">
@@ -95,7 +135,7 @@ export default function CarCard({ car }: CarCardProps) {
         <div className="mb-2">
           <div className="inline-flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-lg px-2 py-1">
             <div className="w-4 h-4 bg-green-600 rounded-full flex items-center justify-center">
-              <CarOutlined className="text-white text-[10px]" />
+              <CarIcon className="text-white" size={10} />
             </div>
             <span className="text-green-700 font-medium text-xs">Miễn thế chấp</span>
           </div>
@@ -115,7 +155,7 @@ export default function CarCard({ car }: CarCardProps) {
             <span className="text-xs">{getTransmissionType()}</span>
           </div>
           <div className="flex items-center gap-1">
-            <TeamOutlined className="text-gray-500 text-sm" />
+            <Users className="text-gray-500" size={14} />
             <span className="text-xs">{car.seats} chỗ</span>
           </div>
           <div className="flex items-center gap-1">
@@ -128,14 +168,14 @@ export default function CarCard({ car }: CarCardProps) {
 
         {/* Địa điểm */}
         <div className="flex items-center gap-1.5 mb-2 text-gray-600">
-          <EnvironmentOutlined className="text-gray-500 text-xs" />
-          <span className="text-xs line-clamp-1">Phường Hiệp Bình Chánh, Quận Thủ Đức</span>
+          <MapPin className="text-gray-500" size={12} />
+          <span className="text-xs line-clamp-1">{locationDisplay}</span>
         </div>
 
         {/* Đánh giá & Số chuyến */}
         <div className="flex items-center gap-3 mb-3">
           <div className="flex items-center gap-1">
-            <StarFilled className="text-yellow-400 text-sm" />
+            <Star className="text-yellow-400" size={14} />
             <span className="font-semibold text-gray-900 text-sm">{rating.toFixed(1)}</span>
           </div>
           <div className="flex items-center gap-1">

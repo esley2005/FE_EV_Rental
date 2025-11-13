@@ -5,14 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import {
-  MailOutlined,
-  LockOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  WarningOutlined,
-  UserOutlined,
-} from "@ant-design/icons";
+import { Mail, Lock, CheckCircle, XCircle, AlertTriangle, User } from "lucide-react";
 import { Input, Button, Checkbox, Modal, notification as antdNotification } from "antd";
 import { authApi } from "@/services/api";
 
@@ -45,7 +38,7 @@ export default function RegisterPage() {
         message: "Mật khẩu không khớp",
         description: "Mật khẩu xác nhận không trùng khớp!",
         placement: "topRight",
-        icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+        icon: <XCircle color="#ff4d4f" />,
       });
       return;
     }
@@ -54,7 +47,7 @@ export default function RegisterPage() {
         message: "Chưa đồng ý điều khoản",
         description: "Vui lòng đồng ý điều khoản để tiếp tục!",
         placement: "topRight",
-        icon: <WarningOutlined style={{ color: "#faad14" }} />,
+        icon: <AlertTriangle color="#faad14" />,
       });
       return;
     }
@@ -72,7 +65,7 @@ export default function RegisterPage() {
           message: "Đăng ký thất bại",
           description: response.error,
           placement: "topRight",
-          icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+          icon: <XCircle color="#ff4d4f" />,
         });
         return;
       }
@@ -81,7 +74,7 @@ export default function RegisterPage() {
         message: "Đăng ký thành công!",
         description: "Vui lòng kiểm tra email để nhận mã OTP xác thực.",
         placement: "topRight",
-        icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
+        icon: <CheckCircle color="#52c41a" />,
         duration: 4,
       });
 
@@ -93,7 +86,7 @@ export default function RegisterPage() {
         message: "Lỗi kết nối",
         description: "Không thể kết nối đến máy chủ. Vui lòng thử lại!",
         placement: "topRight",
-        icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+        icon: <XCircle color="#ff4d4f" />,
       });
     } finally {
       setLoading(false);
@@ -131,7 +124,7 @@ export default function RegisterPage() {
               <Input
                 name="fullName"
                 size="large"
-                prefix={<UserOutlined />}
+                prefix={<User />}
                 placeholder="Họ và tên"
                 value={formData.fullName}
                 onChange={handleChange}
@@ -143,7 +136,7 @@ export default function RegisterPage() {
                 name="email"
                 type="email"
                 size="large"
-                prefix={<MailOutlined />}
+                prefix={<Mail />}
                 placeholder="Email"
                 value={formData.email}
                 onChange={handleChange}
@@ -154,7 +147,7 @@ export default function RegisterPage() {
               <Input.Password
                 name="password"
                 size="large"
-                prefix={<LockOutlined />}
+                prefix={<Lock />}
                 placeholder="Mật khẩu"
                 value={formData.password}
                 onChange={handleChange}
@@ -165,7 +158,7 @@ export default function RegisterPage() {
               <Input.Password
                 name="confirmPassword"
                 size="large"
-                prefix={<LockOutlined />}
+                prefix={<Lock />}
                 placeholder="Xác nhận mật khẩu"
                 value={formData.confirmPassword}
                 onChange={handleChange}

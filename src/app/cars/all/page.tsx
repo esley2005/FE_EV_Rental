@@ -3,15 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
-import { 
-  SearchOutlined,
-  FilterOutlined,
-  ThunderboltOutlined,
-  TeamOutlined,
-  DollarOutlined,
-  CloseCircleOutlined,
-  EnvironmentOutlined
-} from "@ant-design/icons";
+import { Search, Zap, Users, XCircle, MapPin } from "lucide-react";
 import { 
   Card,
   Input,
@@ -377,7 +369,7 @@ export default function AllCarsPage() {
           message: 'Lỗi tải dữ liệu',
           description: response.error || 'Không thể tải danh sách xe!',
           placement: 'topRight',
-          icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+          icon: <XCircle color="#ff4d4f" />, 
         });
       }
     } catch (error) {
@@ -386,7 +378,7 @@ export default function AllCarsPage() {
         message: 'Có lỗi xảy ra',
         description: 'Không thể kết nối đến máy chủ!',
         placement: 'topRight',
-        icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+  icon: <XCircle color="#ff4d4f" />, 
       });
     } finally {
       setLoading(false);
@@ -436,10 +428,11 @@ export default function AllCarsPage() {
     <>
       {contextHolder}
   <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100">
-        {/* Header chung */}
-        <Header />
+    {/* Header chung */}
+    <Header />
 
-        <div className="max-w-7xl mx-auto px-4 py-8">
+    {/* Add top padding to avoid header overlap */}
+    <div className="max-w-7xl mx-auto px-4 pt-24 pb-8">
           {/* Page title + count */}
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-2xl font-bold text-gray-800">Danh sách xe</h1>
@@ -452,7 +445,7 @@ export default function AllCarsPage() {
             <Alert
               message={
                 <div className="flex items-center gap-2">
-                  <EnvironmentOutlined />
+                  <MapPin />
                   <span>
                     Đang tìm xe tại: <strong>{selectedLocation.name}</strong>
                     {selectedLocation.address && ` - ${selectedLocation.address}`}
@@ -480,7 +473,7 @@ export default function AllCarsPage() {
                 <Input
                   size="large"
                   placeholder="Tìm kiếm theo tên xe, model..."
-                  prefix={<SearchOutlined />}
+                  prefix={<Search />}
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                   onPressEnter={handleSearch}
@@ -490,7 +483,7 @@ export default function AllCarsPage() {
               <Button
                 type="primary"
                 size="large"
-                icon={<SearchOutlined />}
+                icon={<Search />}
                 onClick={handleSearch}
                 className="bg-blue-600"
               >
@@ -563,11 +556,11 @@ export default function AllCarsPage() {
 
                       <div className="space-y-2 mb-3">
                         <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <TeamOutlined className="text-blue-600" />
+                          <Users className="text-blue-600" />
                           <span>{car.seats} chỗ</span>
                         </div>
                         <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <ThunderboltOutlined className="text-yellow-600" />
+                          <Zap className="text-yellow-600" />
                           <span>{car.batteryDuration} km</span>
                         </div>
                         <div className="flex items-center gap-2 text-sm text-gray-600">

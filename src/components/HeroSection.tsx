@@ -2,12 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { 
-  CarOutlined, 
-  CalendarOutlined, 
-  EnvironmentOutlined,
-  SearchOutlined
-} from "@ant-design/icons";
+import { Car, MapPin, Search } from "lucide-react";
 import { DatePicker, Select, message } from "antd";
 import type { RangePickerProps } from "antd/es/date-picker";
 import dayjs, { Dayjs } from "dayjs";
@@ -142,7 +137,7 @@ export default function HeroSection() {
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
-              <CarOutlined />
+              <Car />
               <span>Xe tự lái</span>
             </button>
             <button
@@ -153,7 +148,7 @@ export default function HeroSection() {
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
-              <CarOutlined />
+              <Car />
               <span>Xe có tài xế</span>
             </button>
 
@@ -164,14 +159,14 @@ export default function HeroSection() {
             {/* Location Select */}
             <div className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                <EnvironmentOutlined className="mr-1" /> Địa điểm thuê xe
+                <MapPin className="mr-1 inline-block" size={16} /> Địa điểm thuê xe
               </label>
               <Select
                 size="large"
                 value={selectedLocationId}
                 onChange={setSelectedLocationId}
                 placeholder="Chọn địa điểm thuê xe"
-                className="w-full"
+                className="w-full location-select"
                 loading={loadingLocations}
                 showSearch
                 filterOption={(input, option) => {
@@ -179,6 +174,7 @@ export default function HeroSection() {
                   return label.toLowerCase().includes(input.toLowerCase());
                 }}
                 optionFilterProp="label"
+                optionLabelProp="children"
               >
                 {locations.map((location) => (
                   <Select.Option
@@ -186,9 +182,13 @@ export default function HeroSection() {
                     value={location.id}
                     label={`${location.name} - ${location.address}`}
                   >
-                    <div>
-                      <div className="font-medium">{location.name}</div>
-                      <div className="text-xs text-gray-500">{location.address}</div>
+                    <div className="flex flex-col leading-tight">
+                      <span className="text-base font-medium text-gray-900">
+                        {location.name}
+                      </span>
+                      {location.address && (
+                        <span className="text-xs text-gray-500">{location.address}</span>
+                      )}
                     </div>
                   </Select.Option>
                 ))}
@@ -210,7 +210,7 @@ export default function HeroSection() {
                 value={dateRange}
                 onChange={(dates) => setDateRange(dates as [Dayjs | null, Dayjs | null] | null)}
                 disabledDate={disabledDate}
-                className="w-full"
+                className="w-full time-range-picker"
                 placeholder={["Thời gian bắt đầu", "Thời gian kết thúc"]}
               />
             </div>
@@ -221,7 +221,7 @@ export default function HeroSection() {
             onClick={handleSearch}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-lg transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
           >
-            <SearchOutlined />
+            <Search />
             <span>Tìm Xe</span>
           </button>
         </div>

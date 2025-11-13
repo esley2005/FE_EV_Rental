@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { MailOutlined, LockOutlined, SafetyOutlined, CheckCircleOutlined, CloseCircleOutlined, WarningOutlined } from "@ant-design/icons";
+import { motion } from "framer-motion";
+import { Mail, Lock, Shield, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 import { Card, Input, Button, notification as antdNotification, Steps } from "antd";
 import { authApi } from "@/services/api";
 
@@ -31,7 +33,7 @@ export default function ForgotPasswordPage() {
         message: 'Lỗi',
         description: 'Vui lòng nhập email!',
         placement: 'topRight',
-        icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+        icon: <XCircle color="#ff4d4f" />,
       });
       return;
     }
@@ -45,7 +47,7 @@ export default function ForgotPasswordPage() {
           message: 'Thành công!',
           description: 'Mã OTP đã được gửi đến email của bạn. Vui lòng kiểm tra hộp thư!',
           placement: 'topRight',
-          icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+          icon: <CheckCircle color="#52c41a" />,
           duration: 5,
         });
         setCurrentStep(1);
@@ -54,7 +56,7 @@ export default function ForgotPasswordPage() {
           message: 'Gửi OTP thất bại',
           description: response.error || 'Không thể gửi OTP. Vui lòng kiểm tra email!',
           placement: 'topRight',
-          icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+          icon: <XCircle color="#ff4d4f" />,
         });
       }
     } catch (error) {
@@ -63,7 +65,7 @@ export default function ForgotPasswordPage() {
         message: 'Có lỗi xảy ra',
         description: 'Không thể kết nối đến máy chủ. Vui lòng thử lại!',
         placement: 'topRight',
-        icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+        icon: <XCircle color="#ff4d4f" />,
       });
     } finally {
       setLoading(false);
@@ -79,7 +81,7 @@ export default function ForgotPasswordPage() {
         message: 'Thông tin chưa đầy đủ',
         description: 'Vui lòng điền đầy đủ thông tin!',
         placement: 'topRight',
-        icon: <WarningOutlined style={{ color: '#faad14' }} />,
+        icon: <AlertTriangle color="#faad14" />,
       });
       return;
     }
@@ -89,7 +91,7 @@ export default function ForgotPasswordPage() {
         message: 'Mật khẩu không khớp',
         description: 'Mật khẩu xác nhận không khớp với mật khẩu mới!',
         placement: 'topRight',
-        icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+        icon: <XCircle color="#ff4d4f" />,
       });
       return;
     }
@@ -99,7 +101,7 @@ export default function ForgotPasswordPage() {
         message: 'Mật khẩu yếu',
         description: 'Mật khẩu phải có ít nhất 6 ký tự!',
         placement: 'topRight',
-        icon: <WarningOutlined style={{ color: '#faad14' }} />,
+        icon: <AlertTriangle color="#faad14" />,
       });
       return;
     }
@@ -117,7 +119,7 @@ export default function ForgotPasswordPage() {
           message: 'Đặt lại mật khẩu thành công!',
           description: 'Mật khẩu của bạn đã được cập nhật. Đang chuyển đến trang đăng nhập...',
           placement: 'topRight',
-          icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+          icon: <CheckCircle color="#52c41a" />,
           duration: 3,
         });
         setTimeout(() => {
@@ -128,7 +130,7 @@ export default function ForgotPasswordPage() {
           message: 'Xác nhận thất bại',
           description: response.error || 'Mã OTP không đúng hoặc đã hết hạn!',
           placement: 'topRight',
-          icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+          icon: <XCircle color="#ff4d4f" />,
         });
       }
     } catch (error) {
@@ -137,7 +139,7 @@ export default function ForgotPasswordPage() {
         message: 'Có lỗi xảy ra',
         description: 'Không thể đặt lại mật khẩu. Vui lòng thử lại!',
         placement: 'topRight',
-        icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+        icon: <XCircle color="#ff4d4f" />,
       });
     } finally {
       setLoading(false);
@@ -147,11 +149,11 @@ export default function ForgotPasswordPage() {
   const steps = [
     {
       title: "Nhập Email",
-      icon: <MailOutlined />,
+      icon: <Mail />,
     },
     {
       title: "Xác Nhận OTP",
-      icon: <SafetyOutlined />,
+      icon: <Shield />,
     },
   ];
 
@@ -160,13 +162,33 @@ export default function ForgotPasswordPage() {
       {contextHolder}
       <div className="min-h-screen bg-gradient-to-br from-blue-700 via-blue-800 to-gray-900 flex flex-col items-center justify-center px-4">
         {/* Logo */}
-        <div className="mb-8 text-center text-white">
-        <h1 className="text-4xl font-bold tracking-wide">EV RENTAL</h1>
-        <p className="text-gray-200 mt-2 text-sm">Đặt lại mật khẩu</p>
-      </div>
+       <motion.div
+          initial={{ opacity: 0, y: -30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+          className="mb-8 text-center text-white"
+        >
+          <Link href="/" aria-label="Về trang chủ" className="inline-block">
+            <Image
+              src="/logo_ev.png"
+              alt="EV Rental"
+              width={70}
+              height={70}
+              priority
+              className="mx-auto hover:opacity-90 transition-opacity"
+            />
+          </Link>
+          <p className="text-gray-200 mt-2 text-sm">Hệ thống quản trị thuê xe thông minh</p>
+        </motion.div>
 
-      {/* Form Card */}
-      <div className="w-full max-w-md">
+
+      {/* Form Card (animated) */}
+      <motion.div
+        initial={{ opacity: 0, y: 40 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, delay: 0.2 }}
+        className="w-full max-w-md"
+      >
         <Card
           className="shadow-2xl rounded-2xl"
           styles={{ body: { padding: "2rem" } }}
@@ -191,7 +213,7 @@ export default function ForgotPasswordPage() {
               <Input
                 type="email"
                 size="large"
-                prefix={<MailOutlined />}
+                prefix={<Mail />}
                 placeholder="Nhập email của bạn"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -231,7 +253,7 @@ export default function ForgotPasswordPage() {
 
               <Input
                 size="large"
-                prefix={<SafetyOutlined />}
+                prefix={<Shield />}
                 placeholder="Nhập mã OTP (6 chữ số)"
                 value={otp}
                 onChange={(e) => setOtp(e.target.value)}
@@ -241,7 +263,7 @@ export default function ForgotPasswordPage() {
 
               <Input.Password
                 size="large"
-                prefix={<LockOutlined />}
+                prefix={<Lock />}
                 placeholder="Mật khẩu mới (tối thiểu 6 ký tự)"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
@@ -250,7 +272,7 @@ export default function ForgotPasswordPage() {
 
               <Input.Password
                 size="large"
-                prefix={<LockOutlined />}
+                prefix={<Lock />}
                 placeholder="Xác nhận mật khẩu mới"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
@@ -292,12 +314,17 @@ export default function ForgotPasswordPage() {
             </form>
           )}
         </Card>
-      </div>
+      </motion.div>
 
-      {/* Footer */}
-      <footer className="mt-10 text-gray-300 text-sm">
+      {/* Footer (fade-in) */}
+      <motion.footer
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1 }}
+        className="mt-10 text-gray-300 text-sm"
+      >
         EV Rent (GROUP 5 SWP391)
-      </footer>
+      </motion.footer>
       </div>
     </>
   );

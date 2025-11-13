@@ -18,17 +18,84 @@ import {
   Upload,
   Image
 } from "antd";
-import {
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  UploadOutlined,
-  CarOutlined
-} from "@ant-design/icons";
-import { carsApi } from "@/services/api";
+import { Plus, Edit, Trash2, CheckCircle, Upload as UploadIcon, Car as CarIcon } from "lucide-react";
+import { carsApi, rentalLocationApi, carRentalLocationApi } from "@/services/api";
 import type { Car } from "@/types/car";
+import type { RentalLocationData, CarRentalLocationData } from "@/services/api";
+import type { UploadRequestOption as RcCustomRequestOptions } from "rc-upload/lib/interface";
+
+type DotNetList<T> = {
+  $values?: T[];
+  data?: T[] | { $values?: T[] };
+};
+
+type RawCarRentalLocation = {
+  rentalLocationId?: number;
+  RentalLocationId?: number;
+  locationId?: number;
+  LocationId?: number;
+  rentalLocation?: RawRentalLocation | null;
+  RentalLocation?: RawRentalLocation | null;
+  id?: number;
+  Id?: number;
+  isActive?: boolean | number;
+  IsActive?: boolean | number;
+  isDeleted?: boolean | number;
+  IsDeleted?: boolean | number;
+};
+
+type RawRentalLocation = {
+  id?: number;
+  Id?: number;
+  name?: string;
+  Name?: string;
+  address?: string;
+  Address?: string;
+  isActive?: boolean | number;
+  IsActive?: boolean | number;
+  isDeleted?: boolean | number;
+  IsDeleted?: boolean | number;
+};
+
+function normalizeDotNetList<T>(input: unknown): T[] {
+  if (!input) return [];
+  if (Array.isArray(input)) return input as T[];
+  if (typeof input === "object") {
+    const obj = input as DotNetList<T>;
+    if (Array.isArray(obj.$values)) return obj.$values;
+    if (Array.isArray(obj.data)) return obj.data as T[];
+    if (obj.data && typeof obj.data === "object" && Array.isArray(obj.data.$values)) {
+      return obj.data.$values;
+    }
+  }
+  return [];
+}
+
+function extractIdFromData(data: unknown): number | null {
+  if (!data || typeof data !== "object") return null;
+  const obj = data as { id?: number; Id?: number; carId?: number; CarId?: number };
+  return obj.id ?? obj.Id ?? obj.carId ?? obj.CarId ?? null;
+}
+
+type CarFormValues = {
+  name: string;
+  model: string;
+  seats: number;
+  sizeType: string;
+  trunkCapacity: number;
+  batteryType: string;
+  batteryDuration: number;
+  rentPricePerDay: number;
+  rentPricePerHour: number;
+  rentPricePerDayWithDriver: number;
+  rentPricePerHourWithDriver: number;
+  status: number;
+  imageUrl: string;
+  imageUrl2?: string;
+  imageUrl3?: string;
+  isActive: boolean;
+  rentalLocationIds?: number[];
+};
 
 export default function CarManagement() {
   const [api, contextHolder] = antdNotification.useNotification();
@@ -36,11 +103,14 @@ export default function CarManagement() {
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingCar, setEditingCar] = useState<Car | null>(null);
-  const [form] = Form.useForm();
+  const [form] = Form.useForm<CarFormValues>();
   const [uploading, setUploading] = useState(false);
+  const [rentalLocations, setRentalLocations] = useState<RentalLocationData[]>([]);
+  const [loadingLocations, setLoadingLocations] = useState(false);
 
   useEffect(() => {
     loadCars();
+    loadRentalLocations();
   }, []);
 
   const loadCars = async () => {
@@ -48,12 +118,11 @@ export default function CarManagement() {
     try {
       const response = await carsApi.getAll();
       if (response.success && response.data) {
-        // Backend C# trả về { "$values": [...] }
-        const carsData = (response.data as any)?.$values || response.data;
-        const carsList = Array.isArray(carsData) ? carsData : [];
-        
+        const carsList = normalizeDotNetList<Car>(response.data);
+        const fallbackList = Array.isArray(response.data) ? (response.data as Car[]) : [];
+        const listToUse = carsList.length > 0 ? carsList : fallbackList;
         // Filter out deleted cars
-        const activeCars = carsList.filter((car: Car) => !car.isDeleted);
+        const activeCars = listToUse.filter((car) => !car.isDeleted);
         setCars(activeCars);
       }
     } catch (error) {
@@ -63,19 +132,80 @@ export default function CarManagement() {
     }
   };
 
+  const loadRentalLocations = async () => {
+    setLoadingLocations(true);
+    try {
+      const response = await rentalLocationApi.getAll();
+      if (response.success && response.data) {
+        const locationsData = normalizeDotNetList<RentalLocationData>(response.data);
+        const activeLocations = locationsData.filter((loc) => loc.isActive !== false);
+        setRentalLocations(activeLocations);
+      }
+    } catch (error) {
+      console.error('Load rental locations error:', error);
+    } finally {
+      setLoadingLocations(false);
+    }
+  };
+
+  const extractRentalLocationIds = (car: Car | null): number[] => {
+    if (!car) return [];
+    const carLocations = (car as unknown as { carRentalLocations?: unknown })?.carRentalLocations;
+    if (!carLocations) return [];
+
+    const locationsList = normalizeDotNetList<RawCarRentalLocation>(carLocations);
+
+    const ids = locationsList
+      .map((loc) => {
+        const locationInfo = loc.rentalLocation ?? loc.RentalLocation ?? loc;
+
+        const id =
+          loc.rentalLocationId ??
+          loc.RentalLocationId ??
+          loc.locationId ??
+          loc.LocationId ??
+          locationInfo?.id ??
+          locationInfo?.Id;
+
+        return id !== undefined && id !== null ? Number(id) : null;
+      })
+      .filter((id): id is number => id !== null);
+
+    return Array.from(new Set(ids));
+  };
+
   const handleAdd = () => {
     setEditingCar(null);
     form.resetFields();
     form.setFieldsValue({
       status: 0,
-      isActive: true
+      isActive: true,
+      rentalLocationIds: rentalLocations.length > 0 ? [rentalLocations[0].id] : []
     });
     setModalOpen(true);
   };
 
   const handleEdit = (car: Car) => {
     setEditingCar(car);
-    form.setFieldsValue(car);
+    form.setFieldsValue({
+      name: car.name ?? "",
+      model: car.model ?? "",
+      seats: car.seats,
+      sizeType: car.sizeType ?? "",
+      trunkCapacity: car.trunkCapacity,
+      batteryType: car.batteryType ?? "",
+      batteryDuration: car.batteryDuration,
+      rentPricePerDay: car.rentPricePerDay,
+      rentPricePerHour: car.rentPricePerHour,
+      rentPricePerDayWithDriver: car.rentPricePerDayWithDriver,
+      rentPricePerHourWithDriver: car.rentPricePerHourWithDriver,
+      status: car.status,
+      imageUrl: car.imageUrl,
+      imageUrl2: car.imageUrl2 ?? undefined,
+      imageUrl3: car.imageUrl3 ?? undefined,
+      isActive: car.isActive,
+      rentalLocationIds: extractRentalLocationIds(car),
+    });
     setModalOpen(true);
   };
 
@@ -89,7 +219,7 @@ export default function CarManagement() {
         api.success({
           message: 'Xóa xe thành công!',
           placement: 'topRight',
-          icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+          icon: <CheckCircle color="#52c41a" />,
         });
         // Reload danh sách xe
         await loadCars();
@@ -169,62 +299,64 @@ export default function CarManagement() {
     }
   };
 
-  const handleImageUpload = async (options: any, fieldName: string = 'imageUrl') => {
+  const handleImageUpload = async (options: RcCustomRequestOptions, fieldName: string = 'imageUrl') => {
     const { file, onSuccess, onError } = options;
     
     // Validate file type
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
+    const fileObj = file as File;
+    if (!allowedTypes.includes(fileObj.type)) {
       api.error({
         message: 'Lỗi',
         description: 'Chỉ chấp nhận file ảnh (JPG, PNG, GIF, WEBP)!',
         placement: 'topRight',
       });
-      onError(new Error('Invalid file type'));
+      onError?.(new Error('Invalid file type'));
       return;
     }
     
     // Validate file size (max 5MB)
     const maxSize = 5 * 1024 * 1024; // 5MB
-    if (file.size > maxSize) {
+    if (fileObj.size > maxSize) {
       api.error({
         message: 'Lỗi',
         description: 'Kích thước file không được vượt quá 5MB!',
         placement: 'topRight',
       });
-      onError(new Error('File too large'));
+      onError?.(new Error('File too large'));
       return;
     }
     
     setUploading(true);
     
     try {
-      const imageUrl = await handleUploadToCloudinary(file);
-      form.setFieldsValue({ [fieldName]: imageUrl });
+      const imageUrl = await handleUploadToCloudinary(fileObj);
+      form.setFieldsValue({ [fieldName]: imageUrl } as Partial<CarFormValues>);
       api.success({
         message: 'Upload ảnh thành công!',
         description: 'Ảnh đã được tải lên Cloudinary và link đã được cập nhật.',
         placement: 'topRight',
-        icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+        icon: <CheckCircle color="#52c41a" />,
       });
-      onSuccess(imageUrl);
+      onSuccess?.(imageUrl);
     } catch (error) {
+      const err = error instanceof Error ? error : new Error('Upload ảnh thất bại');
       api.error({
         message: 'Upload ảnh thất bại!',
-        description: error instanceof Error ? error.message : 'Vui lòng kiểm tra config Cloudinary và thử lại.',
+        description: err.message || 'Vui lòng kiểm tra config Cloudinary và thử lại.',
         placement: 'topRight',
       });
-      onError(error);
+      onError?.(err);
     } finally {
       setUploading(false);
     }
   };
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: CarFormValues) => {
     setLoading(true);
     try {
       // Map sang PascalCase để tương thích backend .NET (tránh lỗi 'rentPricePerDay is required')
-      const carDataPascal: any = {
+      const carDataPascal: Record<string, unknown> = {
         // Khi update có thể cần Id
         ...(editingCar ? { Id: editingCar.id } : {}),
         Model: values.model,
@@ -244,27 +376,58 @@ export default function CarManagement() {
         Status: values.status,
         IsActive: values.isActive !== undefined ? values.isActive : true,
         IsDeleted: false,
-        // Quan hệ: gửi mảng rỗng nếu không có
         CarRentalLocations: [],
         RentalOrders: [],
         CreatedAt: editingCar ? editingCar.createdAt : new Date().toISOString(),
         UpdatedAt: editingCar ? new Date().toISOString() : null,
       };
 
-      let response;
+      let response: Awaited<ReturnType<typeof carsApi.create>>;
       if (editingCar) {
         // Update với payload PascalCase (ép kiểu any để vượt qua excess property check)
-        response = await carsApi.update(editingCar.id, carDataPascal as any);
+        response = await carsApi.update(editingCar.id, carDataPascal as Partial<Car>);
       } else {
         // Tạo mới
-        response = await carsApi.create(carDataPascal as any);
+        response = await carsApi.create(carDataPascal as Partial<Car>);
       }
 
       if (response.success) {
+        const carId = editingCar ? editingCar.id : extractIdFromData(response.data);
+        const selectedLocationIds: number[] = Array.isArray(values.rentalLocationIds) ? values.rentalLocationIds : [];
+
+        if (carId && selectedLocationIds.length > 0) {
+          let existingLocationIds: number[] = [];
+          if (editingCar) {
+            const existingResponse = await carRentalLocationApi.getByCarId(carId);
+            if (existingResponse.success && existingResponse.data) {
+              const existingList = normalizeDotNetList<CarRentalLocationData>(existingResponse.data);
+              existingLocationIds = existingList.map((item) => item.locationId);
+            }
+          }
+
+          const newLocationIds = selectedLocationIds.filter((id) => !existingLocationIds.includes(id));
+
+          if (newLocationIds.length > 0) {
+            await Promise.all(
+              newLocationIds.map(async (locationId) => {
+                try {
+                  await carRentalLocationApi.create({
+                    carId,
+                    locationId,
+                    quantity: 1,
+                  });
+                } catch (locationError) {
+                  console.error(`[CarManagement] Failed to link car ${carId} with location ${locationId}:`, locationError);
+                }
+              }),
+            );
+          }
+        }
+
         api.success({
           message: editingCar ? 'Cập nhật xe thành công!' : 'Thêm xe thành công!',
           placement: 'topRight',
-          icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+          icon: <CheckCircle color="#52c41a" />,
         });
         setModalOpen(false);
         loadCars();
@@ -360,12 +523,12 @@ export default function CarManagement() {
       title: 'Thao tác',
       key: 'action',
       width: 150,
-      render: (_: any, record: Car) => (
+      render: (_value: unknown, record: Car) => (
         <Space>
           <Button
             type="primary"
             size="small"
-            icon={<EditOutlined />}
+            icon={<Edit />}
             onClick={() => handleEdit(record)}
           >
             Sửa
@@ -377,7 +540,7 @@ export default function CarManagement() {
             okText="Xóa"
             cancelText="Hủy"
           >
-            <Button danger size="small" icon={<DeleteOutlined />}>
+            <Button danger size="small" icon={<Trash2 />}>
               Xóa
             </Button>
           </Popconfirm>
@@ -392,13 +555,13 @@ export default function CarManagement() {
       <Card
         title={
           <div className="flex items-center gap-2">
-            <CarOutlined /> Quản lý xe
+            <CarIcon /> Quản lý xe
           </div>
         }
         extra={
           <Button
             type="primary"
-            icon={<PlusOutlined />}
+            icon={<Plus />}
             onClick={handleAdd}
             className="bg-blue-600"
           >
@@ -554,6 +717,37 @@ export default function CarManagement() {
                 <Select.Option value={1}>Hết xe</Select.Option>
               </Select>
             </Form.Item>
+
+            <Form.Item
+              label="Địa điểm cho thuê"
+              name="rentalLocationIds"
+              rules={[{ required: true, message: 'Vui lòng chọn ít nhất một địa điểm!' }]}
+            >
+              <Select
+                mode="multiple"
+                placeholder="Chọn địa điểm xe hoạt động"
+                loading={loadingLocations}
+                optionFilterProp="label"
+                showSearch
+                filterOption={(input, option) => {
+                  const label = option?.label?.toString() || '';
+                  return label.toLowerCase().includes(input.toLowerCase());
+                }}
+              >
+                {rentalLocations.map((location) => (
+                  <Select.Option
+                    key={location.id}
+                    value={location.id}
+                    label={`${location.name} - ${location.address}`}
+                  >
+                    <div className="flex flex-col">
+                      <span className="font-medium text-gray-900">{location.name}</span>
+                      <span className="text-xs text-gray-500">{location.address}</span>
+                    </div>
+                  </Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
           </div>
 
           {/* Ảnh chính */}
@@ -595,7 +789,7 @@ export default function CarManagement() {
               maxCount={1}
             >
               <Button 
-                icon={<UploadOutlined />} 
+                icon={<UploadIcon />} 
                 loading={uploading}
                 type="dashed"
                 block
@@ -643,7 +837,7 @@ export default function CarManagement() {
               maxCount={1}
             >
               <Button 
-                icon={<UploadOutlined />} 
+                icon={<UploadIcon />} 
                 loading={uploading}
                 type="dashed"
                 block
@@ -691,7 +885,7 @@ export default function CarManagement() {
               maxCount={1}
             >
               <Button 
-                icon={<UploadOutlined />} 
+                icon={<UploadIcon />} 
                 loading={uploading}
                 type="dashed"
                 block

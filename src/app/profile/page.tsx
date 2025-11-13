@@ -95,7 +95,7 @@ export default function ProfilePage() {
           localStorage.setItem("user", JSON.stringify(response.data));
 
           // tải xác thực giấy phép lái xe nha
-          if (response.data.driverLicenseStatus !== undefined) {
+if (response.data.driverLicenseStatus !== undefined) {
             setLicenseVerified(response.data.driverLicenseStatus === 1);
           }
 
@@ -184,7 +184,7 @@ export default function ProfilePage() {
       api.error({
         message: "Có lỗi xảy ra",
         description: "Không thể đổi mật khẩu. Vui lòng thử lại!",
-        placement: "topRight",
+placement: "topRight",
         icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
       });
     } finally {
@@ -257,8 +257,7 @@ export default function ProfilePage() {
                       <div className="text-sm text-gray-500">Điểm</div>
                       <div className="font-medium">0 điểm</div>
                     </div>
-
-                    <div className="ml-auto flex flex-col items-end gap-2">
+<div className="ml-auto flex flex-col items-end gap-2">
                       <div className="flex gap-2">
                         {/* small status tag - license verification state */}
                         {licenseVerified === true && <Tag color="success">GPLX: Đã xác thực</Tag>}
@@ -316,7 +315,7 @@ export default function ProfilePage() {
                                 {user.dateOfBirth ? dayjs(user.dateOfBirth).format("DD/MM/YYYY") : "Chưa cập nhật"}
                               </Descriptions.Item>
                             </Descriptions>
-                            <Button
+<Button
                               type="primary"
                               icon={<EditOutlined />}
                               onClick={() => setEditing(true)}
@@ -369,7 +368,7 @@ export default function ProfilePage() {
                         </Form.Item>
                         <Form.Item label="Mật khẩu mới" name="newPassword" rules={[{ required: true, min: 6 }]}>
                           <Input.Password size="large" prefix={<LockOutlined />} />
-                        </Form.Item>
+</Form.Item>
                         <Form.Item
                           label="Xác nhận mật khẩu mới"
                           name="confirmPassword"
