@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { authUtils } from "@/utils/auth";
 import NotificationDropdown from "./NotificationDropdown";
+import { motion, AnimatePresence } from "framer-motion";
 
 type HeaderProps = {
   colorScheme?: "blue" | "black";
@@ -51,15 +52,22 @@ export default function Header({ colorScheme = "blue" }: HeaderProps) {
       };
 
   return (
-    <header className="fixed top-0 left-0 w-full z-50 bg-white shadow-md">
+    <motion.header 
+      className="fixed top-0 left-0 w-full z-50 bg-white shadow-md"
+      initial={{ y: -100 }}
+      animate={{ y: 0 }}
+      transition={{ duration: 0.5, ease: "easeOut" }}
+    >
       <div className="max-w-6xl mx-auto px-4 py-2 flex items-center justify-between">
         {/* === Left: Logo + Menu Mobile === */}
         <div className="flex items-center gap-4">
           {/* Nút mở menu mobile */}
-          <button
+          <motion.button
             aria-label="Mở menu"
             onClick={() => setOpen((v) => !v)}
             className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-700 hover:bg-gray-100"
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
           >
             {open ? (
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -70,23 +78,54 @@ export default function Header({ colorScheme = "blue" }: HeaderProps) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             )}
-          </button>
+          </motion.button>
 
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-3 hover:opacity-90">
-            <Image src="/logo_ev.png" alt="EV Rental" width={70} height={70} priority />
-            <span className="hidden md:inline-block text-lg font-semibold text-gray-800">
-              EV Rental
-            </span>
-          </Link>
+          <motion.div
+            whileHover={{ scale: 1.05 }}
+            transition={{ type: "spring", stiffness: 400, damping: 10 }}
+          >
+            <Link href="/" className="flex items-center gap-3 hover:opacity-90">
+              <motion.div
+                animate={{ rotate: [0, 5, -5, 0] }}
+                transition={{ duration: 2, repeat: Infinity, repeatDelay: 5 }}
+              >
+                <Image src="/logo_ev.png" alt="EV Rental" width={70} height={70} priority />
+              </motion.div>
+              <span className="hidden md:inline-block text-lg font-semibold text-gray-800">
+                EV Rental
+              </span>
+            </Link>
+          </motion.div>
         </div>
 
         {/* === Desktop Navigation === */}
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-700">
-          <Link href="/" className="hover:text-[#FF4D00] transition-colors">Trang chủ</Link>
-          <Link href="/cars/all" className="hover:text-[#FF4D00] transition-colors">Danh sách xe</Link>
-          <Link href="/about" className="hover:text-[#FF4D00] transition-colors">Giới thiệu</Link>
-          <Link href="/contact" className="hover:text-[#FF4D00] transition-colors">Liên hệ</Link>
+          {[
+            { href: "/", label: "Trang chủ" },
+            { href: "/cars/all", label: "Danh sách xe" },
+            { href: "/about", label: "Giới thiệu" },
+            { href: "/contact", label: "Liên hệ" },
+          ].map((item, index) => (
+            <motion.div
+              key={item.href}
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: index * 0.1 }}
+            >
+              <Link 
+                href={item.href} 
+                className="hover:text-[#FF4D00] transition-colors relative"
+              >
+                <motion.span
+                  whileHover={{ scale: 1.1 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                >
+                  {item.label}
+                </motion.span>
+              </Link>
+            </motion.div>
+          ))}
         </nav>
 
         {/* === Nút hành động bên phải === */}
@@ -113,8 +152,15 @@ export default function Header({ colorScheme = "blue" }: HeaderProps) {
               </button>
 
               {/* Dropdown Menu */}
-              {userMenuOpen && (
-                <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl py-3 border border-gray-200">
+              <AnimatePresence>
+                {userMenuOpen && (
+                  <motion.div 
+                    className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl py-3 border border-gray-200"
+                    initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                    transition={{ duration: 0.2 }}
+                  >
 
                   <div className="px-4 py-2 border-b border-gray-100">
                     <p className="text-sm font-semibold text-gray-800">{user.fullName}</p>
@@ -174,8 +220,9 @@ export default function Header({ colorScheme = "blue" }: HeaderProps) {
                   >
                     Đăng xuất
                   </button>
-                </div>
-              )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
               </div>
             </>
           ) : (
@@ -205,7 +252,15 @@ export default function Header({ colorScheme = "blue" }: HeaderProps) {
       </div>
 
       {/* === Mobile Navigation (Dropdown) === */}
-      <div className={`md:hidden transition-max-height duration-200 overflow-hidden ${open ? "max-h-96" : "max-h-0"}`}>
+      <AnimatePresence>
+        {open && (
+          <motion.div 
+            className="md:hidden overflow-hidden"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+          >
         <div className="px-4 pb-4 space-y-2">
           <Link href="/" className="block px-3 py-2 rounded hover:bg-gray-100">Trang chủ</Link>
           <Link href="/cars/all" className="block px-3 py-2 rounded hover:bg-gray-100">Danh sách xe</Link>
@@ -257,7 +312,9 @@ export default function Header({ colorScheme = "blue" }: HeaderProps) {
             </div>
           )}
         </div>
-      </div>
-    </header>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.header>
   );
 }

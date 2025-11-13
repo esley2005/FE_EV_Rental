@@ -3,6 +3,7 @@ import React, { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Car } from "@/types/car";
 import { Zap, Users, MapPin, Star, Car as CarIcon } from "lucide-react";
+import { motion } from "framer-motion";
 interface CarCardProps {
   car: Car;
 }
@@ -93,58 +94,100 @@ export default function CarCard({ car }: CarCardProps) {
   }, [car.carRentalLocations]);
 
   return (
-    <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-200 cursor-pointer group">
+    <motion.div 
+      className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-200 cursor-pointer group"
+      whileHover={{ scale: 1.02 }}
+      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+    >
       {/* Ảnh xe với badges */}
       <div className="relative" onClick={() => router.push(`/cars/${car.id}`)}>
         <div className="relative h-48 overflow-hidden bg-gray-100">
-          <img
+          <motion.img
             src={car.imageUrl || '/logo_ev.png'}
             alt={car.name}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            className="w-full h-full object-cover"
+            whileHover={{ scale: 1.1 }}
+            transition={{ duration: 0.3 }}
             onError={(e) => {
               (e.target as HTMLImageElement).src = '/logo_ev.png';
             }}
           />
 
           {/* Badge icon tia sét (góc trên trái) */}
-          <div className="absolute top-2 left-2">
-            <div className="bg-gray-800 bg-opacity-70 rounded-lg p-1.5">
+          <motion.div 
+            className="absolute top-2 left-2"
+            initial={{ scale: 0, rotate: -180 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ 
+              type: "spring", 
+              stiffness: 200, 
+              damping: 15,
+              delay: 0.2 
+            }}
+          >
+            <motion.div 
+              className="bg-gray-800 bg-opacity-70 rounded-lg p-1.5"
+              whileHover={{ scale: 1.2, rotate: 15 }}
+            >
               <Zap className="text-yellow-400 fill-yellow-400" size={16} />
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
           {/* Badge giảm giá (góc dưới phải) - chỉ hiển thị nếu có trong data */}
           {/* Có thể thêm logic kiểm tra giảm giá từ backend sau */}
 
           {/* Badge trạng thái (góc trên phải) */}
-          <div className="absolute top-2 right-2">
-            <span
+          <motion.div 
+            className="absolute top-2 right-2"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            <motion.span
               className={`px-2 py-1 text-[10px] font-semibold rounded-lg shadow-md ${car.status === 0
                   ? "bg-blue-600 text-white"
                   : "bg-red-500 text-white"
                 }`}
+              whileHover={{ scale: 1.1 }}
             >
               {car.status === 0 ? "Sẵn sàng" : "Hết xe"}
-            </span>
-          </div>
+            </motion.span>
+          </motion.div>
         </div>
       </div>
 
       {/* Thông tin xe */}
       <div className="p-4" onClick={() => router.push(`/cars/${car.id}`)}>
         {/* Badge "Miễn thế chấp" */}
-        <div className="mb-2">
-          <div className="inline-flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-lg px-2 py-1">
-            <div className="w-4 h-4 bg-green-600 rounded-full flex items-center justify-center">
+        <motion.div 
+          className="mb-2"
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.4 }}
+        >
+          <motion.div 
+            className="inline-flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-lg px-2 py-1"
+            whileHover={{ scale: 1.05 }}
+          >
+            <motion.div 
+              className="w-4 h-4 bg-green-600 rounded-full flex items-center justify-center"
+              animate={{ rotate: [0, 360] }}
+              transition={{ duration: 2, repeat: Infinity, repeatDelay: 5 }}
+            >
               <CarIcon className="text-white" size={10} />
-            </div>
+            </motion.div>
             <span className="text-green-700 font-medium text-xs">Miễn thế chấp</span>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
 
         {/* Tên xe */}
-        <h2 className="text-lg font-bold text-gray-900 mb-2 uppercase line-clamp-2">
+        <motion.h2 
+          className="text-lg font-bold text-gray-900 mb-2 uppercase line-clamp-2"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+        >
           {car.name || car.model}
-        </h2>
+        </motion.h2>
 
         {/* Thông số kỹ thuật chính */}
         <div className="flex items-center gap-3 mb-2 text-gray-600">
@@ -188,19 +231,39 @@ export default function CarCard({ car }: CarCardProps) {
         </div>
 
         {/* Giá thuê */}
-        <div className="border-t pt-3">
+        <motion.div 
+          className="border-t pt-3"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+        >
           <div>
-            <span className="text-blue-600 font-bold text-xl">
+            <motion.span 
+              className="text-blue-600 font-bold text-xl"
+              initial={{ scale: 0.8 }}
+              animate={{ scale: 1 }}
+              transition={{ 
+                type: "spring", 
+                stiffness: 200, 
+                damping: 10,
+                delay: 0.7 
+              }}
+            >
               {formatPrice(pricePerDay)}₫/ngày
-            </span>
+            </motion.span>
           </div>
           {pricePerHour > 0 && (
-            <p className="text-gray-500 text-[10px] mt-0.5">
+            <motion.p 
+              className="text-gray-500 text-[10px] mt-0.5"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.8 }}
+            >
               {formatPrice(pricePerHour, false)}₫/giờ
-            </p>
+            </motion.p>
           )}
-        </div>
+        </motion.div>
       </div>
-    </div>
+    </motion.div>
   );
 }

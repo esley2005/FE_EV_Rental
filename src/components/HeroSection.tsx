@@ -8,6 +8,7 @@ import type { RangePickerProps } from "antd/es/date-picker";
 import dayjs, { Dayjs } from "dayjs";
 import { rentalLocationApi } from "@/services/api";
 import type { RentalLocationData } from "@/services/api";
+import { motion } from "framer-motion";
 
 const { RangePicker } = DatePicker;
 
@@ -24,10 +25,6 @@ export default function HeroSection() {
     dayjs().add(2, "day").hour(20).minute(0)
   ]);
 
-  useEffect(() => {
-    loadLocations();
-  }, []);
-
   const loadLocations = async () => {
     try {
       setLoadingLocations(true);
@@ -35,17 +32,26 @@ export default function HeroSection() {
       
       if (response.success && response.data) {
         // Xử lý nhiều format: trực tiếp array, { $values: [...] }, hoặc { data: { $values: [...] } }
-        const raw = response.data as any;
+        const raw: unknown = response.data;
         let locationsData: RentalLocationData[] = [];
         
         if (Array.isArray(raw)) {
           locationsData = raw;
-        } else if (Array.isArray(raw.$values)) {
-          locationsData = raw.$values;
-        } else if (raw.data && Array.isArray(raw.data.$values)) {
-          locationsData = raw.data.$values;
-        } else if (raw.data && Array.isArray(raw.data)) {
-          locationsData = raw.data;
+        } else if (typeof raw === 'object' && raw !== null) {
+          const rawObj = raw as Record<string, unknown>;
+          // Check for $values
+          if ('$values' in rawObj && Array.isArray(rawObj.$values)) {
+            locationsData = rawObj.$values as RentalLocationData[];
+          }
+          // Check for data.$values
+          else if ('data' in rawObj && typeof rawObj.data === 'object' && rawObj.data !== null) {
+            const dataObj = rawObj.data as Record<string, unknown>;
+            if ('$values' in dataObj && Array.isArray(dataObj.$values)) {
+              locationsData = dataObj.$values as RentalLocationData[];
+            } else if (Array.isArray(rawObj.data)) {
+              locationsData = rawObj.data as RentalLocationData[];
+            }
+          }
         }
         
         // Filter chỉ lấy địa điểm active
@@ -64,6 +70,11 @@ export default function HeroSection() {
       setLoadingLocations(false);
     }
   };
+
+  useEffect(() => {
+    loadLocations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSearch = () => {
     if (!selectedLocationId) {
@@ -115,42 +126,85 @@ export default function HeroSection() {
       {/* Content Container */}
       <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-20">
         {/* Text Overlay */}
-        <div className="text-center mb-8 lg:mb-12">
-          <h1 className="text-4xl sm:text-4xl lg:text-3.5xl font-bold text-white mb-4 drop-shadow-lg">
+        <motion.div 
+          className="text-center mb-8 lg:mb-12"
+          initial={{ opacity: 0, y: -30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+        >
+          <motion.h1 
+            className="text-4xl sm:text-4xl lg:text-3.5xl font-bold text-white mb-4 drop-shadow-lg"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+          >
             EV Rental - Người Bạn Trên Mọi Hành Trình
-          </h1>
-          <p className="text-lg sm:text-xl lg:text-2xl text-white/90 drop-shadow-md">
+          </motion.h1>
+          <motion.p 
+            className="text-lg sm:text-xl lg:text-2xl text-white/90 drop-shadow-md"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.4 }}
+          >
             Trải nghiệm sự khác biệt từ hơn{" "}
-            <span className="text-blue-400 font-semibold">1000</span> xe điện đời mới khắp Việt Nam
-          </p>
-        </div>
+            <motion.span 
+              className="text-blue-400 font-semibold"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ 
+                type: "spring", 
+                stiffness: 200, 
+                damping: 10,
+                delay: 0.6 
+              }}
+            >
+              1000
+            </motion.span>{" "}
+            xe điện đời mới khắp Việt Nam
+          </motion.p>
+        </motion.div>
 
         {/* Search Form */}
-        <div className="bg-white rounded-2xl shadow-2xl p-6 lg:p-8 max-w-5xl mx-auto">
+        <motion.div 
+          className="bg-white rounded-2xl shadow-2xl p-6 lg:p-8 max-w-5xl mx-auto"
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.6, ease: "easeOut" }}
+        >
           {/* Tabs */}
           <div className="flex flex-wrap gap-2 mb-6">
-            <button
+            <motion.button
               onClick={() => setRentalType("self-drive")}
               className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all ${
                 rentalType === "self-drive"
                   ? "bg-blue-600 text-white shadow-md"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.5, delay: 0.8 }}
             >
               <Car />
               <span>Xe tự lái</span>
-            </button>
-            <button
+            </motion.button>
+            <motion.button
               onClick={() => setRentalType("with-driver")}
               className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all ${
                 rentalType === "with-driver"
                   ? "bg-blue-600 text-white shadow-md"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.5, delay: 0.9 }}
             >
               <Car />
               <span>Xe có tài xế</span>
-            </button>
+            </motion.button>
 
           </div>
 
@@ -217,14 +271,24 @@ export default function HeroSection() {
           </div>
 
           {/* Search Button */}
-          <button
+          <motion.button
             onClick={handleSearch}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-lg transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+            whileHover={{ scale: 1.02, boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)" }}
+            whileTap={{ scale: 0.98 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 1.1 }}
           >
-            <Search />
+            <motion.div
+              animate={{ rotate: [0, 10, -10, 0] }}
+              transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+            >
+              <Search />
+            </motion.div>
             <span>Tìm Xe</span>
-          </button>
-        </div>
+          </motion.button>
+        </motion.div>
       </div>
     </div>
   );
