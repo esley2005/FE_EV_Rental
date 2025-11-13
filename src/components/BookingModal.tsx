@@ -5,12 +5,13 @@ import { useRouter } from "next/navigation";
 import { Car } from "@/types/car";
 import { rentalOrderApi, rentalLocationApi, driverLicenseApi, citizenIdApi, authApi, carsApi } from "@/services/api";
 import type { CreateRentalOrderData, RentalLocationData, User, DriverLicenseData, CitizenIdData } from "@/services/api";
-import { Form, Input, DatePicker, Select, Switch, Button, message, notification, Upload, Modal, ConfigProvider } from "antd";
-import { CheckCircle, XCircle, Upload as UploadIcon, IdCard, MapPin } from "lucide-react";
+import { Form, Input, DatePicker, Select, Switch, Button, message, notification, Upload, Modal, ConfigProvider, Checkbox } from "antd";
+import { CheckCircle, XCircle, Upload as UploadIcon, IdCard, MapPin, Phone, Calendar, MapPin as MapPinIcon, User as UserIcon, Sparkles, X } from "lucide-react";
 import dayjs, { Dayjs } from "dayjs";
 import { authUtils } from "@/utils/auth";
 import { geocodeAddress } from "@/utils/geocode";
 import CarMap from "@/components/CarMap";
+import Link from "next/link";
 
 
 const { TextArea } = Input;
@@ -702,7 +703,7 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
     // Hiển thị thông báo thành công
     api.success({
       message: "🎉 Hoàn tất đặt xe thành công!",
-      description: `Đơn hàng #${orderId} đã được tạo và giấy tờ đã được cập nhật. Admin sẽ xác thực và liên hệ với bạn sớm nhất.`,
+      description: `Đơn hàng của bạn đã được tạo và giấy tờ đã được cập nhật. Nhân viên sẽ xác thực và liên hệ với bạn sớm nhất.`,
       placement: "topRight",
       duration: 6,
   icon: <CheckCircle color="#52c41a" />,
@@ -715,59 +716,109 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
   return (
     <ConfigProvider>
       {contextHolder}
-      <div className="fixed inset-0  bg-opacity-50 flex items-center justify-center z-[9999] p-4">4
-        <div className="bg-gray-300 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto relative">
-          <div className="p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">Đặt xe {car.name}</h2>
-              <button
-                onClick={onClose}
-                className="text-gray-400 hover:text-gray-600 text-2xl"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="bg-gray-50 rounded-lg p-4 mb-6">
-              <div className="flex items-center gap-4">
-                <div className="w-20 h-20 bg-white rounded-lg flex items-center justify-center overflow-hidden">
-                  <img
-                    src={car.imageUrl || '/logo_ev.png'}
-                    alt={car.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = '/logo_ev.png';
-                    }}
-                  />
+      {/* Backdrop với blur effect */}
+      <div 
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 animate-in fade-in duration-300"
+        onClick={onClose}
+      >
+        {/* Modal Container với gradient và shadow */}
+        <div 
+          className="bg-gradient-to-br from-white via-blue-50/30 to-white rounded-2xl max-w-3xl w-full max-h-[95vh] overflow-hidden relative shadow-2xl border border-white/20 animate-in zoom-in-95 duration-300"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header với gradient */}
+          <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 p-6 text-white relative overflow-hidden">
+            <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIyMCIvPjwvZz48L2c+PC9zdmc+')] opacity-20"></div>
+            <div className="relative flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                  <Sparkles className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-lg">{car.name}</h3>
-                  <p className="text-gray-600">{car.seats} chỗ</p>
-                  <p className="text-blue-600 font-semibold text-lg">
-                    {car.rentPricePerDay ? `${car.rentPricePerDay.toLocaleString('vi-VN')} VNĐ/ngày` : 'Liên hệ'}
-                  </p>
+                  <h2 className="text-2xl font-bold">Đặt xe {car.name}</h2>
+                  <p className="text-blue-100 text-sm mt-1">Hoàn tất thông tin để đặt xe</p>
                 </div>
               </div>
+              <button
+                onClick={onClose}
+                className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-sm flex items-center justify-center transition-all duration-200 hover:scale-110"
+              >
+                <X className="w-5 h-5 text-white" />
+              </button>
             </div>
+          </div>
 
-            <Form form={form} layout="vertical" onFinish={handleSubmit}>
+          {/* Content với scroll */}
+          <div className="overflow-y-auto max-h-[calc(95vh-120px)]">
+            <div className="p-6 md:p-8">
+              {/* Car Info Card với premium design */}
+              <div className="bg-gradient-to-br from-slate-50 to-blue-50/50 rounded-2xl p-6 mb-6 border border-slate-200/50 shadow-lg relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-200/20 rounded-full -mr-16 -mt-16 blur-2xl"></div>
+                <div className="relative flex items-center gap-6">
+                  <div className="w-28 h-28 bg-white rounded-xl flex items-center justify-center overflow-hidden shadow-lg ring-4 ring-white/50">
+                    <img
+                      src={car.imageUrl || '/logo_ev.png'}
+                      alt={car.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = '/logo_ev.png';
+                      }}
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="font-bold text-2xl text-gray-900">{car.name}</h3>
+                      <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">
+                        {car.seats} chỗ
+                      </span>
+                    </div>
+                    <p className="text-gray-600 mb-3">{car.model || 'Xe điện cao cấp'}</p>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                        {car.rentPricePerDay ? `${car.rentPricePerDay.toLocaleString('vi-VN')}` : 'Liên hệ'}
+                      </span>
+                      {car.rentPricePerDay && (
+                        <span className="text-gray-500 font-medium">VNĐ/ngày</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            <Form form={form} layout="vertical" onFinish={handleSubmit} className="space-y-5">
               <Form.Item
-                label="Số điện thoại"
+                label={
+                  <span className="flex items-center gap-2 text-gray-700 font-semibold">
+                    <Phone className="w-4 h-4 text-blue-600" />
+                    Số điện thoại
+                  </span>
+                }
                 name="phoneNumber"
                 rules={[{ required: true, message: "Vui lòng nhập số điện thoại" }]}
               >
-                <Input placeholder="Nhập số điện thoại" />
+                <Input 
+                  placeholder="Nhập số điện thoại" 
+                  size="large"
+                  className="rounded-lg border-gray-300 hover:border-blue-400 focus:border-blue-500"
+                  prefix={<Phone className="w-4 h-4 text-gray-400" />}
+                />
               </Form.Item>
 
               <Form.Item
-                label="Thời gian thuê xe"
+                label={
+                  <span className="flex items-center gap-2 text-gray-700 font-semibold">
+                    <Calendar className="w-4 h-4 text-blue-600" />
+                    Thời gian thuê xe
+                  </span>
+                }
                 name="dateRange"
                 rules={[{ required: true, message: "Vui lòng chọn thời gian thuê xe" }]}
               >
                 <RangePicker
                   showTime={{ format: 'HH:mm' }}
                   format="DD/MM/YYYY HH:mm"
-                  style={{ width: '100%' }}
+                  size="large"
+                  className="w-full rounded-lg"
                   placeholder={["Thời gian nhận xe", "Thời gian trả xe"]}
                   getPopupContainer={(trigger) => document.body}
                   popupStyle={{ zIndex: 10001 }}
@@ -775,14 +826,21 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
               </Form.Item>
 
               <Form.Item
-                label="Địa điểm nhận xe"
+                label={
+                  <span className="flex items-center gap-2 text-gray-700 font-semibold">
+                    <MapPinIcon className="w-4 h-4 text-blue-600" />
+                    Địa điểm nhận xe
+                  </span>
+                }
                 name="rentalLocationId"
                 rules={[{ required: true, message: "Vui lòng chọn địa điểm nhận xe" }]}
               >
                 <Select 
                   placeholder="Chọn địa điểm nhận xe"
+                  size="large"
                   showSearch
                   optionFilterProp="children"
+                  className="rounded-lg"
                   filterOption={(input, option) =>
                     String(option?.children || '').toLowerCase().includes(input.toLowerCase())
                   }
@@ -815,18 +873,20 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
 
               {/* Hiển thị vị trí xe và bản đồ */}
               {(carCoords || carAddress) && (
-                <div className="mb-4">
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-3">
-                    <div className="flex items-start gap-2 mb-2">
-                      <MapPin className="text-blue-600 mt-1" />
+                <div className="mb-6">
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/50 rounded-xl p-5 mb-4 shadow-sm">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <MapPin className="text-white w-5 h-5" />
+                      </div>
                       <div className="flex-1">
-                        <p className="text-sm font-semibold text-gray-900 mb-1">Vị trí xe hiện tại:</p>
+                        <p className="text-sm font-bold text-gray-900 mb-1">Vị trí xe hiện tại</p>
                         <p className="text-sm text-gray-700">{carAddress || "Đang tải địa chỉ..."}</p>
                       </div>
                     </div>
                   </div>
                   {carCoords && (
-                    <div className="rounded-lg overflow-hidden border border-gray-200">
+                    <div className="rounded-xl overflow-hidden border-2 border-gray-200 shadow-lg">
                       <CarMap
                         cars={[{
                           ...car,
@@ -835,7 +895,7 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
                         }]}
                         center={[carCoords.lat, carCoords.lng]}
                         zoom={14}
-                        height={250}
+                        height={280}
                       />
                     </div>
                   )}
@@ -844,19 +904,21 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
 
               {/* Hiển thị bản đồ khi đã chọn địa điểm nhận xe */}
               {selectedLocationId && selectedLocationCoords && (
-                <div className="mb-4">
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-3">
-                    <div className="flex items-start gap-2">
-                      <MapPin className="text-green-600 mt-1" />
+                <div className="mb-6">
+                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200/50 rounded-xl p-5 mb-4 shadow-sm">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <MapPin className="text-white w-5 h-5" />
+                      </div>
                       <div className="flex-1">
-                        <p className="text-sm font-semibold text-gray-900 mb-1">Địa điểm nhận xe đã chọn:</p>
+                        <p className="text-sm font-bold text-gray-900 mb-1">Địa điểm nhận xe đã chọn</p>
                         <p className="text-sm text-gray-700">
                           {rentalLocations.find(loc => loc.id === selectedLocationId)?.name} - {rentalLocations.find(loc => loc.id === selectedLocationId)?.address}
                         </p>
                       </div>
                     </div>
                   </div>
-                  <div className="rounded-lg overflow-hidden border border-gray-200">
+                  <div className="rounded-xl overflow-hidden border-2 border-gray-200 shadow-lg">
                     <CarMap
                       cars={[{
                         id: 0,
@@ -866,25 +928,64 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
                       } as any]}
                       center={[selectedLocationCoords.lat, selectedLocationCoords.lng]}
                       zoom={14}
-                      height={250}
+                      height={280}
                     />
                   </div>
                 </div>
               )}
 
+              <div className="bg-gradient-to-r from-slate-50 to-blue-50/30 rounded-xl p-5 border border-slate-200/50">
+                <Form.Item
+                  label={
+                    <span className="flex items-center gap-2 text-gray-700 font-semibold">
+                      <UserIcon className="w-4 h-4 text-blue-600" />
+                      Thuê kèm tài xế
+                    </span>
+                  }
+                  name="withDriver"
+                  valuePropName="checked"
+                >
+                  <Switch 
+                    className="bg-gray-300"
+                    checkedChildren="Có"
+                    unCheckedChildren="Không"
+                  />
+                </Form.Item>
+              </div>
+
               <Form.Item
-                label="Thuê kèm tài xế"
-                name="withDriver"
+                name="agreeTerms"
                 valuePropName="checked"
+                rules={[
+                  {
+                    validator: (_, value) =>
+                      value
+                        ? Promise.resolve()
+                        : Promise.reject(new Error('Vui lòng đồng ý với điều khoản thuê xe để tiếp tục')),
+                  },
+                ]}
               >
-                <Switch />
+                <div className="bg-blue-50/50 rounded-xl p-4 border border-blue-100">
+                  <Checkbox className="text-gray-700">
+                    Tôi đã đọc và đồng ý với{' '}
+                    <Link 
+                      href="/guides/rental-terms" 
+                      target="_blank"
+                      className="text-blue-600 hover:text-blue-700 font-semibold underline decoration-2 underline-offset-2 transition-colors"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      điều khoản thuê xe
+                    </Link>
+                  </Checkbox>
+                </div>
               </Form.Item>
 
               {!orderCreated ? (
-                <div className="flex gap-4 pt-4">
+                <div className="flex gap-4 pt-2">
                   <Button
                     onClick={onClose}
-                    className="flex-1"
+                    size="large"
+                    className="flex-1 h-12 rounded-xl border-2 border-gray-300 hover:border-gray-400 font-semibold transition-all"
                   >
                     Hủy
                   </Button>
@@ -892,48 +993,53 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
                     type="primary"
                     htmlType="submit"
                     loading={loading}
-                    className="flex-1 bg-blue-600"
+                    size="large"
+                    className="flex-1 h-12 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 border-0 shadow-lg hover:shadow-xl font-semibold transition-all transform hover:scale-[1.02]"
                   >
-                    Xác nhận đặt xe
+                    {loading ? 'Đang xử lý...' : 'Xác nhận đặt xe'}
                   </Button>
                 </div>
               ) : (
                 <div className="pt-4">
-                  <div className="mb-4 bg-green-50 border border-green-200 rounded-lg p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <CheckCircle className="text-green-600 text-xl" />
-                      <span className="text-green-700 font-semibold text-lg">
-                        Đơn hàng đã được tạo thành công!
-                      </span>
+                  <div className="mb-4 bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-6 shadow-lg">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center">
+                        <CheckCircle className="text-white w-7 h-7" />
+                      </div>
+                      <div>
+                        <span className="text-green-800 font-bold text-xl block">
+                          Đơn hàng đã được tạo thành công!
+                        </span>
+                        <p className="text-green-600 text-sm mt-1">
+                          Vui lòng cập nhật giấy tờ để hoàn tất đơn hàng.
+                        </p>
+                      </div>
                     </div>
-                    <p className="text-green-600 text-sm mb-4">
-                      Vui lòng cập nhật giấy tờ để hoàn tất đơn hàng.
-                    </p>
                     <Button
                       type="primary"
                       size="large"
                       onClick={() => {
-                        // Đóng modal booking trước
                         onClose();
-                        // Chuyển đến trang profile
                         router.push('/profile/documents');
                         message.info("Đang chuyển đến trang hồ sơ để cập nhật giấy tờ...");
                       }}
-                      className="w-full bg-blue-600"
-                      icon={<IdCard size={16} />}
+                      className="w-full h-12 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 border-0 shadow-lg hover:shadow-xl font-semibold transition-all"
+                      icon={<IdCard size={18} />}
                     >
                       Cập nhật giấy phép
                     </Button>
                   </div>
                   <Button
                     onClick={onClose}
-                    className="w-full"
+                    size="large"
+                    className="w-full h-12 rounded-xl border-2 border-gray-300 hover:border-gray-400 font-semibold transition-all"
                   >
                     Đóng
                   </Button>
                 </div>
               )}
             </Form>
+            </div>
           </div>
         </div>
       </div>

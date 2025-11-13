@@ -31,11 +31,13 @@ import {
   Modal,
   Timeline,
   Image,
+  Alert,
   notification as antdNotification
 } from "antd";
 import { rentalOrderApi, carsApi, rentalLocationApi, authApi } from "@/services/api";
 import type { RentalOrderData, Car, RentalLocationData, User } from "@/services/api";
 import dayjs from "dayjs";
+import Link from "next/link";
 
 // Extended interface với thông tin car và location
 interface BookingWithDetails extends RentalOrderData {
@@ -373,6 +375,33 @@ export default function MyBookingsPage() {
                           </div>
                         </div>
 
+                        {/* Thông báo khi đơn hàng đã xác nhận */}
+                        {normalizeStatus(booking.status) === 'confirmed' && (
+                          <Alert
+                            message="Đơn hàng đã được xác nhận"
+                            description={
+                              <div>
+                                <p className="mb-2">
+                                  Đơn hàng đã được xác nhận, bạn hãy đến vị trí thuê của bạn để tiến hành thanh toán và nhận xe.
+                                </p>
+                                <p className="mb-2">
+                                  <strong>Địa điểm nhận xe:</strong> {locationName}
+                                </p>
+                                <p className="mb-2">
+                                  <strong>Thời gian nhận xe:</strong> {formatDate(booking.pickupTime)}
+                                </p>
+                                <Link href="/guides/terms" className="text-blue-600 hover:text-blue-700 underline">
+                                  Xem điều khoản cầm giấy tờ →
+                                </Link>
+                              </div>
+                            }
+                            type="success"
+                            showIcon
+                            className="mb-3"
+                            icon={<InfoCircleOutlined />}
+                          />
+                        )}
+
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
                           <div className="flex items-center gap-2 text-sm">
                             <CalendarOutlined className="text-blue-600" />
@@ -453,6 +482,33 @@ export default function MyBookingsPage() {
                 {getStatusTag(selectedBooking.status)}
               </div>
             </div>
+
+            {/* Thông báo khi đơn hàng đã xác nhận trong modal */}
+            {normalizeStatus(selectedBooking.status) === 'confirmed' && (
+              <Alert
+                message="Đơn hàng đã được xác nhận"
+                description={
+                  <div>
+                    <p className="mb-2">
+                      Đơn hàng đã được xác nhận, bạn hãy đến vị trí thuê của bạn để tiến hành thanh toán và nhận xe.
+                    </p>
+                    <p className="mb-2">
+                      <strong>Địa điểm nhận xe:</strong> {selectedBooking.location?.name || selectedBooking.location?.address || 'Không xác định'}
+                    </p>
+                    <p className="mb-2">
+                      <strong>Thời gian nhận xe:</strong> {formatDate(selectedBooking.pickupTime)}
+                    </p>
+                    <Link href="/guides/terms" className="text-blue-600 hover:text-blue-700 underline">
+                      Xem điều khoản cầm giấy tờ →
+                    </Link>
+                  </div>
+                }
+                type="success"
+                showIcon
+                className="mb-4"
+                icon={<InfoCircleOutlined />}
+              />
+            )}
 
             {/* Car Image */}
             {selectedBooking.car?.imageUrl && (

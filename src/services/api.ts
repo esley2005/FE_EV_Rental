@@ -871,6 +871,39 @@ export const rentalLocationApi = {
     }),
 };
 
+// Car Rental Location API
+export interface CarRentalLocationData {
+  id: number;
+  carId: number;
+  locationId: number;
+  quantity: number;
+}
+
+export interface CreateCarRentalLocationData {
+  carId: number;
+  locationId: number;
+  quantity: number;
+}
+
+export const carRentalLocationApi = {
+  // Tạo mới quan hệ xe - địa điểm
+  create: (data: CreateCarRentalLocationData) =>
+    apiCall<CarRentalLocationData>('/CarRentalLocation/Create', {
+      method: 'POST',
+      body: JSON.stringify({
+        CarId: data.carId,
+        LocationId: data.locationId,
+        Quantity: data.quantity,
+      }),
+    }),
+
+  // Lấy danh sách theo carId (nếu cần)
+  getByCarId: (carId: number) =>
+    apiCall<CarRentalLocationData[]>(`/CarRentalLocation/GetByCarId?carId=${carId}`, {
+      method: 'GET',
+    }),
+};
+
 // Rental Order API
 export interface CreateRentalOrderData {
   phoneNumber: string;
@@ -941,6 +974,18 @@ export const rentalOrderApi = {
     apiCall<RentalOrderData[]>(`/RentalOrder/GetByUserId?userId=${userId}`, {
       method: 'GET',
     }),
+
+  // Cập nhật trạng thái đơn hàng (Admin/Staff only)
+  updateStatus: (orderId: number, status: 1 | 2 | 3 | 4 | 5) => {
+    const formData = new FormData();
+    formData.append('OrderId', orderId.toString());
+    formData.append('Status', status.toString());
+    
+    return apiCall<RentalOrderData>('/RentalOrder/UpdateStatus', {
+      method: 'PUT',
+      body: formData,
+    });
+  },
 };
 
 // Export types

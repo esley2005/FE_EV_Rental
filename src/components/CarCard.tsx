@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Car } from "@/types/car";
 import { Zap, Users, MapPin, Star, Car as CarIcon } from "lucide-react";
@@ -44,6 +44,53 @@ export default function CarCard({ car }: CarCardProps) {
   // Giả định đánh giá và số chuyến (có thể lấy từ API sau)
   const rating = 5.0;
   const tripCount = Math.floor(Math.random() * 50) + 10; // Tạm thời random
+
+  const locationDisplay = useMemo(() => {
+    const defaultText = "Địa điểm đang cập nhật";
+    const carLocations: any = car.carRentalLocations;
+    if (!carLocations) return defaultText;
+
+    const locationsList: any[] = Array.isArray(carLocations)
+      ? carLocations
+      : carLocations?.$values || [];
+
+    if (!Array.isArray(locationsList) || locationsList.length === 0) {
+      return defaultText;
+    }
+
+    const activeLocation = locationsList.find((loc: any) => {
+      const isActive = loc?.isActive ?? loc?.IsActive ?? loc?.rentalLocation?.isActive ?? loc?.rentalLocation?.IsActive;
+      const isDeleted = loc?.isDeleted ?? loc?.IsDeleted ?? loc?.rentalLocation?.isDeleted ?? loc?.rentalLocation?.IsDeleted;
+      return (isActive === true || isActive === 1 || isActive === undefined) &&
+             !(isDeleted === true || isDeleted === 1);
+    }) || locationsList[0];
+
+    const locationInfo =
+      activeLocation?.rentalLocation ??
+      activeLocation?.RentalLocation ??
+      activeLocation;
+
+    const name =
+      locationInfo?.name ??
+      locationInfo?.Name ??
+      activeLocation?.name ??
+      activeLocation?.Name;
+
+    const address =
+      locationInfo?.address ??
+      locationInfo?.Address ??
+      activeLocation?.address ??
+      activeLocation?.Address;
+
+    if (name && address) {
+      return `${name}, ${address}`;
+    }
+
+    if (address) return address;
+    if (name) return name;
+
+    return defaultText;
+  }, [car.carRentalLocations]);
 
   return (
     <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-200 cursor-pointer group">
@@ -122,7 +169,7 @@ export default function CarCard({ car }: CarCardProps) {
         {/* Địa điểm */}
         <div className="flex items-center gap-1.5 mb-2 text-gray-600">
           <MapPin className="text-gray-500" size={12} />
-          <span className="text-xs line-clamp-1">Phường Hiệp Bình Chánh, Quận Thủ Đức</span>
+          <span className="text-xs line-clamp-1">{locationDisplay}</span>
         </div>
 
         {/* Đánh giá & Số chuyến */}

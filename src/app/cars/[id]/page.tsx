@@ -37,6 +37,8 @@ import {
   HelpCircle,
   Info,
   Phone,
+  CheckCircle,
+  Sparkles,
 } from "lucide-react";
 
 //1
@@ -457,23 +459,16 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     notFound();
     return null;
   }
+  
   // → Định dạng tiền VND:
   // 1500000 → 1.500.000 ₫
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
   };
 
-  // Mở modal đặt xe (không kiểm tra giấy tờ trước, sẽ upload sau khi tạo đơn hàng)
+  // Điều hướng đến trang booking
   const handleBookingClick = () => {
-    // Kiểm tra authentication trước
-    if (!authUtils.isAuthenticated()) {
-      message.warning('Vui lòng đăng nhập để thuê xe');
-      router.push('/login');
-      return;
-    }
-
-    // Mở modal luôn - giấy tờ sẽ được yêu cầu upload sau khi tạo đơn hàng
-    setIsBookingModalOpen(true);
+    router.push(`/booking/${car.id}`);
   };
 
   //5
@@ -492,7 +487,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
       <main className="flex-1 container mx-auto px-4 pt-24 pb-8">
         {/* Breadcrumb */}
         <nav className="mb-6">
-          <ol className="flex items-center space-x-2 text-sm text-gray-500">
+          <ol className="flex items-center space-x-2 text-sm text-gray-500 mb-6">
             <li>
               <Link href="/" className="hover:text-blue-600">
                 Trang chủ
@@ -528,11 +523,6 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                   (e.target as HTMLImageElement).src = '/logo_ev.png';
                 }}
               />
-              {/* <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white bg-opacity-90 rounded-full p-3">
-                  <Camera className="w-6 h-6 text-gray-800" />
-                </div>
-              </div> */}
             </div>
             
             {/* Ảnh phụ 1 và 2 - chia đều chiều cao */}
@@ -553,11 +543,6 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                       (e.target as HTMLImageElement).src = '/logo_ev.png';
                     }}
                   />
-                  {/* <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white bg-opacity-90 rounded-full p-2">
-                      <Camera className="w-5 h-5 text-gray-800" />
-                    </div>
-                  </div> */}
                 </div>
               ) : (
                 <div className="flex-1 bg-gray-100 rounded-lg flex items-center justify-center">
@@ -580,11 +565,6 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                       (e.target as HTMLImageElement).src = '/logo_ev.png';
                     }}
                   />
-                  {/* <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white bg-opacity-90 rounded-full p-2">
-                      <Camera className="w-5 h-5 text-gray-800" />
-                    </div>
-                  </div> */}
                 </div>
               ) : (
                 <div className="flex-1 bg-gray-100 rounded-lg flex items-center justify-center">
@@ -605,66 +585,68 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
           centered
           className="image-viewer-modal"
         >
-          <div className="flex flex-col items-center">
-            {/* Ảnh lớn */}
-            <div className="w-full flex justify-center mb-4">
-              <img
-                src={
-                  selectedImageIndex === 0 ? (car.imageUrl || '/logo_ev.png') :
-                  selectedImageIndex === 1 ? (car.imageUrl2 || '/logo_ev.png') :
-                  (car.imageUrl3 || '/logo_ev.png')
-                }
-                alt={car.name}
-                className="max-h-[70vh] max-w-full object-contain rounded-lg"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = '/logo_ev.png';
-                }}
-              />
+          {car && (
+            <div className="flex flex-col items-center">
+              {/* Ảnh lớn */}
+              <div className="w-full flex justify-center mb-4">
+                <img
+                  src={
+                    selectedImageIndex === 0 ? (car.imageUrl || '/logo_ev.png') :
+                    selectedImageIndex === 1 ? (car.imageUrl2 || '/logo_ev.png') :
+                    (car.imageUrl3 || '/logo_ev.png')
+                  }
+                  alt={car.name}
+                  className="max-h-[70vh] max-w-full object-contain rounded-lg"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/logo_ev.png';
+                  }}
+                />
+              </div>
+              
+              {/* Thumbnail navigation */}
+              <div className="flex gap-3 mt-4 justify-center">
+                {car.imageUrl && (
+                  <img
+                    src={car.imageUrl}
+                    alt={`${car.name} - Ảnh 1`}
+                    className={`w-20 h-20 object-cover rounded-lg cursor-pointer border-2 transition-all ${
+                      selectedImageIndex === 0 ? 'border-blue-600 scale-105 shadow-md' : 'border-transparent hover:border-gray-300'
+                    }`}
+                    onClick={() => setSelectedImageIndex(0)}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = '/logo_ev.png';
+                    }}
+                  />
+                )}
+                {car.imageUrl2 && (
+                  <img
+                    src={car.imageUrl2}
+                    alt={`${car.name} - Ảnh 2`}
+                    className={`w-20 h-20 object-cover rounded-lg cursor-pointer border-2 transition-all ${
+                      selectedImageIndex === 1 ? 'border-blue-600 scale-105 shadow-md' : 'border-transparent hover:border-gray-300'
+                    }`}
+                    onClick={() => setSelectedImageIndex(1)}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = '/logo_ev.png';
+                    }}
+                  />
+                )}
+                {car.imageUrl3 && (
+                  <img
+                    src={car.imageUrl3}
+                    alt={`${car.name} - Ảnh 3`}
+                    className={`w-20 h-20 object-cover rounded-lg cursor-pointer border-2 transition-all ${
+                      selectedImageIndex === 2 ? 'border-blue-600 scale-105 shadow-md' : 'border-transparent hover:border-gray-300'
+                    }`}
+                    onClick={() => setSelectedImageIndex(2)}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = '/logo_ev.png';
+                    }}
+                  />
+                )}
+              </div>
             </div>
-            
-            {/* Thumbnail navigation */}
-            <div className="flex gap-3 mt-4 justify-center">
-              {car.imageUrl && (
-                <img
-                  src={car.imageUrl}
-                  alt={`${car.name} - Ảnh 1`}
-                  className={`w-20 h-20 object-cover rounded-lg cursor-pointer border-2 transition-all ${
-                    selectedImageIndex === 0 ? 'border-blue-600 scale-105 shadow-md' : 'border-transparent hover:border-gray-300'
-                  }`}
-                  onClick={() => setSelectedImageIndex(0)}
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = '/logo_ev.png';
-                  }}
-                />
-              )}
-              {car.imageUrl2 && (
-                <img
-                  src={car.imageUrl2}
-                  alt={`${car.name} - Ảnh 2`}
-                  className={`w-20 h-20 object-cover rounded-lg cursor-pointer border-2 transition-all ${
-                    selectedImageIndex === 1 ? 'border-blue-600 scale-105 shadow-md' : 'border-transparent hover:border-gray-300'
-                  }`}
-                  onClick={() => setSelectedImageIndex(1)}
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = '/logo_ev.png';
-                  }}
-                />
-              )}
-              {car.imageUrl3 && (
-                <img
-                  src={car.imageUrl3}
-                  alt={`${car.name} - Ảnh 3`}
-                  className={`w-20 h-20 object-cover rounded-lg cursor-pointer border-2 transition-all ${
-                    selectedImageIndex === 2 ? 'border-blue-600 scale-105 shadow-md' : 'border-transparent hover:border-gray-300'
-                  }`}
-                  onClick={() => setSelectedImageIndex(2)}
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = '/logo_ev.png';
-                  }}
-                />
-              )}
-            </div>
-          </div>
+          )}
         </Modal>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
@@ -749,14 +731,10 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
                   {/* Badges */}
                   <div className="flex items-center gap-3 flex-wrap">
-                    <div className="flex items-center gap-2 bg-green-500 text-white px-3 py-1.5 rounded-full text-sm">
+                    <div className="flex items-center gap-2 bg-blue-500 text-white px-3 py-1.5 rounded-full text-sm">
                       <Shield className="text-white" />
                       <span>Miễn thế chấp</span>
                     </div>
-                    {/* <div className="flex items-center gap-2 bg-red-500 text-white px-3 py-1.5 rounded-full text-sm">
-                      <EnvironmentOutlined className="text-white" />
-                      <span>Giao xe tận nơi</span>
-                    </div> */}
                   </div>
                 </div>
 
@@ -778,11 +756,11 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
             {/* Vị trí xe (Location Map) Section - LUÔN HIỂN THỊ */}
             <div className="bg-white rounded-lg shadow-lg p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">📍 Vị trí xe</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-4"><MapPin className="inline-block mr-2 text-blue-600" /> Vị trí xe</h2>
               
               {loading && (
                 <div className="flex flex-col items-center justify-center py-8 gap-4">
-                  <Spin size="large" />
+                  <MapPin className="inline-block mr-2 text-blue-600" />
                   <p className="text-gray-600">Đang tải vị trí xe...</p>
                 </div>
               )}
@@ -792,22 +770,24 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                   {carAddress && (
                     <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                       <p className="text-sm text-gray-700">
-                        <MapPin className="mr-2 text-blue-600" />
+                        <MapPin className="inline-block mr-2 text-blue-600" />
                         <strong>Địa chỉ:</strong> {carAddress}
                       </p>
                     </div>
                   )}
                   <div className="rounded-lg overflow-hidden border border-gray-200">
-                    <CarMap
-                      cars={[{
-                        ...car,
-                        coords: carCoords,
-                        primaryAddress: carAddress || undefined
-                      }]}
-                      center={[carCoords.lat, carCoords.lng]}
-                      zoom={15}
-                      height={400}
-                    />
+                    {carCoords && (
+                      <CarMap
+                        cars={[{
+                          ...car,
+                          coords: carCoords,
+                          primaryAddress: carAddress || undefined
+                        }]}
+                        center={[carCoords.lat, carCoords.lng]}
+                        zoom={15}
+                        height={400}
+                      />
+                    )}
                   </div>
                 </>
               )}
@@ -815,7 +795,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               {!loading && !carCoords && carAddress && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                   <p className="text-sm text-gray-700 mb-2">
-                    <MapPin className="mr-2 text-yellow-600" />
+                    <MapPin className="inline-block mr-2 text-yellow-600" />
                     <strong>Địa chỉ:</strong> {carAddress}
                   </p>
                   <p className="text-xs text-gray-500">
@@ -830,7 +810,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               {!loading && !carCoords && !carAddress && (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                   <p className="text-sm text-gray-500 mb-2">
-                    <MapPin className="mr-2" />
+                    <MapPin className="inline-block mr-2 text-gray-500" />
                     Đang tải thông tin vị trí xe...
                   </p>
                   <p className="text-xs text-gray-400">
@@ -896,10 +876,6 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
               {/* Rental Policies */}
               <ul className="space-y-2 mb-4 text-gray-900">
-                {/* <li className="flex items-start">
-                  <span className="mr-2 text-green-600">•</span>
-                  <span>Hoàn tiền đổ xăng dư.</span>
-                </li> */}
                 <li className="flex items-start">
                   <span className="mr-2 text-green-600">•</span>
                   <span>Miễn phí vượt dưới 1h.</span>
@@ -979,9 +955,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               <p className="text-sm text-gray-500 mb-4">Chọn 1 trong 2 hình thức</p>
 
               <div className="space-y-3">
-                <label className="flex items-center gap-3 p-3 "
-                >
-
+                <label className="flex items-center gap-3 p-3">
                   <div className="flex items-center gap-2">
                     <svg className="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
@@ -990,9 +964,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                   </div>
                 </label>
 
-                <label className="flex items-center gap-3 p-3"
-                >
-
+                <label className="flex items-center gap-3 p-3">
                   <div className="flex items-center gap-2">
                     <svg className="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
@@ -1090,22 +1062,83 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
           {/* Phần booking panel - Chiếm 1/3 cột */}
           <div className="lg:col-span-1">
-            <div className="bg-gray-50 rounded-lg shadow-lg p-6 sticky top-8 z-10 self-start">
-              {/* Status và giá */}
-              <div className="mb-8">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="line-through text-gray-500">752K</span>
-                  <span className="bg-red-500 text-white px-2 py-0.5 rounded-full text-xs">-21%</span>
-                </div>
-                <p className="text-3xl font-bold text-gray-900">
-                  {Math.round(car.rentPricePerDay / 1000)}K/ngày
-                </p>
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              {/* Giá thuê theo các gói */}
+              <div className="mb-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Bảng giá thuê</h3>
+                
+               {/* Box chung hiển thị toàn bộ giá thuê */}
+<div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+  {/* Theo giờ - Tự lái */}
+  <div className="flex justify-between items-center mb-3">
+    <div>
+      <p className="text-xs text-gray-600">Theo giờ (Tự lái)</p>
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-gray-500 line-through">
+          {formatCurrency(Math.round(car.rentPricePerHour * 1.1))}
+        </span>
+        <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span>
+      </div>
+    </div>
+    <p className="text-lg font-bold text-gray-900 text-right">
+      {formatCurrency(car.rentPricePerHour)}/giờ
+    </p>
+  </div>
+
+  {/* Theo ngày - Tự lái */}
+  <div className="flex justify-between items-center mb-3">
+    <div>
+      <p className="text-xs text-gray-600">Theo ngày (Tự lái)</p>
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-gray-500 line-through">
+          {formatCurrency(Math.round(car.rentPricePerDay * 1.1))}
+        </span>
+        <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span>
+      </div>
+    </div>
+    <p className="text-lg font-bold text-gray-900 text-right">
+      {formatCurrency(car.rentPricePerDay)}/ngày
+    </p>
+  </div>
+
+  {/* Theo giờ - Có tài xế */}
+  <div className="flex justify-between items-center mb-3">
+    <div>
+      <p className="text-xs text-gray-600">Theo giờ (Có tài xế)</p>
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-gray-500 line-through">
+          {formatCurrency(Math.round(car.rentPricePerHourWithDriver * 1.1))}
+        </span>
+        <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span>
+      </div>
+    </div>
+    <p className="text-lg font-bold text-gray-900 text-right">
+      {formatCurrency(car.rentPricePerHourWithDriver)}/giờ
+    </p>
+  </div>
+
+  {/* Theo ngày - Có tài xế */}
+  <div className="flex justify-between items-center">
+    <div>
+      <p className="text-xs text-gray-600">Theo ngày (Có tài xế)</p>
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-gray-500 line-through">
+          {formatCurrency(Math.round(car.rentPricePerDayWithDriver * 1.1))}
+        </span>
+        <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span>
+      </div>
+    </div>
+    <p className="text-lg font-bold text-gray-900 text-right">
+      {formatCurrency(car.rentPricePerDayWithDriver)}/ngày
+    </p>
+  </div>
+</div>
               </div>
 
               {/* Status */}
-              <div className={`text-center p-3 rounded-lg mb-6 ${car.status === 0 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
-                <span className="font-semibold text-gray-900">
-                  {car.status === 0 ? 'Xe đang có sẵn' : 'Hết xe'}
+              <div className={`text-center p-3 rounded-lg mb-6 ${car.status === 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                <span className="font-semibold">
+                  {car.status === 0 ? ' Xe đang có sẵn' : '✗ Hết xe'}
                 </span>
               </div>
 
@@ -1113,18 +1146,20 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               <button
                 onClick={handleBookingClick}
                 disabled={car.status !== 0}
-                className={`w-full py-4 px-6 rounded-lg font-bold text-lg transition-colors mb-5  ${car.status === 0
-                  ? 'bg-blue-600 text-white hover:bg-blue-700'
-                  : 'bg-gray-300 text-gray-900 cursor-not-allowed'
-                  }`}
+                className={`w-full py-4 px-6 rounded-lg font-bold text-lg transition-colors mb-5 flex items-center justify-center gap-2 ${
+                  car.status === 0
+                    ? 'bg-blue-500 text-white hover:bg-blue-600'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
               >
-                {car.status === 0 ? '+ CHỌN THUÊ' : 'Xe đã hết'}
+                <span></span>
+                {car.status === 0 ? 'CHỌN THUÊ' : 'Xe đã hết'}
               </button>
 
               {/* Quick Info */}
-              <div className="space-y-3 text-sm">
+              <div className="space-y-3 text-sm border-t border-gray-200 pt-4">
                 <div className="flex justify-between">
-                  <span className="text-gray-900">Loại xe</span>
+                  <span className="text-gray-600">Loại xe</span>
                   <span className="font-semibold text-gray-900">{car.sizeType}</span>
                 </div>
                 <div className="flex justify-between">
@@ -1291,14 +1326,3 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   );
 }
 
-// [User mở /cars/5]
-//         ↓
-// Next.js gọi → CarDetailPage
-//         ↓
-// useEffect → gọi carsApi.getAll()
-//         ↓
-// carsApi dùng axiosClient → gọi API thật
-//         ↓
-// Backend ASP.NET trả JSON (Swagger định nghĩa)
-//         ↓
-// FE hiển thị dữ liệu (ảnh, giá, thông số, …)

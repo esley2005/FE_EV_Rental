@@ -25,6 +25,34 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+.location-select .ant-select-selector {
+  min-height: 64px;
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+
+.location-select .ant-select-selection-item,
+.location-select .ant-select-selection-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  white-space: normal;
+  line-height: 1.2;
+}
+
+.time-range-picker.ant-picker {
+  min-height: 64px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  display: flex;
+  align-items: center;
+}
+
+.time-range-picker .ant-picker-input > input {
+  height: auto;
+}
+
 /* Custom scrollbar for horizontal car list */
 .scrollbar-thin {
   scrollbar-width: thin;
