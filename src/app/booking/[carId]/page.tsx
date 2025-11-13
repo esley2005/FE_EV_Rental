@@ -636,11 +636,11 @@ export default function BookingPage() {
           </div>
 
           {/* Các bước thanh toán */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
+          {/* <div className="bg-white rounded-lg shadow-sm p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-6">Các bước thanh toán</h2>
             
             <div className="space-y-4">
-              {/* Step 1 */}
+    
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
                   <span className="text-white font-bold">1</span>
@@ -657,7 +657,6 @@ export default function BookingPage() {
                 <span className="font-bold text-gray-900">{formatCurrency(deposit)}</span>
               </div>
 
-              {/* Step 2 */}
               <div className="flex items-start gap-4">
                 <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
                   <span className="text-white font-bold">2</span>
@@ -678,7 +677,7 @@ export default function BookingPage() {
                 </div>
               </div>
             </div>
-          </div>
+          </div> */}
 
         
 

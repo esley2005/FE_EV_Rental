@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { notFound, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Spin, message, notification, Modal, Button } from "antd";
@@ -9,7 +9,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import BookingModal from "@/components/BookingModal";
 import CarMap from "@/components/CarMap";
-import { carsApi, authApi, rentalLocationApi } from "@/services/api";
+import { carsApi, authApi, rentalLocationApi, carRentalLocationApi } from "@/services/api";
 import type { Car } from "@/types/car";
 import type { User } from "@/services/api";
 import { authUtils } from "@/utils/auth";
@@ -47,6 +47,152 @@ interface CarDetailPageProps {
   params: Promise<{ id: string }>;
 }
 
+type CarLocationDisplay = {
+  id: number;
+  name: string | null;
+  address: string | null;
+  quantity: number | null;
+};
+
+const extractCarRentalLocationList = (source: any): any[] => {
+  if (!source) return [];
+  const raw = source?.carRentalLocations ?? source;
+  if (!raw) return [];
+
+  if (Array.isArray(raw)) {
+    return raw;
+  }
+
+  if (Array.isArray(raw?.$values)) {
+    return raw.$values;
+  }
+
+  if (raw?.data) {
+    if (Array.isArray(raw.data)) {
+      return raw.data;
+    }
+    if (Array.isArray(raw.data?.$values)) {
+      return raw.data.$values;
+    }
+  }
+
+  return [];
+};
+
+const normalizeRentalLocationsData = (raw: any): any[] => {
+  if (!raw) return [];
+
+  if (Array.isArray(raw)) {
+    return raw;
+  }
+
+  if (Array.isArray(raw?.$values)) {
+    return raw.$values;
+  }
+
+  if (raw?.data) {
+    if (Array.isArray(raw.data)) {
+      return raw.data;
+    }
+    if (Array.isArray(raw.data?.$values)) {
+      return raw.data.$values;
+    }
+  }
+
+  return [];
+};
+
+const getLocationIdFromRelation = (relation: any): number | null => {
+  const candidates = [
+    relation?.locationId,
+    relation?.LocationId,
+    relation?.rentalLocationId,
+    relation?.RentalLocationId,
+    relation?.rentalLocation?.id,
+    relation?.rentalLocation?.Id,
+    relation?.rentalLocation?.locationId,
+    relation?.rentalLocation?.LocationId,
+    relation?.RentalLocation?.id,
+    relation?.RentalLocation?.Id,
+    relation?.RentalLocation?.locationId,
+    relation?.RentalLocation?.LocationId,
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate !== undefined && candidate !== null && !Number.isNaN(Number(candidate))) {
+      return Number(candidate);
+    }
+  }
+
+  return null;
+};
+
+const getNameFromSource = (source: any): string | null => {
+  const candidates = [
+    source?.name,
+    source?.Name,
+    source?.locationName,
+    source?.LocationName,
+    source?.rentalLocation?.name,
+    source?.rentalLocation?.Name,
+    source?.RentalLocation?.name,
+    source?.RentalLocation?.Name,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  return null;
+};
+
+const getAddressFromSource = (source: any): string | null => {
+  const candidates = [
+    source?.address,
+    source?.Address,
+    source?.locationAddress,
+    source?.LocationAddress,
+    source?.rentalLocation?.address,
+    source?.rentalLocation?.Address,
+    source?.RentalLocation?.address,
+    source?.RentalLocation?.Address,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  return null;
+};
+
+const getQuantityFromRelation = (relation: any): number | null => {
+  const candidates = [
+    relation?.quantity,
+    relation?.Quantity,
+    relation?.availableQuantity,
+    relation?.AvailableQuantity,
+    relation?.stock,
+    relation?.Stock,
+    relation?.carQuantity,
+    relation?.CarQuantity,
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate !== undefined && candidate !== null) {
+      const parsed = Number(candidate);
+      if (!Number.isNaN(parsed)) {
+        return parsed;
+      }
+    }
+  }
+
+  return null;
+};
+
 export default function CarDetailPage({ params }: CarDetailPageProps) {
   const resolvedParams = React.use(params);
   const router = useRouter();
@@ -63,6 +209,8 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   const [loading, setLoading] = useState(true);
   const [carCoords, setCarCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [carAddress, setCarAddress] = useState<string | null>(null);
+  const [carLocations, setCarLocations] = useState<CarLocationDisplay[]>([]);
+  const [carLocationsLoading, setCarLocationsLoading] = useState(false);
 
   // Debug: Log khi otherCars thay đổi
   useEffect(() => {
@@ -78,6 +226,154 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     title: string;
     content: string;
   }>({ visible: false, title: '', content: '' });
+
+  const loadCarLocations = useCallback(async (carData: Car) => {
+    setCarLocationsLoading(true);
+
+    try {
+      let relations = extractCarRentalLocationList(carData);
+
+      if (!relations.length) {
+        console.log('[Car Detail] loadCarLocations: No carRentalLocations in car data, fetching via carRentalLocationApi...');
+        try {
+          const relationResponse = await carRentalLocationApi.getByCarId(Number(carData.id));
+          if (relationResponse.success && relationResponse.data) {
+            relations = extractCarRentalLocationList({ carRentalLocations: relationResponse.data });
+          }
+        } catch (error) {
+          console.warn('[Car Detail] loadCarLocations: Failed to load carRentalLocations via API', error);
+        }
+      }
+
+      if (!relations.length) {
+        console.log('[Car Detail] loadCarLocations: No relations found');
+        setCarLocations([]);
+        return;
+      }
+
+      const locationIds = new Set<number>();
+      const relationsByLocation = new Map<number, any[]>();
+
+      relations.forEach((relation: any) => {
+        const locId = getLocationIdFromRelation(relation);
+        if (locId === null) {
+          return;
+        }
+
+        locationIds.add(locId);
+        if (!relationsByLocation.has(locId)) {
+          relationsByLocation.set(locId, []);
+        }
+        relationsByLocation.get(locId)?.push(relation);
+      });
+
+      if (!locationIds.size) {
+        console.log('[Car Detail] loadCarLocations: No location IDs resolved from relations');
+        setCarLocations([]);
+        return;
+      }
+
+      const locationInfoMap = new Map<number, { name: string | null; address: string | null }>();
+
+      relations.forEach((relation: any) => {
+        const locId = getLocationIdFromRelation(relation);
+        if (locId === null) return;
+
+        const infoSource = relation?.rentalLocation ?? relation?.RentalLocation ?? relation;
+        const name = getNameFromSource(infoSource);
+        const address = getAddressFromSource(infoSource);
+
+        if ((name || address) && !locationInfoMap.has(locId)) {
+          locationInfoMap.set(locId, {
+            name: name ?? null,
+            address: address ?? null,
+          });
+        }
+      });
+
+      if (locationInfoMap.size < locationIds.size) {
+        console.log('[Car Detail] loadCarLocations: Fetching rental locations list for missing details...');
+        try {
+          const locationsResponse = await rentalLocationApi.getAll();
+          if (locationsResponse.success && locationsResponse.data) {
+            const locationsList = normalizeRentalLocationsData(locationsResponse.data);
+            locationsList.forEach((location: any) => {
+              const locId = Number(
+                location?.id ??
+                  location?.Id ??
+                  location?.locationId ??
+                  location?.LocationId ??
+                  location?.rentalLocationId ??
+                  location?.RentalLocationId
+              );
+
+              if (!Number.isNaN(locId)) {
+                locationInfoMap.set(locId, {
+                  name: getNameFromSource(location),
+                  address: getAddressFromSource(location),
+                });
+              }
+            });
+          }
+        } catch (error) {
+          console.warn('[Car Detail] loadCarLocations: Unable to fetch rental locations list', error);
+        }
+      }
+
+      const details: CarLocationDisplay[] = Array.from(locationIds).map((locId) => {
+        const relationList = relationsByLocation.get(locId) ?? [];
+        let totalQuantity = 0;
+        let hasQuantity = false;
+
+        relationList.forEach((relation) => {
+          const quantity = getQuantityFromRelation(relation);
+          if (quantity !== null) {
+            hasQuantity = true;
+            totalQuantity += quantity;
+          }
+        });
+
+        const info = locationInfoMap.get(locId) ?? { name: null, address: null };
+        const fallbackSource = relationList[0];
+        const name = info.name ?? getNameFromSource(fallbackSource);
+        const address = info.address ?? getAddressFromSource(fallbackSource);
+
+        return {
+          id: locId,
+          name: name ?? null,
+          address: address ?? null,
+          quantity: hasQuantity ? totalQuantity : null,
+        };
+      });
+
+      const filteredDetails = details.filter((detail) => detail.quantity === null || detail.quantity > 0);
+
+      filteredDetails.sort((a, b) => {
+        const labelA = (a.name || a.address || '').toLowerCase();
+        const labelB = (b.name || b.address || '').toLowerCase();
+        if (labelA === labelB) {
+          return a.id - b.id;
+        }
+        return labelA.localeCompare(labelB);
+      });
+
+      console.log('[Car Detail] loadCarLocations: Final details', filteredDetails);
+      setCarLocations(filteredDetails);
+    } catch (error) {
+      console.error('[Car Detail] loadCarLocations error:', error);
+      setCarLocations([]);
+    } finally {
+      setCarLocationsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (car) {
+      loadCarLocations(car);
+    } else {
+      setCarLocations([]);
+    }
+  }, [car, loadCarLocations]);
 
   // Helper: Parse coordinates từ string "lat,lng" hoặc "{lat},{lng}"
   const parseCoordinates = (coordsString: string | null | undefined): { lat: number; lng: number } | null => {
@@ -718,12 +1014,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                               }
                             }
                           }
-                          return (
-                            <span className="text-gray-400">
-                              <MapPin className="mr-2" />
-                              Đang tải thông tin địa chỉ...
-                            </span>
-                          );
+               
                         })()}
                       </>
                     )}
@@ -756,15 +1047,17 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
             {/* Vị trí xe (Location Map) Section - LUÔN HIỂN THỊ */}
             <div className="bg-white rounded-lg shadow-lg p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4"><MapPin className="inline-block mr-2 text-blue-600" /> Vị trí xe</h2>
-              
+              <h2 className="text-xl font-bold text-gray-900 mb-4">
+                <MapPin className="inline-block mr-2 text-blue-600" /> Vị trí xe
+              </h2>
+
               {loading && (
                 <div className="flex flex-col items-center justify-center py-8 gap-4">
-                  <MapPin className="inline-block mr-2 text-blue-600" />
+                  <MapPin className="inline-block text-blue-600" />
                   <p className="text-gray-600">Đang tải vị trí xe...</p>
                 </div>
               )}
-              
+
               {!loading && carCoords && (
                 <>
                   {carAddress && (
@@ -776,18 +1069,18 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                     </div>
                   )}
                   <div className="rounded-lg overflow-hidden border border-gray-200">
-                    {carCoords && (
-                      <CarMap
-                        cars={[{
+                    <CarMap
+                      cars={[
+                        {
                           ...car,
                           coords: carCoords,
-                          primaryAddress: carAddress || undefined
-                        }]}
-                        center={[carCoords.lat, carCoords.lng]}
-                        zoom={15}
-                        height={400}
-                      />
-                    )}
+                          primaryAddress: carAddress || undefined,
+                        },
+                      ]}
+                      center={[carCoords.lat, carCoords.lng]}
+                      zoom={15}
+                      height={400}
+                    />
                   </div>
                 </>
               )}
@@ -816,6 +1109,53 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                   <p className="text-xs text-gray-400">
                     Vui lòng mở Developer Console (F12) để xem logs debug
                   </p>
+                </div>
+              )}
+
+              {!loading && (
+                <div className="mt-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                    Xe hiện có tại các địa điểm
+                  </h3>
+
+                  {carLocationsLoading && (
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <Spin size="small" />
+                      <span>Đang tải danh sách địa điểm...</span>
+                    </div>
+                  )}
+
+                  {!carLocationsLoading && carLocations.length > 0 && (
+                    <div className="space-y-3">
+                      {carLocations.map((location) => (
+                        <div
+                          key={`${location.id}-${location.name ?? ''}-${location.address ?? ''}`}
+                          className="flex items-start gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg"
+                        >
+                          <MapPin className="mt-1 text-blue-600" />
+                          <div className="flex-1">
+                            <p className="font-medium text-gray-900">
+                              {location.name || `Địa điểm thuê #${location.id}`}
+                            </p>
+                            {location.address && (
+                              <p className="text-sm text-gray-600">{location.address}</p>
+                            )}
+                            {location.quantity !== null && location.quantity !== undefined && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                Số lượng xe sẵn có: {location.quantity}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {!carLocationsLoading && carLocations.length === 0 && (
+                    <p className="text-sm text-gray-500">
+                      Chưa có thông tin địa điểm cho xe này. Vui lòng liên hệ hỗ trợ để biết thêm chi tiết.
+                    </p>
+                  )}
                 </div>
               )}
             </div>

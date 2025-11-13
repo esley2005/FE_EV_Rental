@@ -16,9 +16,9 @@ import {
   Tag,
   Alert
 } from "antd";
-import { carsApi, rentalLocationApi } from "@/services/api";
+import { carsApi, rentalLocationApi, carRentalLocationApi } from "@/services/api";
 import type { Car } from "@/types/car";
-import type { RentalLocationData } from "@/services/api";
+import type { RentalLocationData, CarRentalLocationData } from "@/services/api";
 
 export default function AllCarsPage() {
   const router = useRouter();
@@ -34,6 +34,56 @@ export default function AllCarsPage() {
   const [searchInput, setSearchInput] = useState("");
   const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<RentalLocationData | null>(null);
+  const [locations, setLocations] = useState<RentalLocationData[]>([]);
+  const [locationsLoading, setLocationsLoading] = useState(false);
+
+  const loadLocations = async () => {
+    setLocationsLoading(true);
+    try {
+      const response = await rentalLocationApi.getAll();
+      if (response.success && response.data) {
+        const raw = response.data as any;
+        let locationsData: RentalLocationData[] = [];
+
+        if (Array.isArray(raw)) {
+          locationsData = raw;
+        } else if (Array.isArray(raw.$values)) {
+          locationsData = raw.$values;
+        } else if (raw.data && Array.isArray(raw.data.$values)) {
+          locationsData = raw.data.$values;
+        } else if (raw.data && Array.isArray(raw.data)) {
+          locationsData = raw.data;
+        }
+
+        const activeLocations = locationsData.filter(
+          (loc) => loc && (loc.isActive || loc.isActive === undefined || loc.isActive === null)
+        );
+
+        setLocations(activeLocations);
+      }
+    } catch (error) {
+      console.error('Load locations error:', error);
+    } finally {
+      setLocationsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadLocations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (selectedLocationId && locations.length > 0) {
+      const matchedLocation = locations.find(
+        (loc) => Number(loc.id) === Number(selectedLocationId)
+      );
+
+      if (matchedLocation) {
+        setSelectedLocation(matchedLocation);
+      }
+    }
+  }, [selectedLocationId, locations]);
 
   useEffect(() => {
     // Lấy params từ URL và cập nhật state
@@ -84,7 +134,16 @@ export default function AllCarsPage() {
         } else if (raw.data && Array.isArray(raw.data)) {
           locationsData = raw.data;
         }
-        const location = locationsData.find((loc: RentalLocationData) => loc.id === locationId);
+
+        const activeLocations = locationsData.filter(
+          (loc) => loc && (loc.isActive || loc.isActive === undefined || loc.isActive === null)
+        );
+
+        if (activeLocations.length > 0) {
+          setLocations((prev) => (prev.length > 0 ? prev : activeLocations));
+        }
+
+        const location = activeLocations.find((loc: RentalLocationData) => loc.id === locationId);
         if (location) {
           setSelectedLocation(location);
         } else if (locationName) {
@@ -146,25 +205,76 @@ export default function AllCarsPage() {
           // Fetch chi tiết cho TẤT CẢ xe để lấy carRentalLocations
           const carsWithDetails = await Promise.all(
             activeCars.map(async (car: any) => {
+              const carResult = { ...car };
               try {
-                // Nếu đã có carRentalLocations, không cần fetch lại
-                if (car.carRentalLocations && 
-                    (Array.isArray(car.carRentalLocations) || (car.carRentalLocations as any)?.$values)) {
-                  console.log(`[Car ${car.id}] Đã có carRentalLocations, bỏ qua fetch`);
-                  return car;
+                // Nếu đã có carRentalLocations dạng array hoặc $values, giữ nguyên
+                if (
+                  carResult.carRentalLocations &&
+                  (Array.isArray(carResult.carRentalLocations) ||
+                    (carResult.carRentalLocations as any)?.$values)
+                ) {
+                  console.log(`[Car ${car.id}] Đã có carRentalLocations, bỏ qua fetch detail`);
+                  return carResult;
                 }
-                
-                console.log(`[Car ${car.id}] Fetching details to get carRentalLocations...`);
+
+                console.log(`[Car ${car.id}] Fetching carRentalLocations via carRentalLocationApi...`);
+                const carLocationResponse = await carRentalLocationApi.getByCarId(Number(car.id));
+
+                if (carLocationResponse.success && carLocationResponse.data) {
+                  const rawLocations = carLocationResponse.data as any;
+                  let locationsData: CarRentalLocationData[] = [];
+
+                  if (Array.isArray(rawLocations)) {
+                    locationsData = rawLocations;
+                  } else if (Array.isArray(rawLocations.$values)) {
+                    locationsData = rawLocations.$values;
+                  } else if (rawLocations.data && Array.isArray(rawLocations.data.$values)) {
+                    locationsData = rawLocations.data.$values;
+                  } else if (rawLocations.data && Array.isArray(rawLocations.data)) {
+                    locationsData = rawLocations.data;
+                  }
+
+                  carResult.carRentalLocations = locationsData;
+
+                  console.log(
+                    `[Car ${car.id}] carRentalLocationApi returned ${locationsData.length} records`
+                  );
+
+                  // Nếu vẫn chưa có dữ liệu, thử fallback lấy chi tiết xe
+                  if (!locationsData.length) {
+                    const detailResponse = await carsApi.getById(String(car.id));
+                    if (detailResponse.success && detailResponse.data) {
+                      const detailCar = detailResponse.data as any;
+                      return {
+                        ...detailCar,
+                        carRentalLocations:
+                          detailCar.carRentalLocations ||
+                          ([] as CarRentalLocationData[]),
+                      };
+                    }
+                  }
+
+                  return carResult;
+                }
+
+                console.warn(
+                  `[Car ${car.id}] carRentalLocationApi không trả về data, thử fallback getById`
+                );
                 const detailResponse = await carsApi.getById(String(car.id));
                 if (detailResponse.success && detailResponse.data) {
-                  console.log(`[Car ${car.id}] Got details:`, detailResponse.data.carRentalLocations ? 'Has carRentalLocations' : 'No carRentalLocations');
-                  return detailResponse.data;
+                  const detailCar = detailResponse.data as any;
+                  return {
+                    ...detailCar,
+                    carRentalLocations:
+                      detailCar.carRentalLocations ||
+                      ([] as CarRentalLocationData[]),
+                  };
                 }
-                return car;
               } catch (error) {
-                console.error(`[All Cars Page] Error fetching details for car ${car.id}:`, error);
-                return car;
+                console.error(`[All Cars Page] Error fetching locations for car ${car.id}:`, error);
               }
+
+              return carResult;
             })
           );
           
@@ -385,13 +495,71 @@ export default function AllCarsPage() {
     }
   };
 
+  const handleLocationChange = (value: number | string | null) => {
+    const newLocationId =
+      value !== null && value !== undefined ? Number(value) : null;
+
+    setSelectedLocationId(newLocationId);
+    setPageIndex(0);
+
+    let selectedLoc: RentalLocationData | null = null;
+    if (newLocationId !== null) {
+      selectedLoc =
+        locations.find((loc) => Number(loc.id) === newLocationId) || null;
+    }
+    setSelectedLocation(selectedLoc);
+
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (newLocationId !== null && selectedLoc) {
+      params.set('locationId', String(newLocationId));
+      params.set('location', selectedLoc.name);
+      if (selectedLoc.address) {
+        params.set('locationAddress', selectedLoc.address);
+      } else {
+        params.delete('locationAddress');
+      }
+    } else if (newLocationId !== null) {
+      params.set('locationId', String(newLocationId));
+      params.delete('location');
+      params.delete('locationAddress');
+    } else {
+      params.delete('locationId');
+      params.delete('location');
+      params.delete('locationAddress');
+    }
+
+    params.set('page', '1');
+
+    // Keep current search keyword in the URL if it exists
+    if (keyword && keyword.trim()) {
+      params.set('search', keyword.trim());
+    } else {
+      params.delete('search');
+    }
+
+    router.push(`/cars/all?${params.toString()}`);
+  };
+
   const handleSearch = () => {
-    setKeyword(searchInput);
+    const trimmedSearch = searchInput.trim();
+    setKeyword(trimmedSearch);
     setPageIndex(0);
     
     // Update URL
     const params = new URLSearchParams();
-    if (searchInput) params.set('search', searchInput);
+    if (trimmedSearch) {
+      params.set('search', trimmedSearch);
+    }
+    if (selectedLocationId !== null) {
+      params.set('locationId', String(selectedLocationId));
+      if (selectedLocation?.name) {
+        params.set('location', selectedLocation.name);
+      }
+      if (selectedLocation?.address) {
+        params.set('locationAddress', selectedLocation.address);
+      }
+    }
     params.set('page', '1');
     router.push(`/cars/all?${params.toString()}`);
   };
@@ -401,7 +569,18 @@ export default function AllCarsPage() {
     
     // Update URL
     const params = new URLSearchParams();
-    if (keyword) params.set('search', keyword);
+    if (keyword && keyword.trim()) {
+      params.set('search', keyword.trim());
+    }
+    if (selectedLocationId !== null) {
+      params.set('locationId', String(selectedLocationId));
+      if (selectedLocation?.name) {
+        params.set('location', selectedLocation.name);
+      }
+      if (selectedLocation?.address) {
+        params.set('locationAddress', selectedLocation.address);
+      }
+    }
     params.set('page', page.toString());
     router.push(`/cars/all?${params.toString()}`);
     
@@ -480,15 +659,41 @@ export default function AllCarsPage() {
                   allowClear
                 />
               </div>
-              <Button
-                type="primary"
-                size="large"
-                icon={<Search />}
-                onClick={handleSearch}
-                className="bg-blue-600"
-              >
-                Tìm kiếm
-              </Button>
+              <div className="md:w-72">
+                <Select
+                  size="large"
+                  placeholder="Chọn địa điểm nhận xe"
+                  value={selectedLocationId ?? undefined}
+                  onChange={(value) => handleLocationChange(value)}
+                  allowClear
+                  loading={locationsLoading}
+                  className="w-full"
+                  showSearch
+                  optionFilterProp="label"
+                  suffixIcon={<MapPin size={16} />}
+                  options={locations.map((location) => ({
+                    value: location.id,
+                    label: location.address
+                      ? `${location.name} - ${location.address}`
+                      : location.name,
+                  }))}
+                  filterOption={(input, option) => {
+                    const optionLabel = ((option?.label ?? '') as string).toLowerCase();
+                    return optionLabel.includes(input.toLowerCase());
+                  }}
+                />
+              </div>
+              <div className="md:w-auto">
+                <Button
+                  type="primary"
+                  size="large"
+                  icon={<Search />}
+                  onClick={handleSearch}
+                  className="bg-blue-600 w-full md:w-auto"
+                >
+                  Tìm kiếm
+                </Button>
+              </div>
             </div>
           </Card>
 
