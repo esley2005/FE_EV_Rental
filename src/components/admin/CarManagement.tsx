@@ -214,7 +214,7 @@ export default function CarManagement() {
     try {
       const response = await carsApi.delete(id);
       console.log('[CarManagement] Delete response:', response);
-      
+
       if (response.success) {
         api.success({
           message: 'Xóa xe thành công!',
@@ -244,27 +244,27 @@ export default function CarManagement() {
   const handleUploadToCloudinary = async (file: File): Promise<string> => {
     const formData = new FormData();
     formData.append('file', file);
-    
+
     // Lấy Cloudinary config từ env
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'your-cloud-name';
     const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'ev_rental_cars';
-    
+
     // Unsigned Upload: Chỉ cần upload_preset (đơn giản, recommended)
     formData.append('upload_preset', uploadPreset);
-    
+
     // Optional: Thêm folder để tổ chức ảnh
     // formData.append('folder', 'ev-rental/cars');
-    
+
     // Optional: Signed Upload (bảo mật cao hơn - cần API key & signature)
     // const apiKey = process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY;
     // if (apiKey) {
     //   formData.append('api_key', apiKey);
     //   // Cần generate signature từ backend để bảo mật API_SECRET
     // }
-    
+
     try {
       console.log('[Upload] Cloudinary config:', { cloudName, uploadPreset });
-      
+
       const response = await fetch(
         `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
         {
@@ -272,10 +272,10 @@ export default function CarManagement() {
           body: formData,
         }
       );
-      
+
       const data = await response.json();
       console.log('[Upload] Cloudinary response:', data);
-      
+
       if (!response.ok) {
         // Log chi tiết lỗi từ Cloudinary
         console.error('[Upload] Cloudinary error details:', {
@@ -283,11 +283,11 @@ export default function CarManagement() {
           error: data.error,
           message: data.error?.message
         });
-        
+
         const errorMsg = data.error?.message || `Upload failed with status: ${response.status}`;
         throw new Error(errorMsg);
       }
-      
+
       if (data.secure_url) {
         console.log('[Upload] Image uploaded successfully to Cloudinary:', data.secure_url);
         return data.secure_url;
@@ -301,7 +301,7 @@ export default function CarManagement() {
 
   const handleImageUpload = async (options: RcCustomRequestOptions, fieldName: string = 'imageUrl') => {
     const { file, onSuccess, onError } = options;
-    
+
     // Validate file type
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
     const fileObj = file as File;
@@ -314,7 +314,7 @@ export default function CarManagement() {
       onError?.(new Error('Invalid file type'));
       return;
     }
-    
+
     // Validate file size (max 5MB)
     const maxSize = 5 * 1024 * 1024; // 5MB
     if (fileObj.size > maxSize) {
@@ -326,9 +326,9 @@ export default function CarManagement() {
       onError?.(new Error('File too large'));
       return;
     }
-    
+
     setUploading(true);
-    
+
     try {
       const imageUrl = await handleUploadToCloudinary(fileObj);
       form.setFieldsValue({ [fieldName]: imageUrl } as Partial<CarFormValues>);
@@ -494,7 +494,7 @@ export default function CarManagement() {
       title: 'Giá/ngày',
       dataIndex: 'rentPricePerDay',
       key: 'rentPricePerDay',
-      render: (price: number) => 
+      render: (price: number) =>
         new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price),
     },
     {
@@ -623,10 +623,19 @@ export default function CarManagement() {
             <Form.Item
               label="Loại xe"
               name="sizeType"
-              rules={[{ required: true, message: 'Vui lòng nhập loại xe!' }]}
+              rules={[{ required: true, message: 'Vui lòng chọn loại xe!' }]}
             >
-              <Input placeholder="mini, compact, sedan, suv, mpv..." />
+              <Select placeholder="Chọn loại xe">
+                <Select.Option value="mini">Mini</Select.Option>
+                <Select.Option value="coupé">Coupé</Select.Option>
+                <Select.Option value="crossover">Crossover</Select.Option>
+                <Select.Option value="compact">Compact</Select.Option>
+                <Select.Option value="sedan">Sedan</Select.Option>
+                <Select.Option value="suv">SUV</Select.Option>
+                <Select.Option value="mpv">MPV</Select.Option>
+              </Select>
             </Form.Item>
+
 
             <Form.Item
               label="Dung tích cốp (lít)"
@@ -640,11 +649,19 @@ export default function CarManagement() {
             <Form.Item
               label="Loại pin"
               name="batteryType"
-              rules={[{ required: true }]}
-              tooltip="Ví dụ: LFP, NMC, hoặc số kWh như 40"
+              rules={[{ required: true, message: 'Vui lòng chọn loại pin!' }]}
             >
-              <Input placeholder="LFP, NMC, 40 kWh..." />
+              <Select placeholder="Chọn loại pin">
+                <Select.Option value="LFP">LFP</Select.Option>
+                <Select.Option value="NMC">NMC</Select.Option>
+                <Select.Option value="NCA">NMC</Select.Option>
+                <Select.Option value="LTO">NMC</Select.Option>
+                <Select.Option value="Na‑Ion">NMC</Select.Option>
+                <Select.Option value="Lead‑Acid">NMC</Select.Option>
+                <Select.Option value="Other">Khác</Select.Option>
+              </Select>
             </Form.Item>
+
 
             <Form.Item
               label="Quãng đường (km)"
@@ -661,9 +678,9 @@ export default function CarManagement() {
               rules={[{ required: true }]}
               tooltip="Ví dụ: 900000"
             >
-              <InputNumber 
-                min={0} 
-                className="w-full" 
+              <InputNumber
+                min={0}
+                className="w-full"
                 formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
               />
             </Form.Item>
@@ -674,9 +691,9 @@ export default function CarManagement() {
               rules={[{ required: true }]}
               tooltip="Ví dụ: 150000"
             >
-              <InputNumber 
-                min={0} 
-                className="w-full" 
+              <InputNumber
+                min={0}
+                className="w-full"
                 formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
               />
             </Form.Item>
@@ -687,9 +704,9 @@ export default function CarManagement() {
               rules={[{ required: true }]}
               tooltip="Ví dụ: 1200000"
             >
-              <InputNumber 
-                min={0} 
-                className="w-full" 
+              <InputNumber
+                min={0}
+                className="w-full"
                 formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
               />
             </Form.Item>
@@ -700,9 +717,9 @@ export default function CarManagement() {
               rules={[{ required: true }]}
               tooltip="Ví dụ: 200000"
             >
-              <InputNumber 
-                min={0} 
-                className="w-full" 
+              <InputNumber
+                min={0}
+                className="w-full"
                 formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
               />
             </Form.Item>
@@ -757,7 +774,7 @@ export default function CarManagement() {
             rules={[{ required: true, message: 'Vui lòng nhập URL ảnh chính!' }]}
             tooltip="Link ảnh từ internet hoặc upload bên dưới"
           >
-            <Input 
+            <Input
               placeholder="https://res.cloudinary.com/... hoặc upload ảnh bên dưới"
             />
           </Form.Item>
@@ -788,8 +805,8 @@ export default function CarManagement() {
               accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
               maxCount={1}
             >
-              <Button 
-                icon={<UploadIcon />} 
+              <Button
+                icon={<UploadIcon />}
                 loading={uploading}
                 type="dashed"
                 block
@@ -801,11 +818,12 @@ export default function CarManagement() {
 
           {/* Ảnh phụ 1 */}
           <Form.Item
-            label="URL ảnh xe phụ 1 (tùy chọn)"
+            label="URL ảnh xe phụ 1 (bắt buộc)"
             name="imageUrl2"
+            rules={[{ required: true, message: 'Vui lòng nhập URL ảnh chính!' }]}
             tooltip="Link ảnh từ internet hoặc upload bên dưới"
           >
-            <Input 
+            <Input
               placeholder="https://res.cloudinary.com/... hoặc upload ảnh bên dưới"
             />
           </Form.Item>
@@ -836,8 +854,8 @@ export default function CarManagement() {
               accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
               maxCount={1}
             >
-              <Button 
-                icon={<UploadIcon />} 
+              <Button
+                icon={<UploadIcon />}
                 loading={uploading}
                 type="dashed"
                 block
@@ -849,11 +867,12 @@ export default function CarManagement() {
 
           {/* Ảnh phụ 2 */}
           <Form.Item
-            label="URL ảnh xe phụ 2 (tùy chọn)"
+            label="URL ảnh xe phụ 2 (bắt buộc)"
             name="imageUrl3"
+            rules={[{ required: true, message: 'Vui lòng nhập URL ảnh chính!' }]}
             tooltip="Link ảnh từ internet hoặc upload bên dưới"
           >
-            <Input 
+            <Input
               placeholder="https://res.cloudinary.com/... hoặc upload ảnh bên dưới"
             />
           </Form.Item>
@@ -884,8 +903,8 @@ export default function CarManagement() {
               accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
               maxCount={1}
             >
-              <Button 
-                icon={<UploadIcon />} 
+              <Button
+                icon={<UploadIcon />}
                 loading={uploading}
                 type="dashed"
                 block

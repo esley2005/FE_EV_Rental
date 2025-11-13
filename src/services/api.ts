@@ -552,18 +552,34 @@ export interface LoginData {
   password: string;
 }
 
+export interface RentalLocation {
+  id: number;
+  name: string;
+  address?: string;
+}
+
 export interface User {
   id: number;
   email: string;
   fullName: string;
-  role: string;
+  role: string; // Customer, Staff, Admin
   phone?: string;
   address?: string;
   dateOfBirth?: string;
   avatar?: string;
   driverLicenseStatus?: number; // 0 = chưa cập nhật/chưa xác thực, 1 = đã xác thực
   citizenIdStatus?: number; // 0 = chưa cập nhật/chưa xác thực, 1 = đã xác thực
+  isEmailConfirmed?: boolean;
+  isActive?: boolean;
   createdAt?: string;
+  updatedAt?: string;
+  locationId?: number; // ID của điểm thuê (legacy field)
+  rentalLocationId?: number; // ID của điểm thuê
+  rentalLocation?: RentalLocation; // Navigation property
+  // Collection counts (optional, may be included in API response)
+  feedbackCount?: number;
+  rentalOrdersCount?: number;
+  paymentsCount?: number;
 }
 
 export interface AuthResponse {
@@ -586,6 +602,7 @@ export interface UpdateProfileData {
   phone?: string;
   address?: string;
   dateOfBirth?: string;
+  avatar?: string;
 }
 
 export interface ChangePasswordData {
@@ -691,6 +708,8 @@ export const authApi = {
           address: u.address,
           dateOfBirth: u.dateOfBirth ?? u.dob,
           avatar: u.avatar,
+          locationId: u.locationId ?? u.rentalLocationId ?? u.LocationId ?? u.RentalLocationId,
+          rentalLocationId: u.rentalLocationId ?? u.locationId ?? u.RentalLocationId ?? u.LocationId,
         })) as User[];
         return { success: true, data: normalized } as ApiResponse<User[]>;
       }
@@ -868,6 +887,12 @@ export const rentalLocationApi = {
     apiCall<RentalLocationData>(`/RentalLocation/GetById?id=${id}`, {
       method: 'GET',
       skipAuth: true, // Có thể public
+    }),
+
+  // Lấy tất cả nhân viên theo locationId
+  getAllStaffByLocationId: (locationId: number) =>
+    apiCall<User[]>(`/RentalLocation/GetAllStaffByLocationId?locationId=${locationId}`, {
+      method: 'GET',
     }),
 };
 

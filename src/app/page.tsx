@@ -3,6 +3,7 @@ import Header from "@/components/Header";
 import HeroSection from "@/components/HeroSection";
 import CarsSection from "@/components/home/CarsSection";
 import Footer from "@/components/Footer";
+import ChatBox from "@/components/chat/ChatBox"; // 👈 Thêm dòng này
 
 export default function Home() {
   return (
@@ -22,6 +23,9 @@ export default function Home() {
       </main>
 
       <Footer />
+
+      {/* 💬 Chat box nổi */}
+      <ChatBox  />
     </div>
   );
 }
