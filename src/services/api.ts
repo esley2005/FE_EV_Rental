@@ -895,7 +895,38 @@ export const rentalLocationApi = {
       method: 'GET',
     }),
 };
+// Payment API
+export interface PaymentData {
+  id: number;
+  userId: number;
+  rentalOrderId?: number;
+  amount: number;
+  paymentDate: string;
+  status: string; // Pending, Completed, Cancelled
+  rentalLocationId?: number;
+  rentalLocationName?: string;
+}
 
+// Payment API
+export interface RevenueByLocationData {
+  rentalLocationId: number;
+  rentalLocationName: string;
+  totalRevenue: number;
+  totalOrders: number;
+}
+
+export interface CreatePaymentDTO {
+  userId: number;
+  rentalOrderId: number;
+  amount: number;
+  status: string;
+  rentalLocationId?: number;
+}
+
+export interface UpdatePaymentStatusDTO {
+  paymentId: number;
+  status: string;
+}
 // Car Rental Location API
 export interface CarRentalLocationData {
   id: number;
@@ -1012,7 +1043,13 @@ export const rentalOrderApi = {
     });
   },
 };
-
+export const paymentApi = {
+  // Lấy doanh thu theo từng điểm thuê (Admin/Staff)
+  getRevenueByLocation: () =>
+    apiCall<RevenueByLocationData[]>("/Payment/ByRentalLocation", {
+      method: "GET",
+    }),
+};
 // Export types
 export type { ApiResponse };
 
