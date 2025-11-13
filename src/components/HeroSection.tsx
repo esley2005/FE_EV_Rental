@@ -129,7 +129,7 @@ export default function HeroSection() {
         <div className="bg-white rounded-2xl shadow-2xl p-6 lg:p-8 max-w-5xl mx-auto">
           {/* Tabs */}
           <div className="flex flex-wrap gap-2 mb-6">
-            <button
+            {/* <button
               onClick={() => setRentalType("self-drive")}
               className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all ${
                 rentalType === "self-drive"
@@ -139,8 +139,8 @@ export default function HeroSection() {
             >
               <Car />
               <span>Xe tự lái</span>
-            </button>
-            <button
+            </button> */}
+            {/* <button
               onClick={() => setRentalType("with-driver")}
               className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all ${
                 rentalType === "with-driver"
@@ -150,7 +150,7 @@ export default function HeroSection() {
             >
               <Car />
               <span>Xe có tài xế</span>
-            </button>
+            </button> */}
 
           </div>
 
@@ -196,7 +196,7 @@ export default function HeroSection() {
             </div>
 
             {/* Date Range Picker */}
-            <div className="relative">
+            {/* <div className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Thời gian thuê
               </label>
@@ -213,7 +213,7 @@ export default function HeroSection() {
                 className="w-full time-range-picker"
                 placeholder={["Thời gian bắt đầu", "Thời gian kết thúc"]}
               />
-            </div>
+            </div> */}
           </div>
 
           {/* Search Button */}
