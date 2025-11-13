@@ -869,6 +869,91 @@ export const rentalLocationApi = {
       method: 'GET',
       skipAuth: true, // Có thể public
     }),
+<<<<<<< Updated upstream
+=======
+
+  // Lấy tất cả nhân viên theo locationId
+  getAllStaffByLocationId: (locationId: number) =>
+    apiCall<User[]>(`/RentalLocation/GetAllStaffByLocationId?locationId=${locationId}`, {
+      method: 'GET',
+    }),
+};
+// Payment API
+export interface PaymentData {
+  id: number;
+  userId: number;
+  rentalOrderId?: number;
+  amount: number;
+  paymentDate: string;
+  status: string; // Pending, Completed, Cancelled
+  rentalLocationId?: number;
+  rentalLocationName?: string;
+}
+
+// Payment API
+export interface RevenueByLocationData {
+  rentalLocationId: number;
+  rentalLocationName: string;
+  totalRevenue: number;
+  totalOrders: number;
+}
+
+export interface CreatePaymentDTO {
+  userId: number;
+  rentalOrderId: number;
+  amount: number;
+  status: string;
+  rentalLocationId?: number;
+}
+
+export interface UpdatePaymentStatusDTO {
+  paymentId: number;
+  status: string;
+}
+// Car Rental Location API
+export interface CarRentalLocationData {
+  id: number;
+  carId: number;
+  locationId: number;
+  quantity: number;
+}
+
+export interface CreateCarRentalLocationData {
+  carId: number;
+  locationId: number;
+  quantity: number;
+}
+
+export const carRentalLocationApi = {
+  // Tạo mới quan hệ xe - địa điểm
+  create: (data: CreateCarRentalLocationData) =>
+    apiCall<CarRentalLocationData>('/CarRentalLocation/Create', {
+      method: 'POST',
+      body: JSON.stringify({
+        CarId: data.carId,
+        LocationId: data.locationId,
+        Quantity: data.quantity,
+      }),
+    }),
+
+  // Lấy danh sách theo carId (nếu cần)
+  getByCarId: (carId: number) =>
+    apiCall<CarRentalLocationData[]>(`/CarRentalLocation/GetByCarId?carId=${carId}`, {
+      method: 'GET',
+    }),
+
+  // Xóa quan hệ xe - địa điểm
+  delete: (id: number) =>
+    apiCall(`/CarRentalLocation/${id}`, {
+      method: 'DELETE',
+    }),
+
+  // Xóa quan hệ theo carId và locationId
+  deleteByCarAndLocation: (carId: number, locationId: number) =>
+    apiCall(`/CarRentalLocation/DeleteByCarAndLocation?carId=${carId}&locationId=${locationId}`, {
+      method: 'DELETE',
+    }),
+>>>>>>> Stashed changes
 };
 
 // Rental Order API

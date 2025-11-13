@@ -52,6 +52,66 @@ export default function CarCard({ car }: CarCardProps) {
   const rating = 5.0;
   const tripCount = Math.floor(Math.random() * 50) + 10; // Tạm thời random
 
+<<<<<<< Updated upstream
+=======
+  const locationDisplay = useMemo(() => {
+    const defaultText = "Địa điểm đang cập nhật";
+    const carLocations: any = car.carRentalLocations;
+    if (!carLocations) return defaultText;
+
+    const locationsList: any[] = Array.isArray(carLocations)
+      ? carLocations
+      : carLocations?.$values || [];
+
+    if (!Array.isArray(locationsList) || locationsList.length === 0) {
+      return defaultText;
+    }
+
+    // Chỉ lấy location đầu tiên (ưu tiên active, nếu không có thì lấy location đầu tiên)
+    const firstLocation = locationsList.find((loc: any) => {
+      const isActive = loc?.isActive ?? loc?.IsActive ?? loc?.rentalLocation?.isActive ?? loc?.rentalLocation?.IsActive;
+      const isDeleted = loc?.isDeleted ?? loc?.IsDeleted ?? loc?.rentalLocation?.isDeleted ?? loc?.rentalLocation?.IsDeleted;
+      return (isActive === true || isActive === 1 || isActive === undefined) &&
+             !(isDeleted === true || isDeleted === 1);
+    }) || locationsList[0];
+
+    // Lấy thông tin location từ nested object hoặc trực tiếp
+    const locationInfo =
+      firstLocation?.rentalLocation ??
+      firstLocation?.RentalLocation ??
+      firstLocation;
+
+    // Lấy name và address
+    const name =
+      locationInfo?.name ??
+      locationInfo?.Name ??
+      firstLocation?.name ??
+      firstLocation?.Name;
+
+    const address =
+      locationInfo?.address ??
+      locationInfo?.Address ??
+      firstLocation?.address ??
+      firstLocation?.Address;
+
+    // Format hiển thị: hiển thị cả name và address nếu có, format dễ đọc hơn
+    if (name && address) {
+      // Tách name và address bằng dấu xuống dòng hoặc format rõ ràng hơn
+      return `${name}\n${address}`;
+    }
+    
+    if (address) {
+      return address;
+    }
+    
+    if (name) {
+      return name;
+    }
+
+    return defaultText;
+  }, [car.carRentalLocations]);
+
+>>>>>>> Stashed changes
   return (
     <div className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-200 cursor-pointer group">
       {/* Ảnh xe với badges */}
@@ -127,9 +187,27 @@ export default function CarCard({ car }: CarCardProps) {
         </div>
 
         {/* Địa điểm */}
+<<<<<<< Updated upstream
         <div className="flex items-center gap-1.5 mb-2 text-gray-600">
           <EnvironmentOutlined className="text-gray-500 text-xs" />
           <span className="text-xs line-clamp-1">Phường Hiệp Bình Chánh, Quận Thủ Đức</span>
+=======
+        <div className="flex items-start gap-1.5 mb-2 text-gray-600">
+          <MapPin className="text-blue-600 mt-0.5 flex-shrink-0" size={14} />
+          <div className="flex-1 min-w-0">
+            {locationDisplay.includes('\n') ? (
+              <div className="text-xs leading-relaxed">
+                {locationDisplay.split('\n').map((line, idx) => (
+                  <div key={idx} className={idx === 0 ? 'font-medium text-gray-800' : 'text-gray-600'}>
+                    {line}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <span className="text-xs leading-relaxed line-clamp-2 break-words">{locationDisplay}</span>
+            )}
+          </div>
+>>>>>>> Stashed changes
         </div>
 
         {/* Đánh giá & Số chuyến */}

@@ -70,6 +70,186 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     content: string;
   }>({ visible: false, title: '', content: '' });
 
+<<<<<<< Updated upstream
+=======
+  const loadCarLocations = useCallback(async (carData: Car) => {
+    setCarLocationsLoading(true);
+
+    try {
+      let relations = extractCarRentalLocationList(carData);
+
+      if (!relations.length) {
+        console.log('[Car Detail] loadCarLocations: No carRentalLocations in car data, fetching via carRentalLocationApi...');
+        try {
+          const relationResponse = await carRentalLocationApi.getByCarId(Number(carData.id));
+          if (relationResponse.success && relationResponse.data) {
+            relations = extractCarRentalLocationList({ carRentalLocations: relationResponse.data });
+          }
+        } catch (error) {
+          console.warn('[Car Detail] loadCarLocations: Failed to load carRentalLocations via API', error);
+        }
+      }
+
+      if (!relations.length) {
+        console.log('[Car Detail] loadCarLocations: No relations found');
+        setCarLocations([]);
+        return;
+      }
+
+      const locationIds = new Set<number>();
+      const relationsByLocation = new Map<number, any[]>();
+
+      relations.forEach((relation: any) => {
+        const locId = getLocationIdFromRelation(relation);
+        if (locId === null) {
+          return;
+        }
+
+        locationIds.add(locId);
+        if (!relationsByLocation.has(locId)) {
+          relationsByLocation.set(locId, []);
+        }
+        relationsByLocation.get(locId)?.push(relation);
+      });
+
+      if (!locationIds.size) {
+        console.log('[Car Detail] loadCarLocations: No location IDs resolved from relations');
+        setCarLocations([]);
+        return;
+      }
+
+      const locationInfoMap = new Map<number, { name: string | null; address: string | null }>();
+
+      relations.forEach((relation: any) => {
+        const locId = getLocationIdFromRelation(relation);
+        if (locId === null) return;
+
+        const infoSource = relation?.rentalLocation ?? relation?.RentalLocation ?? relation;
+        const name = getNameFromSource(infoSource);
+        const address = getAddressFromSource(infoSource);
+
+        if ((name || address) && !locationInfoMap.has(locId)) {
+          locationInfoMap.set(locId, {
+            name: name ?? null,
+            address: address ?? null,
+          });
+        }
+      });
+
+      if (locationInfoMap.size < locationIds.size) {
+        console.log('[Car Detail] loadCarLocations: Fetching rental locations list for missing details...');
+        try {
+          const locationsResponse = await rentalLocationApi.getAll();
+          if (locationsResponse.success && locationsResponse.data) {
+            const locationsList = normalizeRentalLocationsData(locationsResponse.data);
+            locationsList.forEach((location: any) => {
+              const locId = Number(
+                location?.id ??
+                  location?.Id ??
+                  location?.locationId ??
+                  location?.LocationId ??
+                  location?.rentalLocationId ??
+                  location?.RentalLocationId
+              );
+
+              if (!Number.isNaN(locId)) {
+                locationInfoMap.set(locId, {
+                  name: getNameFromSource(location),
+                  address: getAddressFromSource(location),
+                });
+              }
+            });
+          }
+        } catch (error) {
+          console.warn('[Car Detail] loadCarLocations: Unable to fetch rental locations list', error);
+        }
+      }
+
+      const details: CarLocationDisplay[] = Array.from(locationIds).map((locId) => {
+        const relationList = relationsByLocation.get(locId) ?? [];
+        let totalQuantity = 0;
+        let hasQuantity = false;
+
+        relationList.forEach((relation) => {
+          const quantity = getQuantityFromRelation(relation);
+          if (quantity !== null) {
+            hasQuantity = true;
+            totalQuantity += quantity;
+          }
+        });
+
+        const info = locationInfoMap.get(locId) ?? { name: null, address: null };
+        const fallbackSource = relationList[0];
+        const name = info.name ?? getNameFromSource(fallbackSource);
+        const address = info.address ?? getAddressFromSource(fallbackSource);
+
+        return {
+          id: locId,
+          name: name ?? null,
+          address: address ?? null,
+          quantity: hasQuantity ? totalQuantity : null,
+        };
+      });
+
+      const filteredDetails = details.filter((detail) => detail.quantity === null || detail.quantity > 0);
+
+      filteredDetails.sort((a, b) => {
+        const labelA = (a.name || a.address || '').toLowerCase();
+        const labelB = (b.name || b.address || '').toLowerCase();
+        if (labelA === labelB) {
+          return a.id - b.id;
+        }
+        return labelA.localeCompare(labelB);
+      });
+
+      console.log('[Car Detail] loadCarLocations: Final details', filteredDetails);
+      setCarLocations(filteredDetails);
+    } catch (error) {
+      console.error('[Car Detail] loadCarLocations error:', error);
+      setCarLocations([]);
+    } finally {
+      setCarLocationsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (car) {
+      loadCarLocations(car);
+    } else {
+      setCarLocations([]);
+    }
+  }, [car, loadCarLocations]);
+
+  // Khi carLocations được load và chưa có carCoords/carAddress, lấy từ location đầu tiên
+  useEffect(() => {
+    if (carLocations.length > 0 && !carCoords && !carAddress && !carLocationsLoading) {
+      const firstLocation = carLocations[0];
+      console.log('[Car Detail] Using first location from carLocations:', firstLocation);
+      
+      if (firstLocation.address) {
+        setCarAddress(firstLocation.address);
+        console.log('[Car Detail] ✅ Set carAddress from carLocations:', firstLocation.address);
+      } else if (firstLocation.name) {
+        setCarAddress(firstLocation.name);
+        console.log('[Car Detail] ✅ Set carAddress (name) from carLocations:', firstLocation.name);
+      }
+      
+      // Nếu có address, thử geocode để lấy coordinates
+      if (firstLocation.address && !carCoords) {
+        console.log('[Car Detail] Geocoding address from carLocations:', firstLocation.address);
+        geocodeAddress(firstLocation.address).then((coords) => {
+          if (coords) {
+            setCarCoords(coords);
+            console.log('[Car Detail] ✅ Set carCoords from geocoding:', coords);
+          }
+        }).catch((error) => {
+          console.error('[Car Detail] Geocoding error:', error);
+        });
+      }
+    }
+  }, [carLocations, carCoords, carAddress, carLocationsLoading]);
+
+>>>>>>> Stashed changes
   // Helper: Parse coordinates từ string "lat,lng" hoặc "{lat},{lng}"
   const parseCoordinates = (coordsString: string | null | undefined): { lat: number; lng: number } | null => {
     if (!coordsString || typeof coordsString !== 'string') return null;
@@ -361,6 +541,11 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             console.log('[Car Detail] ✅ Set carCoords:', location.coords);
           } else {
             console.warn('[Car Detail] ⚠️ No coordinates found for car');
+          }
+          
+          // Nếu không tìm được location từ getCarLocation, đợi carLocations load xong rồi lấy location đầu tiên
+          if (!location.address && !location.coords) {
+            console.log('[Car Detail] No location from getCarLocation, will try from carLocations after they load');
           }
           
           // Lọc các xe khác (không phải xe hiện tại) và lấy 3 xe đầu tiên
@@ -821,6 +1006,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
               {!loading && !carCoords && !carAddress && (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+<<<<<<< Updated upstream
                   <p className="text-sm text-gray-500 mb-2">
                     <EnvironmentOutlined className="mr-2" />
                     Đang tải thông tin vị trí xe...
@@ -828,6 +1014,49 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                   <p className="text-xs text-gray-400">
                     Vui lòng mở Developer Console (F12) để xem logs debug
                   </p>
+=======
+                  {carLocationsLoading ? (
+                    <>
+                      <p className="text-sm text-gray-500 mb-2">
+                        <MapPin className="inline-block mr-2 text-gray-500" />
+                        Đang tải thông tin vị trí xe...
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        Vui lòng đợi trong giây lát...
+                      </p>
+                    </>
+                  ) : carLocations.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className="text-sm text-gray-700 mb-2">
+                        <MapPin className="inline-block mr-2 text-blue-600" />
+                        <strong>Xe có sẵn tại các địa điểm sau:</strong>
+                      </p>
+                      <div className="space-y-1">
+                        {carLocations.map((loc) => (
+                          <div key={loc.id} className="text-sm text-gray-600 pl-6">
+                            • {loc.name || loc.address || `Địa điểm #${loc.id}`}
+                            {loc.quantity !== null && (
+                              <span className="text-gray-500 ml-2">({loc.quantity} xe)</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-gray-400 mt-2">
+                        Đang xử lý tọa độ để hiển thị bản đồ...
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-sm text-gray-500 mb-2">
+                        <MapPin className="inline-block mr-2 text-gray-500" />
+                        Chưa có thông tin vị trí xe
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        Xe này chưa được gán vào địa điểm thuê xe nào
+                      </p>
+                    </>
+                  )}
+>>>>>>> Stashed changes
                 </div>
               )}
             </div>

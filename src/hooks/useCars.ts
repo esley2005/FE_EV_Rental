@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { carsApi } from "@/services/api";
+import { carsApi, carRentalLocationApi, rentalLocationApi } from "@/services/api";
 import type { Car } from "@/types/car";
 import { geocodeAddress } from "@/utils/geocode";
 import { mockCars } from '@/utils/apiTest';
@@ -24,9 +24,28 @@ function getPrimaryAddressFromCar(car: any): string | null {
   if (!Array.isArray(list) || list.length === 0) return null;
 
   // Ưu tiên location đang active, nếu không có thì lấy phần tử đầu tiên
-  const active = list.find((l: any) => (l?.isActive ?? l?.IsActive) && !(l?.isDeleted ?? l?.IsDeleted)) || list[0];
-  const addr = active?.address ?? active?.Address;
-  return typeof addr === 'string' && addr.trim() ? addr : null;
+  const firstLocation = list.find((l: any) => {
+    const isActive = l?.isActive ?? l?.IsActive ?? l?.rentalLocation?.isActive ?? l?.rentalLocation?.IsActive;
+    const isDeleted = l?.isDeleted ?? l?.IsDeleted ?? l?.rentalLocation?.isDeleted ?? l?.rentalLocation?.IsDeleted;
+    return (isActive === true || isActive === 1 || isActive === undefined) &&
+           !(isDeleted === true || isDeleted === 1);
+  }) || list[0];
+
+  // Lấy thông tin location từ nested object hoặc trực tiếp
+  const locationInfo = firstLocation?.rentalLocation ?? firstLocation?.RentalLocation ?? firstLocation;
+  
+  // Ưu tiên address, nếu không có thì lấy name
+  const address = locationInfo?.address ?? locationInfo?.Address ?? firstLocation?.address ?? firstLocation?.Address;
+  if (typeof address === 'string' && address.trim()) {
+    return address.trim();
+  }
+  
+  const name = locationInfo?.name ?? locationInfo?.Name ?? firstLocation?.name ?? firstLocation?.Name;
+  if (typeof name === 'string' && name.trim()) {
+    return name.trim();
+  }
+  
+  return null;
 }
 
 // Helper: chuẩn hóa dữ liệu .NET có thể trả về dạng { $values: [...] }
@@ -36,18 +55,94 @@ function toArray<T = any>(data: any): T[] {
   return [];
 }
 
+// Helper: lấy locationId từ CarRentalLocation
+function getLocationIdFromRelation(relation: any): number | null {
+  const candidates = [
+    relation?.rentalLocationId,
+    relation?.RentalLocationId,
+    relation?.locationId,
+    relation?.LocationId,
+    relation?.rentalLocation?.id,
+    relation?.rentalLocation?.Id,
+    relation?.RentalLocation?.id,
+    relation?.RentalLocation?.Id,
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate !== undefined && candidate !== null && !Number.isNaN(Number(candidate))) {
+      return Number(candidate);
+    }
+  }
+  return null;
+}
+
 // Helper: làm giàu 1 car với tọa độ (nếu cần thì fetch chi tiết)
 async function enrichCarWithCoords(car: any) {
   try {
-    let address = getPrimaryAddressFromCar(car);
     let enriched = car;
+    let address = getPrimaryAddressFromCar(car);
 
-    // Nếu không có address trong payload ban đầu, thử gọi API getById để lấy đầy đủ relationships
-    if (!address && car?.id != null) {
-      const detailResp = await carsApi.getById(String(car.id));
-      if (detailResp.success && detailResp.data) {
-        enriched = detailResp.data;
-        address = getPrimaryAddressFromCar(detailResp.data);
+    // Kiểm tra xem đã có carRentalLocations chưa
+    const hasCarRentalLocations = car.carRentalLocations && 
+      ((Array.isArray(car.carRentalLocations) && car.carRentalLocations.length > 0) ||
+       (car.carRentalLocations.$values && car.carRentalLocations.$values.length > 0));
+
+    // Nếu chưa có carRentalLocations hoặc không có address, fetch từ API
+    if ((!hasCarRentalLocations || !address) && car?.id != null) {
+      try {
+        // Thử fetch carRentalLocations trước
+        const locationResponse = await carRentalLocationApi.getByCarId(Number(car.id));
+        if (locationResponse.success && locationResponse.data) {
+          const locationsData = Array.isArray(locationResponse.data)
+            ? locationResponse.data
+            : (locationResponse.data as any)?.$values || [];
+          
+          // Nếu carRentalLocations không có đầy đủ thông tin rentalLocation, fetch thêm
+          const enrichedLocations = await Promise.all(
+            locationsData.map(async (rel: any) => {
+              // Nếu đã có rentalLocation với đầy đủ thông tin, giữ nguyên
+              if (rel?.rentalLocation?.address || rel?.RentalLocation?.Address) {
+                return rel;
+              }
+
+              // Nếu chưa có, thử lấy locationId và fetch từ rentalLocationApi
+              const locationId = getLocationIdFromRelation(rel);
+              if (locationId) {
+                try {
+                  const rentalLocResponse = await rentalLocationApi.getById(locationId);
+                  if (rentalLocResponse.success && rentalLocResponse.data) {
+                    return {
+                      ...rel,
+                      rentalLocation: rentalLocResponse.data,
+                    };
+                  }
+                } catch (err) {
+                  console.warn(`[useCars] Failed to fetch rentalLocation ${locationId}:`, err);
+                }
+              }
+              return rel;
+            })
+          );
+          
+          enriched = {
+            ...enriched,
+            carRentalLocations: enrichedLocations
+          };
+          
+          // Lấy address từ carRentalLocations mới fetch
+          address = getPrimaryAddressFromCar(enriched);
+        }
+      } catch (locationError) {
+        console.warn(`[useCars] Failed to fetch carRentalLocations for car ${car.id}:`, locationError);
+      }
+
+      // Nếu vẫn không có address, thử getById để lấy đầy đủ relationships
+      if (!address) {
+        const detailResp = await carsApi.getById(String(car.id));
+        if (detailResp.success && detailResp.data) {
+          enriched = detailResp.data;
+          address = getPrimaryAddressFromCar(detailResp.data);
+        }
       }
     }
 
@@ -57,7 +152,8 @@ async function enrichCarWithCoords(car: any) {
       return { ...enriched, primaryAddress: address };
     }
     return enriched;
-  } catch {
+  } catch (error) {
+    console.error(`[useCars] Error enriching car ${car?.id}:`, error);
     return car;
   }
 }
