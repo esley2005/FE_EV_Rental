@@ -54,9 +54,8 @@ export default function Header({ colorScheme = "blue" }: HeaderProps) {
   return (
     <motion.header 
       className="fixed top-0 left-0 w-full z-50 bg-white shadow-md"
-      initial={{ y: -100 }}
       animate={{ y: 0 }}
-      transition={{ duration: 0.5, ease: "easeOut" }}
+      
     >
       <div className="max-w-6xl mx-auto px-4 py-2 flex items-center justify-between">
         {/* === Left: Logo + Menu Mobile === */}
@@ -66,7 +65,7 @@ export default function Header({ colorScheme = "blue" }: HeaderProps) {
             aria-label="Mở menu"
             onClick={() => setOpen((v) => !v)}
             className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-700 hover:bg-gray-100"
-            whileHover={{ scale: 1.1 }}
+            whileHover={{ scale: 0.7 }}
             whileTap={{ scale: 0.9 }}
           >
             {open ? (
@@ -83,12 +82,12 @@ export default function Header({ colorScheme = "blue" }: HeaderProps) {
           {/* Logo */}
           <motion.div
             whileHover={{ scale: 1.05 }}
-            transition={{ type: "spring", stiffness: 400, damping: 10 }}
+            
           >
             <Link href="/" className="flex items-center gap-3 hover:opacity-90">
               <motion.div
                 animate={{ rotate: [0, 5, -5, 0] }}
-                transition={{ duration: 2, repeat: Infinity, repeatDelay: 5 }}
+               
               >
                 <Image src="/logo_ev.png" alt="EV Rental" width={70} height={70} priority />
               </motion.div>
@@ -111,7 +110,7 @@ export default function Header({ colorScheme = "blue" }: HeaderProps) {
               key={item.href}
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
+              
             >
               <Link 
                 href={item.href} 
@@ -119,7 +118,7 @@ export default function Header({ colorScheme = "blue" }: HeaderProps) {
               >
                 <motion.span
                   whileHover={{ scale: 1.1 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                 
                 >
                   {item.label}
                 </motion.span>
@@ -159,7 +158,7 @@ export default function Header({ colorScheme = "blue" }: HeaderProps) {
                     initial={{ opacity: 0, y: -10, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                    transition={{ duration: 0.2 }}
+                    
                   >
 
                   <div className="px-4 py-2 border-b border-gray-100">
@@ -259,7 +258,7 @@ export default function Header({ colorScheme = "blue" }: HeaderProps) {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.3 }}
+           
           >
         <div className="px-4 pb-4 space-y-2">
           <Link href="/" className="block px-3 py-2 rounded hover:bg-gray-100">Trang chủ</Link>
