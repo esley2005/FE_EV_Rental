@@ -636,6 +636,60 @@ export interface CitizenIdData {
   createdAt?: string;
   updatedAt?: string;
 }
+// Feedback API
+export interface FeedbackData {
+  id: number;
+  title: string;
+  content: string;
+  createdAt: string;
+  userFullName: string;
+  rentalOrderId: number;
+  userId?: number;
+  carId?: number;
+}
+
+export const feedbackApi = {
+  // Lấy tất cả feedback
+  getAll: () =>
+    apiCall<{ $values: FeedbackData[] }>("/Feedback/GetAll", {
+      method: "GET",
+      skipAuth: true, // Nếu public, không cần token
+    }),
+
+  // Lấy feedback theo ID
+  getById: async (id: number) => {
+    const res = await feedbackApi.getAll();
+    if (res.success && res.data?.$values) {
+      const fb = res.data.$values.find((f) => f.id === id);
+      if (fb) {
+        return { success: true, data: fb };
+      } else {
+        return { success: false, error: "Feedback not found" };
+      }
+    }
+    return res;
+  },
+
+  // Tạo feedback mới
+  create: (feedback: Partial<FeedbackData>) =>
+    apiCall<FeedbackData>("/Feedback/Create", {
+      method: "POST",
+      body: JSON.stringify(feedback),
+    }),
+
+  // Cập nhật feedback
+  update: (feedback: Partial<FeedbackData>) =>
+    apiCall<FeedbackData>("/Feedback/Update", {
+      method: "PUT",
+      body: JSON.stringify(feedback),
+    }),
+
+  // Xóa feedback
+  delete: (id: number) =>
+    apiCall(`/Feedback/Delete/${id}`, {
+      method: "DELETE",
+    }),
+};
 
 export const authApi = {
   // Đăng nhập

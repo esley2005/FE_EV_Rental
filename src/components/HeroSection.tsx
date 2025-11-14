@@ -208,46 +208,48 @@ export default function HeroSection() {
 
           </div>
 
-          {/* Input Fields */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            {/* Location Select */}
-            <div className="relative">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <MapPin className="mr-1 inline-block" size={16} /> Địa điểm thuê xe
-              </label>
-              <Select
-                size="large"
-                value={selectedLocationId}
-                onChange={setSelectedLocationId}
-                placeholder="Chọn địa điểm thuê xe"
-                className="w-full location-select"
-                loading={loadingLocations}
-                showSearch
-                filterOption={(input, option) => {
-                  const label = option?.label?.toString() || '';
-                  return label.toLowerCase().includes(input.toLowerCase());
-                }}
-                optionFilterProp="label"
-                optionLabelProp="children"
-              >
-                {locations.map((location) => (
-                  <Select.Option
-                    key={location.id}
-                    value={location.id}
-                    label={`${location.name} - ${location.address}`}
-                  >
-                    <div className="flex flex-col leading-tight">
-                      <span className="text-base font-medium text-gray-900">
-                        {location.name}
-                      </span>
-                      {location.address && (
-                        <span className="text-xs text-gray-500">{location.address}</span>
-                      )}
-                    </div>
-                  </Select.Option>
-                ))}
-              </Select>
-            </div>
+       {/* Input Fields */}
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+  {/* Location Select */}
+  <div className="relative">
+    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+      <MapPin size={16} /> Địa điểm thuê xe
+    </label>
+    <Select
+      size="large"
+      value={selectedLocationId}
+      onChange={setSelectedLocationId}
+      placeholder="Chọn địa điểm thuê xe"
+      className="w-full location-select"
+      loading={loadingLocations}
+      showSearch
+      optionFilterProp="label"
+      filterOption={(input, option) => {
+        const label = option?.label?.toString() || '';
+        return label.toLowerCase().includes(input.toLowerCase());
+      }}
+      optionLabelProp="children"
+      dropdownClassName="!z-50" // Đảm bảo dropdown nổi trên các phần tử khác
+      getPopupContainer={(triggerNode) => document.body} // Dropdown không bị cắt bởi overflow của parent
+    >
+      {locations.map((location) => (
+        <Select.Option
+          key={location.id}
+          value={location.id}
+          label={`${location.name} - ${location.address}`}
+        >
+          <div className="flex flex-col leading-tight">
+            <span className="text-base font-medium text-gray-900">
+              {location.name}
+            </span>
+            {location.address && (
+              <span className="text-xs text-gray-500">{location.address}</span>
+            )}
+          </div>
+        </Select.Option>
+      ))}
+    </Select>
+  </div>
 
             {/* Date Range Picker */}
             {/* <div className="relative">

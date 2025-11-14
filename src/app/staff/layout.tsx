@@ -326,29 +326,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             ]}
           />
 
-          {/* ElaAdmin-like top summary cards */}
-          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-            <Col xs={24} sm={12} md={6}>
-              <Card bordered hoverable loading={metricsLoading}>
-                <Statistic title="Doanh thu" prefix={<span>₫</span>} value={metrics.revenue} precision={0} />
-              </Card>
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <Card bordered hoverable loading={metricsLoading}>
-                <Statistic title="Đơn hàng" value={metrics.orders} />
-              </Card>
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <Card bordered hoverable loading={metricsLoading}>
-                <Statistic title="Số xe" value={metrics.templates} />
-              </Card>
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <Card bordered hoverable loading={metricsLoading}>
-                <Statistic title="Khách hàng" value={metrics.clients} />
-              </Card>
-            </Col>
-          </Row>
+        
 
           {/* Đã bỏ các khối Lưu lượng và Chỉ số theo yêu cầu */}
 

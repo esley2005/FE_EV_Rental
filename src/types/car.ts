@@ -21,6 +21,7 @@ export interface Car {
   isDeleted: boolean;
   carRentalLocations: any | null; // replace `any` with a specific type if you have one
   rentalOrders: any | null;       // same here
+  rentalOrderId?: number ;
 }
 
 export interface CarResponse {

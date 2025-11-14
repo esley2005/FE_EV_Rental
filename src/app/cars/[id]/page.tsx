@@ -9,11 +9,12 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import BookingModal from "@/components/BookingModal";
 import CarMap from "@/components/CarMap";
-import { carsApi, authApi, rentalLocationApi, carRentalLocationApi } from "@/services/api";
+import { carsApi, authApi, rentalLocationApi, carRentalLocationApi, rentalOrderApi } from "@/services/api";
 import type { Car } from "@/types/car";
 import type { User } from "@/services/api";
 import { authUtils } from "@/utils/auth";
 import { geocodeAddress } from "@/utils/geocode";
+import Feedback from "@/components/feedback/Feedback";
 import {
   MapPin,
   Bluetooth,
@@ -211,6 +212,8 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   const [carAddress, setCarAddress] = useState<string | null>(null);
   const [carLocations, setCarLocations] = useState<CarLocationDisplay[]>([]);
   const [carLocationsLoading, setCarLocationsLoading] = useState(false);
+  const [userOrderIdForCar, setUserOrderIdForCar] = useState<number | null>(null);
+  const [checkingReviewEligibility, setCheckingReviewEligibility] = useState(false);
 
   // Debug: Log khi otherCars thay đổi
   useEffect(() => {
@@ -769,6 +772,53 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
     loadUserProfile();
   }, []);
+
+  useEffect(() => {
+    if (!user?.id || !car?.id) {
+      setUserOrderIdForCar(null);
+      return;
+    }
+
+    const checkUserOrders = async () => {
+      setCheckingReviewEligibility(true);
+      try {
+        const response = await rentalOrderApi.getByUserId(Number(user.id));
+        if (response.success && response.data) {
+          const raw = response.data as any;
+          const orders = Array.isArray(raw)
+            ? raw
+            : Array.isArray(raw?.$values)
+            ? raw.$values
+            : [];
+
+          const matchedOrder = orders.find((order: any) => {
+            const orderCarId = Number(order?.carId ?? order?.CarId);
+            if (Number.isNaN(orderCarId)) return false;
+            if (orderCarId !== Number(car.id)) return false;
+            const status = (order?.status ?? order?.Status ?? "").toString().toLowerCase();
+            return status !== "cancelled" && status !== "rejected";
+          });
+
+          if (matchedOrder) {
+            const orderId =
+              Number(matchedOrder?.id ?? matchedOrder?.Id ?? matchedOrder?.orderId ?? matchedOrder?.OrderId) || null;
+            setUserOrderIdForCar(orderId);
+          } else {
+            setUserOrderIdForCar(null);
+          }
+        } else {
+          setUserOrderIdForCar(null);
+        }
+      } catch (error) {
+        console.error("Check user rental orders error:", error);
+        setUserOrderIdForCar(null);
+      } finally {
+        setCheckingReviewEligibility(false);
+      }
+    };
+
+    checkUserOrders();
+  }, [user?.id, car?.id]);
 
   //4 
   //Hiện thị khi đang load 
@@ -1637,6 +1687,25 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               </div>
             </div>
           </div>
+        </div>
+
+
+        <div className="bg-white rounded-lg shadow-lg p-6 mt-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Đánh giá từ khách hàng</h2>
+          <p className="text-sm text-gray-500 mb-6">
+            Trải nghiệm thực tế của khách thuê xe {car.name}.
+          </p>
+          <Feedback
+            carId={car.id}
+            allowCreate={Boolean(userOrderIdForCar)}
+            createRentalOrderId={userOrderIdForCar ?? undefined}
+            userId={user?.id}
+          />
+          {!checkingReviewEligibility && !userOrderIdForCar && (
+            <p className="text-sm text-gray-500 mt-4">
+              Bạn cần hoàn tất ít nhất một đơn thuê xe này để có thể gửi đánh giá.
+            </p>
+          )}
         </div>
 
         {/* Xe khác */}
