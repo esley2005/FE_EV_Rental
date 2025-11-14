@@ -192,6 +192,17 @@ export default function RegisterPage() {
               >
                 Đăng ký
               </Button>
+
+              <Button
+                type="primary"
+                htmlType="submit"
+                size="large"
+                block
+                href="/login"
+                className="bg-blue-600 hover:bg-blue-700 font-semibold"
+              >
+                Về trang Login
+              </Button>
             </form>
 
             <div className="text-center mt-6 text-gray-600 text-sm">
