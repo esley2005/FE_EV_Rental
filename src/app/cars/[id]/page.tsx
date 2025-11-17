@@ -1132,60 +1132,11 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               </div>
             </div>
 
-            {/* Vị trí xe (Location Map) Section - LUÔN HIỂN THỊ */}
+      
             <div className="bg-white rounded-lg shadow-lg p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">
-                <MapPin className="inline-block mr-2 text-blue-600" /> Vị trí xe
-              </h2>
-
-              {loading && (
-                <div className="flex flex-col items-center justify-center py-8 gap-4">
-                  <MapPin className="inline-block text-blue-600" />
-                  <p className="text-gray-600">Đang tải vị trí xe...</p>
-                </div>
-              )}
-
-              {!loading && carCoords && (
-                <>
-                  {carAddress && (
-                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                      <p className="text-sm text-gray-700">
-                        <MapPin className="inline-block mr-2 text-blue-600" />
-                        <strong>Địa chỉ:</strong> {carAddress}
-                      </p>
-                    </div>
-                  )}
-                  <div className="rounded-lg overflow-hidden border border-gray-200">
-                    <CarMap
-                      cars={[
-                        {
-                          ...car,
-                          coords: carCoords,
-                          primaryAddress: carAddress || undefined,
-                        },
-                      ]}
-                      center={[carCoords.lat, carCoords.lng]}
-                      zoom={15}
-                      height={400}
-                    />
-                  </div>
-                </>
-              )}
-
-              {!loading && !carCoords && carAddress && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                  <p className="text-sm text-gray-700 mb-2">
-                    <MapPin className="inline-block mr-2 text-yellow-600" />
-                    <strong>Địa chỉ:</strong> {carAddress}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Đang xử lý tọa độ để hiển thị bản đồ...
-                  </p>
-                  <p className="text-xs text-gray-400 mt-2">
-                    (Kiểm tra console để xem chi tiết debug)
-                  </p>
-                </div>
-              )}
+             
+         
+              
 
               {!loading && !carCoords && !carAddress && (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">

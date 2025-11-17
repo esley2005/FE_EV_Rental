@@ -31,10 +31,11 @@ import DeliveryForm from "@/components/DeliveryForm";
 import ReturnForm from "@/components/ReturnForm";
 import DocumentVerification from "@/components/DocumentVerification";
 import CarManagement from "@/components/admin/CarManagement";
+import RentalOrderManagement from "@/components/staff/RentalOrderManagement";
 import { authUtils } from "@/utils/auth";
 import { carsApi as carsApiWrapped, bookingsApi as bookingsApiWrapped, rentalOrderApi, type ApiResponse } from "@/services/api";
 import { getUsers } from "@/services/userService";
-import { useRouter } from "next/navigation"; // ✅ Đúng cho App Router
+import { useRouter } from "next/navigation"; 
 
 const { Header, Sider, Content, Footer } = Layout;
 
@@ -42,6 +43,7 @@ const { Header, Sider, Content, Footer } = Layout;
  🧱 PHẦN 1: MENU CHÍNH (HEADER MENU)
  ========================================================= */
 const mainMenu = [
+  { key: "orders", label: "Quản lý đơn hàng", icon: <FileOutlined /> },
   { key: "tasks", label: "Giao / Nhận xe", icon: <PieChartOutlined /> },
   { key: "customers", label: "Xác thực khách hàng", icon: <UserOutlined /> },
   { key: "payments", label: "Thanh toán tại điểm", icon: <DesktopOutlined /> },
@@ -53,6 +55,9 @@ const mainMenu = [
  📑 PHẦN 2: SUBMENU (SIDEBAR)
  ========================================================= */
 const subMenus: Record<string, { key: string; label: string; icon: React.ReactNode }[]> = {
+  orders: [
+    { key: "1", label: "Danh sách đơn hàng", icon: <FileOutlined /> },
+  ],
   tasks: [
     { key: "1", label: "Danh sách xe sẵn sàng", icon: <PieChartOutlined /> },
     { key: "2", label: "Xe đã đặt / đang thuê", icon: <DesktopOutlined /> },
@@ -86,7 +91,7 @@ const subMenus: Record<string, { key: string; label: string; icon: React.ReactNo
  ========================================================= */
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
-  const [selectedModule, setSelectedModule] = useState("tasks");
+  const [selectedModule, setSelectedModule] = useState("orders");
   const [selectedSubMenu, setSelectedSubMenu] = useState("1");
 
   const [showDelivery, setShowDelivery] = useState(false);
@@ -326,7 +331,29 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             ]}
           />
 
-        
+          {/* ElaAdmin-like top summary cards */}
+          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+            <Col xs={24} sm={12} md={6}>
+              <Card bordered hoverable loading={metricsLoading}>
+                <Statistic title="Doanh thu" prefix={<span>₫</span>} value={metrics.revenue} precision={0} />
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} md={6}>
+              <Card bordered hoverable loading={metricsLoading}>
+                <Statistic title="Đơn hàng" value={metrics.orders} />
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} md={6}>
+              <Card bordered hoverable loading={metricsLoading}>
+                <Statistic title="Số xe" value={metrics.templates} />
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} md={6}>
+              <Card bordered hoverable loading={metricsLoading}>
+                <Statistic title="Khách hàng" value={metrics.clients} />
+              </Card>
+            </Col>
+          </Row>
 
           {/* Đã bỏ các khối Lưu lượng và Chỉ số theo yêu cầu */}
 
@@ -338,7 +365,9 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               minHeight: 400,
             }}
           >
-            {selectedModule === "tasks" ? (
+            {selectedModule === "orders" ? (
+              <RentalOrderManagement />
+            ) : selectedModule === "tasks" ? (
               selectedSubMenu === "1" || selectedSubMenu === "2" ? (
                 <CarStatusList
                   onDeliver={(car) => handleOpenDelivery(car)}

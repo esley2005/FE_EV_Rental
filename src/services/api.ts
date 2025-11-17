@@ -1045,6 +1045,7 @@ export interface RentalOrderData {
   expectedReturnTime: string;
   actualReturnTime?: string;
   subTotal?: number;
+  deposit?: number;
   total?: number;
   discount?: number;
   extraFee?: number;
@@ -1098,14 +1099,42 @@ export const rentalOrderApi = {
     }),
 
   // Cập nhật trạng thái đơn hàng (Admin/Staff only)
-  updateStatus: (orderId: number, status: 1 | 2 | 3 | 4 | 5) => {
-    const formData = new FormData();
-    formData.append('OrderId', orderId.toString());
-    formData.append('Status', status.toString());
-    
+  // Status enum: Pending=0, DocumentsSubmitted=1, DepositPending=2, Confirmed=3, 
+  // Renting=4, Returned=5, PaymentPending=6, Cancelled=7, Completed=8
+  updateStatus: (orderId: number, status: number) => {
     return apiCall<RentalOrderData>('/RentalOrder/UpdateStatus', {
       method: 'PUT',
-      body: formData,
+      body: JSON.stringify({
+        OrderId: orderId,
+        Status: status,
+      }),
+    });
+  },
+
+  // Cập nhật tổng tiền đơn hàng (Admin/Staff only)
+  updateTotal: (orderId: number, extraFee: number, damageFee: number, damageNotes?: string) => {
+    return apiCall<RentalOrderData>('/RentalOrder/UpdateTotal', {
+      method: 'PUT',
+      body: JSON.stringify({
+        OrderId: orderId,
+        ExtraFee: extraFee,
+        DamageFee: damageFee,
+        DamageNotes: damageNotes || '',
+      }),
+    });
+  },
+
+  // Xác nhận tổng tiền (tạo payment record) (Admin/Staff only)
+  confirmTotal: (orderId: number) => {
+    return apiCall<{ success: boolean; message?: string }>(`/RentalOrder/ConfirmTotal?orderId=${orderId}`, {
+      method: 'PUT',
+    });
+  },
+
+  // Xác nhận thanh toán đã hoàn thành (Admin/Staff only)
+  confirmPayment: (orderId: number) => {
+    return apiCall<{ success: boolean; message?: string }>(`/RentalOrder/ConfirmPayment?orderId=${orderId}`, {
+      method: 'PUT',
     });
   },
 };
@@ -1115,6 +1144,13 @@ export const paymentApi = {
     apiCall<RevenueByLocationData[]>("/Payment/ByRentalLocation", {
       method: "GET",
     }),
+
+  // Xác nhận thanh toán đặt cọc (Admin/Staff only)
+  confirmDepositPayment: (orderId: number) => {
+    return apiCall<{ success: boolean; message?: string }>(`/Payment/ConfirmDepositPayment?orderId=${orderId}`, {
+      method: 'PUT',
+    });
+  },
 };
 // Export types
 export type { ApiResponse };
