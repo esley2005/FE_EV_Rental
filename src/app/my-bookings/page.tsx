@@ -17,7 +17,11 @@ import {
   EyeOutlined,
   WarningOutlined,
   PhoneOutlined,
-  EnvironmentOutlined
+  EnvironmentOutlined,
+  UserOutlined,
+  MailOutlined,
+  IdcardOutlined,
+  ReloadOutlined
 } from "@ant-design/icons";
 import { 
   Card, 
@@ -34,8 +38,9 @@ import {
   Alert,
   notification as antdNotification
 } from "antd";
-import { rentalOrderApi, carsApi, rentalLocationApi, authApi } from "@/services/api";
-import type { RentalOrderData, Car, RentalLocationData, User } from "@/services/api";
+import { rentalOrderApi, carsApi, rentalLocationApi, authApi, driverLicenseApi, citizenIdApi } from "@/services/api";
+import type { RentalOrderData, RentalLocationData, User, DriverLicenseData, CitizenIdData } from "@/services/api";
+import type { Car } from "@/types/car";
 import dayjs from "dayjs";
 import Link from "next/link";
 
@@ -44,6 +49,8 @@ interface BookingWithDetails extends RentalOrderData {
   car?: Car;
   location?: RentalLocationData;
   user?: User;
+  driverLicense?: DriverLicenseData;
+  citizenIdDoc?: CitizenIdData;
 }
 
 export default function MyBookingsPage() {
@@ -122,10 +129,12 @@ export default function MyBookingsPage() {
         ? ordersResponse.data
         : (ordersResponse.data as any)?.$values || [];
 
-      // Load all cars and locations for mapping
-      const [carsResponse, locationsResponse] = await Promise.all([
+      // Load all cars, locations, licenses, and citizen IDs for mapping
+      const [carsResponse, locationsResponse, licensesResponse, citizenIdsResponse] = await Promise.all([
         carsApi.getAll(),
-        rentalLocationApi.getAll()
+        rentalLocationApi.getAll(),
+        driverLicenseApi.getAll(),
+        citizenIdApi.getAll()
       ]);
 
       const cars: Car[] = carsResponse.success && carsResponse.data
@@ -147,15 +156,29 @@ export default function MyBookingsPage() {
         }
       }
 
-      // Map orders with car and location info
+      // Xử lý licenses
+      const licenses: DriverLicenseData[] = licensesResponse.success && licensesResponse.data
+        ? (Array.isArray(licensesResponse.data) ? licensesResponse.data : (licensesResponse.data as any)?.$values || [])
+        : [];
+
+      // Xử lý citizen IDs
+      const citizenIds: CitizenIdData[] = citizenIdsResponse.success && citizenIdsResponse.data
+        ? (Array.isArray(citizenIdsResponse.data) ? citizenIdsResponse.data : (citizenIdsResponse.data as any)?.$values || [])
+        : [];
+
+      // Map orders with car, location, license, and citizen ID info
       const bookingsWithDetails: BookingWithDetails[] = orders.map((order: RentalOrderData) => {
         const car = cars.find((c) => c.id === order.carId);
         const location = locations.find((l) => l.id === order.rentalLocationId);
+        const license = licenses.find((l) => l.rentalOrderId === order.id);
+        const citizenIdDoc = citizenIds.find((c) => c.rentalOrderId === order.id);
         return {
           ...order,
           car,
           location,
           user,
+          driverLicense: license,
+          citizenIdDoc,
         };
       });
 
@@ -230,6 +253,38 @@ export default function MyBookingsPage() {
         {config.text}
       </Tag>
     );
+  };
+
+  const getDocumentStatusTag = (status?: string) => {
+    const statusLower = status?.toLowerCase() || '';
+    if (statusLower === 'approved' || statusLower === '1') {
+      return <Tag color="success">Đã xác thực</Tag>;
+    }
+    if (statusLower === 'rejected' || statusLower === '2') {
+      return <Tag color="error">Đã từ chối</Tag>;
+    }
+    return <Tag color="warning">Chờ xác thực</Tag>;
+  };
+
+  const handleRefreshBooking = async () => {
+    if (!selectedBooking || !user) return;
+    try {
+      setLoading(true);
+      await loadBookings(user.id);
+      // Reload selected booking
+      const updatedBooking = bookings.find(b => b.id === selectedBooking.id);
+      if (updatedBooking) {
+        setSelectedBooking(updatedBooking);
+      }
+      api.success({
+        message: 'Đã làm mới thông tin',
+        placement: 'topRight',
+      });
+    } catch (error) {
+      console.error('Refresh booking error:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const showBookingDetail = (booking: BookingWithDetails) => {
@@ -461,7 +516,19 @@ export default function MyBookingsPage() {
 
       {/* Detail Modal */}
       <Modal
-        title={<span className="text-xl font-semibold">Chi tiết đơn hàng</span>}
+        title={
+          <div className="flex justify-between items-center">
+            <span className="text-xl font-semibold">Chi tiết đơn hàng #{selectedBooking?.id}</span>
+            <Button 
+              icon={<ReloadOutlined />} 
+              onClick={handleRefreshBooking}
+              loading={loading}
+              size="small"
+            >
+              Làm mới
+            </Button>
+          </div>
+        }
         open={detailModalOpen}
         onCancel={() => setDetailModalOpen(false)}
         footer={[
@@ -469,19 +536,17 @@ export default function MyBookingsPage() {
             Đóng
           </Button>
         ]}
-        width={800}
+        width={900}
       >
         {selectedBooking && (
-          <div>
-            <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+          <div className="space-y-4">
+            {/* Order Status & Basic Info */}
+            <Card size="small" className="bg-blue-50">
               <div className="flex justify-between items-center">
-                <div>
-                  <span className="text-gray-600">Mã đơn hàng:</span>
-                  <span className="ml-2 font-semibold text-lg">#{selectedBooking.id}</span>
-                </div>
+                <span className="font-semibold">Trạng thái đơn hàng:</span>
                 {getStatusTag(selectedBooking.status)}
               </div>
-            </div>
+            </Card>
 
             {/* Thông báo khi đơn hàng đã xác nhận trong modal */}
             {normalizeStatus(selectedBooking.status) === 'confirmed' && (
@@ -510,112 +575,149 @@ export default function MyBookingsPage() {
               />
             )}
 
-            {/* Car Image */}
-            {selectedBooking.car?.imageUrl && (
-              <div className="mb-4">
-                <Image
-                  src={selectedBooking.car.imageUrl}
-                  alt={selectedBooking.car.name}
-                  className="w-full rounded-lg"
-                  style={{ maxHeight: 300, objectFit: 'cover' }}
-                  fallback="/logo_ev.png"
-                />
-              </div>
-            )}
-
-            <Descriptions bordered column={1}>
-              <Descriptions.Item label={<><CarOutlined /> Xe thuê</>}>
-                <div className="font-medium text-lg">{selectedBooking.car?.name || 'Không xác định'}</div>
-                <div className="text-sm text-gray-600">{selectedBooking.car?.model || ''}</div>
-                {selectedBooking.car && (
-                  <div className="mt-2 text-xs text-gray-500">
-                    <Space>
-                      <span>Số chỗ: {selectedBooking.car.seats}</span>
-                      <span>•</span>
-                      <span>Pin: {selectedBooking.car.batteryType}</span>
-                      <span>•</span>
-                      <span>Giá/ngày: {formatCurrency(selectedBooking.car.rentPricePerDay)}</span>
-                    </Space>
+            {/* Car Information */}
+            <Card title={<><CarOutlined /> Thông tin xe</>} size="small">
+              {selectedBooking.car ? (
+                <div>
+                  <div className="flex gap-4 mb-3">
+                    <Image
+                      src={selectedBooking.car.imageUrl}
+                      alt={selectedBooking.car.name}
+                      width={150}
+                      height={100}
+                      style={{ objectFit: 'cover', borderRadius: 8 }}
+                      fallback="/logo_ev.png"
+                    />
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold">{selectedBooking.car.name}</h3>
+                      <p className="text-gray-600">{selectedBooking.car.model}</p>
+                      <Descriptions column={2} size="small" className="mt-2">
+                        <Descriptions.Item label="Số chỗ">{selectedBooking.car.seats}</Descriptions.Item>
+                        <Descriptions.Item label="Loại pin">{selectedBooking.car.batteryType}</Descriptions.Item>
+                        <Descriptions.Item label="Giá/ngày">{formatCurrency(selectedBooking.car.rentPricePerDay)}</Descriptions.Item>
+                      </Descriptions>
+                    </div>
                   </div>
+                </div>
+              ) : (
+                <div className="text-gray-500">Không có thông tin xe</div>
+              )}
+            </Card>
+
+            {/* Customer Information */}
+            <Card title={<><UserOutlined /> Thông tin khách hàng</>} size="small">
+              {selectedBooking.user ? (
+                <Descriptions column={2} size="small">
+                  <Descriptions.Item label="Họ tên">{selectedBooking.user.fullName || '-'}</Descriptions.Item>
+                  <Descriptions.Item label={<><MailOutlined /> Email</>}>{selectedBooking.user.email || '-'}</Descriptions.Item>
+                  <Descriptions.Item label={<><PhoneOutlined /> Số điện thoại</>}>{selectedBooking.user.phone || selectedBooking.phoneNumber || '-'}</Descriptions.Item>
+                </Descriptions>
+              ) : (
+                <div className="text-gray-500">Không có thông tin người dùng</div>
+              )}
+            </Card>
+
+            {/* Document Status */}
+            <Card title={<><IdcardOutlined /> Trạng thái giấy tờ</>} size="small">
+              <Descriptions column={2} size="small">
+                <Descriptions.Item label="Giấy phép lái xe (GPLX)">
+                  {selectedBooking.driverLicense ? (
+                    <Space>
+                      {getDocumentStatusTag(selectedBooking.driverLicense.status)}
+                      <span className="text-sm text-gray-600">
+                        ({selectedBooking.driverLicense.name})
+                      </span>
+                    </Space>
+                  ) : (
+                    <Tag color="default">Chưa upload</Tag>
+                  )}
+                </Descriptions.Item>
+                <Descriptions.Item label="Căn cước công dân (CCCD)">
+                  {selectedBooking.citizenIdDoc ? (
+                    <Space>
+                      {getDocumentStatusTag(selectedBooking.citizenIdDoc.status)}
+                      <span className="text-sm text-gray-600">
+                        ({selectedBooking.citizenIdDoc.name})
+                      </span>
+                    </Space>
+                  ) : (
+                    <Tag color="default">Chưa upload</Tag>
+                  )}
+                </Descriptions.Item>
+              </Descriptions>
+            </Card>
+
+            {/* Time and Location Info */}
+            <Card title="Thông tin thời gian và địa điểm" size="small">
+              <Descriptions column={2} size="small" bordered>
+                <Descriptions.Item label="Mã đơn hàng">#{selectedBooking.id}</Descriptions.Item>
+                <Descriptions.Item label="Số điện thoại">{selectedBooking.phoneNumber || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Ngày đặt">{formatDate(selectedBooking.orderDate || selectedBooking.createdAt)}</Descriptions.Item>
+                <Descriptions.Item label="Có tài xế">
+                  {selectedBooking.withDriver ? <Tag color="blue">Có</Tag> : <Tag color="default">Không</Tag>}
+                </Descriptions.Item>
+                <Descriptions.Item label="Ngày nhận xe">{formatDate(selectedBooking.pickupTime)}</Descriptions.Item>
+                <Descriptions.Item label="Ngày trả xe (dự kiến)">{formatDate(selectedBooking.expectedReturnTime)}</Descriptions.Item>
+                {selectedBooking.actualReturnTime && (
+                  <Descriptions.Item label="Ngày trả xe (thực tế)">{formatDate(selectedBooking.actualReturnTime)}</Descriptions.Item>
                 )}
-              </Descriptions.Item>
-              
-              <Descriptions.Item label={<><PhoneOutlined /> Số điện thoại</>}>
-                {selectedBooking.phoneNumber || '-'}
-              </Descriptions.Item>
-
-              <Descriptions.Item label={<><CalendarOutlined /> Ngày nhận xe</>}>
-                {formatDate(selectedBooking.pickupTime)}
-              </Descriptions.Item>
-              
-              <Descriptions.Item label={<><CalendarOutlined /> Ngày trả xe (dự kiến)</>}>
-                {formatDate(selectedBooking.expectedReturnTime)}
-              </Descriptions.Item>
-
-              {selectedBooking.actualReturnTime && (
-                <Descriptions.Item label={<><CheckCircleOutlined /> Ngày trả xe (thực tế)</>}>
-                  {formatDate(selectedBooking.actualReturnTime)}
+                <Descriptions.Item label="Số ngày thuê">
+                  {calculateDays(selectedBooking.pickupTime, selectedBooking.expectedReturnTime)} ngày
                 </Descriptions.Item>
-              )}
+                <Descriptions.Item label={<><EnvironmentOutlined /> Địa điểm nhận xe</>} span={2}>
+                  {selectedBooking.location?.name || selectedBooking.location?.address || 'Không xác định'}
+                  {selectedBooking.location?.address && (
+                    <div className="text-sm text-gray-600 mt-1">{selectedBooking.location.address}</div>
+                  )}
+                </Descriptions.Item>
+              </Descriptions>
+            </Card>
 
-              <Descriptions.Item label="Số ngày thuê">
-                {calculateDays(selectedBooking.pickupTime, selectedBooking.expectedReturnTime)} ngày
-              </Descriptions.Item>
-
-              <Descriptions.Item label={<><EnvironmentOutlined /> Địa điểm nhận xe</>}>
-                {selectedBooking.location?.name || selectedBooking.location?.address || 'Không xác định'}
-                {selectedBooking.location?.address && (
-                  <div className="text-sm text-gray-600 mt-1">{selectedBooking.location.address}</div>
+            {/* Payment Details */}
+            <Card title={<><DollarOutlined /> Chi tiết thanh toán</>} size="small">
+              <Descriptions column={2} size="small" bordered>
+                {selectedBooking.subTotal && (
+                  <Descriptions.Item label="Tổng phụ">
+                    <span className="font-semibold">{formatCurrency(selectedBooking.subTotal)}</span>
+                  </Descriptions.Item>
                 )}
-              </Descriptions.Item>
-
-              <Descriptions.Item label="Có tài xế">
-                {selectedBooking.withDriver ? (
-                  <Tag color="blue">Có</Tag>
-                ) : (
-                  <Tag color="default">Không</Tag>
+                {selectedBooking.deposit && (
+                  <Descriptions.Item label="Tiền cọc">
+                    <span className="font-semibold">{formatCurrency(selectedBooking.deposit)}</span>
+                  </Descriptions.Item>
                 )}
-              </Descriptions.Item>
+                {selectedBooking.discount && selectedBooking.discount > 0 && (
+                  <Descriptions.Item label="Giảm giá">
+                    <span className="text-red-600">- {formatCurrency(selectedBooking.discount)}</span>
+                  </Descriptions.Item>
+                )}
+                {selectedBooking.extraFee && selectedBooking.extraFee > 0 && (
+                  <Descriptions.Item label="Phí phát sinh">
+                    <span className="text-orange-600">+ {formatCurrency(selectedBooking.extraFee)}</span>
+                  </Descriptions.Item>
+                )}
+                {selectedBooking.damageFee && selectedBooking.damageFee > 0 && (
+                  <Descriptions.Item label="Phí hư hỏng">
+                    <span className="text-red-600">+ {formatCurrency(selectedBooking.damageFee)}</span>
+                  </Descriptions.Item>
+                )}
+                {selectedBooking.total && (
+                  <Descriptions.Item label="Tổng tiền">
+                    <span className="font-semibold text-green-600 text-lg">
+                      {formatCurrency(selectedBooking.total)}
+                    </span>
+                  </Descriptions.Item>
+                )}
+                {selectedBooking.damageNotes && (
+                  <Descriptions.Item label="Ghi chú hư hỏng" span={2}>
+                    <div className="text-red-600">{selectedBooking.damageNotes}</div>
+                  </Descriptions.Item>
+                )}
+              </Descriptions>
+            </Card>
 
-              {selectedBooking.subTotal && (
-                <Descriptions.Item label="Tổng tiền (chưa giảm)">
-                  {formatCurrency(selectedBooking.subTotal)}
-                </Descriptions.Item>
-              )}
-
-              {selectedBooking.discount && selectedBooking.discount > 0 && (
-                <Descriptions.Item label="Giảm giá">
-                  <span className="text-red-600">- {formatCurrency(selectedBooking.discount)}</span>
-                </Descriptions.Item>
-              )}
-
-              {selectedBooking.extraFee && selectedBooking.extraFee > 0 && (
-                <Descriptions.Item label="Phí phát sinh">
-                  <span className="text-orange-600">+ {formatCurrency(selectedBooking.extraFee)}</span>
-                </Descriptions.Item>
-              )}
-
-              {selectedBooking.damageFee && selectedBooking.damageFee > 0 && (
-                <Descriptions.Item label="Phí hư hỏng">
-                  <span className="text-red-600">+ {formatCurrency(selectedBooking.damageFee)}</span>
-                </Descriptions.Item>
-              )}
-
-              <Descriptions.Item label="Tổng tiền">
-                <span className="text-xl font-bold text-green-600">
-                  {formatCurrency(selectedBooking.total || selectedBooking.subTotal)}
-                </span>
-              </Descriptions.Item>
-
-              {selectedBooking.damageNotes && (
-                <Descriptions.Item label="Ghi chú hư hỏng">
-                  <div className="text-red-600">{selectedBooking.damageNotes}</div>
-                </Descriptions.Item>
-              )}
-            </Descriptions>
-
-            <div className="mt-6">
-              <h4 className="font-semibold mb-3">Lịch sử đơn hàng</h4>
+            {/* Order History Timeline */}
+            <Card title="Lịch sử đơn hàng" size="small">
               <Timeline
                 items={[
                   {
@@ -640,7 +742,7 @@ export default function MyBookingsPage() {
                   }] : [])
                 ]}
               />
-            </div>
+            </Card>
           </div>
         )}
       </Modal>
