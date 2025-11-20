@@ -36,7 +36,6 @@ import { rentalOrderApi, carsApi, authApi, driverLicenseApi, citizenIdApi, payme
 import type { RentalOrderData, User, DriverLicenseData, CitizenIdData } from "@/services/api";
 import type { Car } from "@/types/car";
 import dayjs from "dayjs";
-import { formatDateTime } from "@/utils/dateFormat";
 
 interface OrderWithDetails extends Omit<RentalOrderData, 'citizenId'> {
   car?: Car;
@@ -218,27 +217,6 @@ export default function RentalOrderManagement() {
     if (newStatus === RentalOrderStatus.Returned) {
       setSelectedOrderForAction(order);
       setReturnModalVisible(true);
-      return;
-    }
-
-    // Nếu chọn "Hủy đơn" (Cancelled), sử dụng API cancelOrder
-    if (newStatus === RentalOrderStatus.Cancelled) {
-      try {
-        setLoading(true);
-        const response = await rentalOrderApi.cancelOrder(orderId);
-        
-        if (response.success) {
-          message.success('Hủy đơn hàng thành công!');
-          await loadOrders();
-        } else {
-          message.error(response.error || 'Hủy đơn hàng thất bại');
-        }
-      } catch (error) {
-        console.error('Cancel order error:', error);
-        message.error('Có lỗi xảy ra khi hủy đơn hàng');
-      } finally {
-        setLoading(false);
-      }
       return;
     }
 
@@ -911,7 +889,7 @@ export default function RentalOrderManagement() {
       key: "pickupTime",
       width: 150,
       render: (_: any, record: OrderWithDetails) =>
-        formatDateTime(record.pickupTime),
+        record.pickupTime ? dayjs(record.pickupTime).format('DD/MM/YYYY HH:mm') : '-',
     },
     {
       title: "Thao tác",
@@ -1067,14 +1045,14 @@ export default function RentalOrderManagement() {
               <Descriptions column={2} size="small">
                 <Descriptions.Item label="Mã đơn hàng">#{selectedOrder.id}</Descriptions.Item>
                 <Descriptions.Item label="Số điện thoại">{selectedOrder.phoneNumber || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Ngày đặt">{formatDateTime(selectedOrder.orderDate || selectedOrder.createdAt)}</Descriptions.Item>
+                <Descriptions.Item label="Ngày đặt">{dayjs(selectedOrder.orderDate || selectedOrder.createdAt).format('DD/MM/YYYY HH:mm')}</Descriptions.Item>
                 <Descriptions.Item label="Có tài xế">
                   {selectedOrder.withDriver ? <Tag color="blue">Có</Tag> : <Tag color="default">Không</Tag>}
                 </Descriptions.Item>
-                <Descriptions.Item label="Ngày nhận xe">{formatDateTime(selectedOrder.pickupTime)}</Descriptions.Item>
-                <Descriptions.Item label="Ngày trả xe (dự kiến)">{formatDateTime(selectedOrder.expectedReturnTime)}</Descriptions.Item>
+                <Descriptions.Item label="Ngày nhận xe">{dayjs(selectedOrder.pickupTime).format('DD/MM/YYYY HH:mm')}</Descriptions.Item>
+                <Descriptions.Item label="Ngày trả xe (dự kiến)">{dayjs(selectedOrder.expectedReturnTime).format('DD/MM/YYYY HH:mm')}</Descriptions.Item>
                 {selectedOrder.actualReturnTime && (
-                  <Descriptions.Item label="Ngày trả xe (thực tế)">{formatDateTime(selectedOrder.actualReturnTime)}</Descriptions.Item>
+                  <Descriptions.Item label="Ngày trả xe (thực tế)">{dayjs(selectedOrder.actualReturnTime).format('DD/MM/YYYY HH:mm')}</Descriptions.Item>
                 )}
                 {selectedOrder.subTotal && (
                   <Descriptions.Item label="Tổng phụ">
@@ -1374,7 +1352,7 @@ export default function RentalOrderManagement() {
         footer={null}
         width={800}
       >
-        {selectedLicense ? (
+        {selectedLicense && (
           <Form
             form={updateLicenseForm}
             layout="vertical"
@@ -1455,8 +1433,6 @@ export default function RentalOrderManagement() {
               </Space>
             </Form.Item>
           </Form>
-        ) : (
-          <div className="text-center py-4 text-gray-500">Đang tải thông tin...</div>
         )}
       </Modal>
 
@@ -1474,7 +1450,7 @@ export default function RentalOrderManagement() {
         footer={null}
         width={800}
       >
-        {selectedCitizenId ? (
+        {selectedCitizenId && (
           <Form
             form={updateCitizenIdForm}
             layout="vertical"
@@ -1562,8 +1538,6 @@ export default function RentalOrderManagement() {
               </Space>
             </Form.Item>
           </Form>
-        ) : (
-          <div className="text-center py-4 text-gray-500">Đang tải thông tin...</div>
         )}
       </Modal>
 

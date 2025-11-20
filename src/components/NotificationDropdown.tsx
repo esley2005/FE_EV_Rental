@@ -27,33 +27,33 @@ export interface Notification {
 
 // thông báo mẫu 
 const mockNotifications: Notification[] = [
-  // {
-  //   id: "1",
-  //   title: "🎉 Giảm giá đặc biệt hôm nay!",
-  //   message: "Giảm 30% cho tất cả các dòng xe điện trong ngày hôm nay. Đặt ngay để nhận ưu đãi!",
-  //   type: "success",
-  //   read: false,
-  //   createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 giờ trước
-  //   link: "/cars/all",
-  // },
-  // {
-  //   id: "2",
-  //   title: "🚗 Khuyến mãi cuối tuần",
-  //   message: "Thuê xe cuối tuần giảm 20% + tặng kèm bảo hiểm miễn phí. Áp dụng từ thứ 6 đến chủ nhật.",
-  //   type: "success",
-  //   read: false,
-  //   createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), // 5 giờ trước
-  //   link: "/cars/all",
-  // },
-  // {
-  //   id: "3",
-  //   title: "✨ Chương trình khách hàng thân thiết",
-  //   message: "Tích điểm mỗi lần thuê xe và đổi lấy voucher giảm giá. Tham gia ngay!",
-  //   type: "info",
-  //   read: false,
-  //   createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 1 ngày trước
-  //   link: "/profile",
-  // },
+  {
+    id: "1",
+    title: "🎉 Giảm giá đặc biệt hôm nay!",
+    message: "Giảm 30% cho tất cả các dòng xe điện trong ngày hôm nay. Đặt ngay để nhận ưu đãi!",
+    type: "success",
+    read: false,
+    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 giờ trước
+    link: "/cars/all",
+  },
+  {
+    id: "2",
+    title: "🚗 Khuyến mãi cuối tuần",
+    message: "Thuê xe cuối tuần giảm 20% + tặng kèm bảo hiểm miễn phí. Áp dụng từ thứ 6 đến chủ nhật.",
+    type: "success",
+    read: false,
+    createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), // 5 giờ trước
+    link: "/cars/all",
+  },
+  {
+    id: "3",
+    title: "✨ Chương trình khách hàng thân thiết",
+    message: "Tích điểm mỗi lần thuê xe và đổi lấy voucher giảm giá. Tham gia ngay!",
+    type: "info",
+    read: false,
+    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 1 ngày trước
+    link: "/profile",
+  },
   {
     id: "4",
     title: "Welcome to EV Rental",
