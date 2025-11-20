@@ -45,13 +45,13 @@ const subMenus: Record<string, { key: string; label: string; icon: React.ReactNo
   cars: [
     { key: "1", label: "Danh sách xe", icon: <Car /> },
     { key: "2", label: "Lịch sử giao nhận xe", icon: <History /> },
-    { key: "3", label: "Điều phối xe", icon: <Shuffle /> },
+    // { key: "3", label: "Điều phối xe", icon: <Shuffle /> },
   ],
 
   customers: [
     { key: "1", label: "Hồ sơ khách hàng", icon: <User /> },
 
-    { key: "2", label: "Danh sách khách hàng có rủi ro", icon: <Users /> },
+    // { key: "2", label: "Danh sách khách hàng có rủi ro", icon: <Users /> },
   ],
 
   staff: [
@@ -120,8 +120,8 @@ export default function AdminLayout() {
             return <CarManagement />;
           case "2":
             return <TransactionHistory />;
-          case "3":
-            return <VehicleDispatch />;
+          // case "3":
+          //   return <VehicleDispatch />;
           default:
             return <p>Chưa có nội dung.</p>;
         }
@@ -130,8 +130,8 @@ export default function AdminLayout() {
           case "1":
             return <CustomerManagement />;
  
-          case "2":
-            return <p>Chưa có</p>;
+          // case "2":
+          //   return <p>Chưa có</p>;
           default:
             return <p>Chưa có nội dung.</p>;
         }
