@@ -20,13 +20,15 @@ import { Layout, Menu, Dropdown, Space, Avatar, Breadcrumb, message, Result, But
 import { authUtils } from "@/utils/auth";
 
 // Các component nội dung mẫu
-import HistoryList from "@/components/admin/HistoryList";
-import DispatchList from "@/components/DispatchList";
+
+import VehicleDispatch from "@/components/admin/VehicleDispatch";
 import CarManagement from "@/components/admin/CarManagement";
 import CustomerManagement from "@/components/admin/CustomerManagement";
 import StaffManagement from "@/components/admin/StaffManagement";
 import AIAnalysis from "@/components/admin/AIAnalysis";
 import RevenueByLocation from "@/components/admin/RevenueByLocation";
+import TransactionHistory from "@/components/admin/TransactionHistory";
+
 
 const { Header, Sider, Content, Footer } = Layout;
 
@@ -42,19 +44,19 @@ const mainMenu = [
 const subMenus: Record<string, { key: string; label: string; icon: React.ReactNode }[]> = {
   cars: [
     { key: "1", label: "Danh sách xe", icon: <Car /> },
-    { key: "2", label: "Lịch sử giao nhận", icon: <History /> },
+    { key: "2", label: "Lịch sử giao nhận xe", icon: <History /> },
     { key: "3", label: "Điều phối xe", icon: <Shuffle /> },
   ],
 
   customers: [
     { key: "1", label: "Hồ sơ khách hàng", icon: <User /> },
-    { key: "2", label: "Khiếu nại", icon: <FileText /> },
-    { key: "3", label: "Danh sách khách hàng có rủi ro", icon: <Users /> },
+
+    { key: "2", label: "Danh sách khách hàng có rủi ro", icon: <Users /> },
   ],
 
   staff: [
     { key: "1", label: "Danh sách nhân viên tại các điểm", icon: <Users /> },
-  
+
   ],
 
   reports: [
@@ -109,63 +111,51 @@ export default function AdminLayout() {
     setUserInitial(initial || "A");
   }, []);
 
-  // Hiển thị nội dung theo module và submenu
-  const renderContent = () => {
-    if (selectedModule === "cars") {
-      switch (selectedSubMenu) {
-        case "1":
-          return <CarManagement />;
-        case "2":
-          return <HistoryList />;
-        case "3":
-          return <DispatchList />;
-        default:
-          return <p>Chưa có nội dung.</p>;
-      }
+  // Module content riêng, tránh đệ quy
+  const getModuleContent = () => {
+    switch (selectedModule) {
+      case "cars":
+        switch (selectedSubMenu) {
+          case "1":
+            return <CarManagement />;
+          case "2":
+            return <TransactionHistory />;
+          case "3":
+            return <VehicleDispatch />;
+          default:
+            return <p>Chưa có nội dung.</p>;
+        }
+      case "customers":
+        switch (selectedSubMenu) {
+          case "1":
+            return <CustomerManagement />;
+ 
+          case "2":
+            return <p>Chưa có</p>;
+          default:
+            return <p>Chưa có nội dung.</p>;
+        }
+      case "staff":
+        switch (selectedSubMenu) {
+          case "1":
+            return <StaffManagement />;
+          default:
+            return <p>Chưa có nội dung.</p>;
+        }
+      case "reports":
+        switch (selectedSubMenu) {
+          case "1":
+            return <RevenueByLocation />;
+          case "2":
+            return <AIAnalysis variant="car-usage" />;
+          case "3":
+            return <AIAnalysis />;
+          default:
+            return <p>Chưa có nội dung.</p>;
+        }
+      default:
+        return <p>Module không tồn tại.</p>;
     }
-
-    if (selectedModule === "customers") {
-      switch (selectedSubMenu) {
-        case "1":
-          return <CustomerManagement />;
-        case "2":
-          return <p>Trang Khiếu nại khách hàng</p>;
-        case "3":
-          return <p>Danh sách khách hàng có rủi ro</p>;
-        default:
-          return <p>Chưa có nội dung.</p>;
-      }
-    }
-
-    if (selectedModule === "staff") {
-      switch (selectedSubMenu) {
-        case "1":
-          return <StaffManagement />;
-
-        default:
-          return <p>Chưa có nội dung.</p>;
-      }
-    }
-
-    if (selectedModule === "reports") {
-      switch (selectedSubMenu) {
-        case "1":
-          return <RevenueByLocation />;
-        case "2":
-          return <AIAnalysis variant="car-usage" />;
-        case "3":
-          return <AIAnalysis />;
-        default:
-          return <p>Chưa có nội dung.</p>;
-      }
-    }
-
-    return (
-      <p>
-        Nội dung của module{" "}
-        <strong>{mainMenu.find((m) => m.key === selectedModule)?.label}</strong> đang được phát triển.
-      </p>
-    );
   };
 
   if (denied) {
@@ -181,19 +171,10 @@ export default function AdminLayout() {
           }
           extra={
             <Space>
-              <Button
-                type="primary"
-                size="large"
-                className="font-semibold"
-                onClick={() => router.push("/")}
-              >
+              <Button type="primary" size="large" className="font-semibold" onClick={() => router.push("/")}>
                 Về trang chủ
               </Button>
-              <Button
-                size="large"
-                className="font-semibold"
-                onClick={() => router.push("/login")}
-              >
+              <Button size="large" className="font-semibold" onClick={() => router.push("/login")}>
                 Đăng nhập
               </Button>
             </Space>
@@ -207,7 +188,6 @@ export default function AdminLayout() {
 
   return (
     <Layout style={{ minHeight: "100vh", background: "#E3EFFF" }}>
-      {/* Sidebar trái */}
       <Sider
         collapsible
         collapsed={collapsed}
@@ -227,10 +207,7 @@ export default function AdminLayout() {
           style={{ borderRight: 0 }}
         />
       </Sider>
-
-      {/* Layout chính */}
       <Layout>
-        {/* Header */}
         <Header
           style={{
             background: "#1447E6",
@@ -252,15 +229,12 @@ export default function AdminLayout() {
             }}
             style={{ flex: 1, background: "transparent" }}
           />
-
-          {/* Dropdown admin */}
           <Dropdown
             trigger={["click"]}
             menu={{
               items: userMenu.items,
               onClick: ({ key }) => {
                 if (key === "2") {
-                  // Đăng xuất
                   authUtils.logout();
                   router.push("/");
                 } else if (key === "1") {
@@ -278,8 +252,6 @@ export default function AdminLayout() {
             </Space>
           </Dropdown>
         </Header>
-
-        {/* Content */}
         <Content style={{ margin: "16px" }}>
           <Breadcrumb
             style={{ marginBottom: 16 }}
@@ -288,20 +260,10 @@ export default function AdminLayout() {
               { title: subMenus[selectedModule].find((s) => s.key === selectedSubMenu)?.label },
             ]}
           />
-
-          <div
-            style={{
-              padding: 24,
-              background: "#fff",
-              borderRadius: 8,
-              minHeight: 400,
-            }}
-          >
-            {renderContent()}
+          <div style={{ padding: 24, background: "#fff", borderRadius: 8, minHeight: 400 }}>
+            {getModuleContent()}
           </div>
         </Content>
-
-        {/* Footer */}
         <Footer style={{ textAlign: "center", background: "#f0f2f5" }}>
           EV Rental Admin ©{new Date().getFullYear()}
         </Footer>
