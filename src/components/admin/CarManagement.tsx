@@ -567,8 +567,8 @@ export default function CarManagement() {
       key: 'status',
       width: 120,
       render: (status: number) => (
-        <Tag color={status === 0 ? 'green' : 'red'}>
-          {status === 0 ? 'Sẵn sàng' : 'Hết xe'}
+        <Tag color={status === 1 ? 'green' : 'red'}>
+          {status === 1 ? 'Sẵn sàng' : 'Hết xe'}
         </Tag>
       ),
     },

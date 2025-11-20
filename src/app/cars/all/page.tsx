@@ -596,7 +596,7 @@ export default function AllCarsPage() {
   };
 
   const getStatusTag = (status: number) => {
-    return status === 0 ? (
+    return status === 1 ? (
       <Tag color="blue">Sẵn sàng</Tag>
     ) : (
       <Tag color="red">Hết xe</Tag>
