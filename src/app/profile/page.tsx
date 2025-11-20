@@ -287,9 +287,11 @@ placement: "topRight",
                             <Form.Item label="Họ và tên" name="fullName" rules={[{ required: true }]}>
                               <Input size="large" prefix={<UserOutlined />} />
                             </Form.Item>
-                            <Form.Item label="Email" name="email">
-                              <Input size="large" prefix={<MailOutlined />} disabled />
-                            </Form.Item>
+                            {user.id !== 3 && (
+                              <Form.Item label="Email" name="email">
+                                <Input size="large" prefix={<MailOutlined />} disabled />
+                              </Form.Item>
+                            )}
                             <Space>
                               <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading} className="bg-blue-600">
                                 Lưu thay đổi
