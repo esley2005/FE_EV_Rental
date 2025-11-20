@@ -1,6 +1,7 @@
 "use client";
 import Header from "@/components/Header";
 import HeroSection from "@/components/HeroSection";
+import AboutSection from "@/components/home/AboutSection";
 import CarsSection from "@/components/home/CarsSection";
 import Footer from "@/components/Footer";
 import ChatBox from "@/components/chat/ChatBox";
@@ -14,6 +15,9 @@ export default function Home() {
       <main className="flex-1 flex flex-col">
         {/* Hero Section với ảnh nền và form tìm kiếm */}
         <HeroSection />
+        
+        {/* About Section */}
+        <AboutSection />
         
         {/* Cars Section */}
         <div className="bg-gradient-to-br from-blue-50 to-blue-100 py-12">
