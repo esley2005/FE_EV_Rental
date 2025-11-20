@@ -1137,6 +1137,18 @@ export const rentalOrderApi = {
       method: 'PUT',
     });
   },
+
+  // Hủy đơn hàng
+  cancelOrder: (orderId: number) => {
+    // Backend sử dụng HttpDelete với [FromForm], nên cần gửi form data
+    const formData = new FormData();
+    formData.append('orderId', orderId.toString());
+    
+    return apiCall<RentalOrderData>(`/RentalOrder/CancelOrder`, {
+      method: 'DELETE',
+      body: formData,
+    });
+  },
 };
 export const paymentApi = {
   // Lấy doanh thu theo từng điểm thuê (Admin/Staff)

@@ -21,7 +21,8 @@ import {
   UserOutlined,
   MailOutlined,
   IdcardOutlined,
-  ReloadOutlined
+  ReloadOutlined,
+  DeleteOutlined
 } from "@ant-design/icons";
 import { 
   Card, 
@@ -36,7 +37,8 @@ import {
   Timeline,
   Image,
   Alert,
-  notification as antdNotification
+  notification as antdNotification,
+  Popconfirm
 } from "antd";
 import { rentalOrderApi, carsApi, rentalLocationApi, authApi, driverLicenseApi, citizenIdApi } from "@/services/api";
 import type { RentalOrderData, RentalLocationData, User, DriverLicenseData, CitizenIdData } from "@/services/api";
@@ -287,6 +289,51 @@ export default function MyBookingsPage() {
     }
   };
 
+  const handleCancelBooking = async (booking: BookingWithDetails) => {
+    try {
+      setLoading(true);
+      // Gọi API CancelOrder
+      const response = await rentalOrderApi.cancelOrder(booking.id);
+      
+      if (response.success) {
+        api.success({
+          message: 'Hủy đơn hàng thành công',
+          description: 'Đơn hàng đã được hủy thành công.',
+          placement: 'topRight',
+          icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+        });
+        
+        // Reload bookings
+        if (user) {
+          await loadBookings(user.id);
+        }
+        
+        // Close detail modal if open
+        if (selectedBooking?.id === booking.id) {
+          setDetailModalOpen(false);
+        }
+      } else {
+        throw new Error(response.error || 'Không thể hủy đơn hàng');
+      }
+    } catch (error: any) {
+      console.error('Cancel booking error:', error);
+      api.error({
+        message: 'Không thể hủy đơn hàng',
+        description: error.message || 'Có lỗi xảy ra khi hủy đơn hàng. Vui lòng thử lại.',
+        placement: 'topRight',
+        icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const canCancelBooking = (booking: BookingWithDetails): boolean => {
+    const status = normalizeStatus(booking.status);
+    // Chỉ cho phép hủy khi đơn hàng đang ở trạng thái pending hoặc chưa được xác nhận
+    return status === 'pending' || status === 'confirmed';
+  };
+
   const showBookingDetail = (booking: BookingWithDetails) => {
     setSelectedBooking(booking);
     setDetailModalOpen(true);
@@ -495,14 +542,35 @@ export default function MyBookingsPage() {
                               <EnvironmentOutlined /> {locationName}
                             </span>
                           </div>
-                          <Button
-                            type="primary"
-                            icon={<EyeOutlined />}
-                            onClick={() => showBookingDetail(booking)}
-                            className="bg-blue-600"
-                          >
-                            Xem chi tiết
-                          </Button>
+                          <Space>
+                            {canCancelBooking(booking) && (
+                              <Popconfirm
+                                title="Hủy đơn hàng"
+                                description="Bạn có chắc chắn muốn hủy đơn hàng này không?"
+                                onConfirm={() => handleCancelBooking(booking)}
+                                okText="Có, hủy đơn"
+                                cancelText="Không"
+                                okButtonProps={{ danger: true }}
+                                icon={<WarningOutlined style={{ color: '#ff4d4f' }} />}
+                              >
+                                <Button
+                                  danger
+                                  icon={<DeleteOutlined />}
+                                  loading={loading}
+                                >
+                                  Hủy đơn
+                                </Button>
+                              </Popconfirm>
+                            )}
+                            <Button
+                              type="primary"
+                              icon={<EyeOutlined />}
+                              onClick={() => showBookingDetail(booking)}
+                              className="bg-blue-600"
+                            >
+                              Xem chi tiết
+                            </Button>
+                          </Space>
                         </div>
                       </div>
                     </div>
@@ -532,10 +600,30 @@ export default function MyBookingsPage() {
         open={detailModalOpen}
         onCancel={() => setDetailModalOpen(false)}
         footer={[
+          selectedBooking && canCancelBooking(selectedBooking) && (
+            <Popconfirm
+              key="cancel"
+              title="Hủy đơn hàng"
+              description="Bạn có chắc chắn muốn hủy đơn hàng này không?"
+              onConfirm={() => selectedBooking && handleCancelBooking(selectedBooking)}
+              okText="Có, hủy đơn"
+              cancelText="Không"
+              okButtonProps={{ danger: true }}
+              icon={<WarningOutlined style={{ color: '#ff4d4f' }} />}
+            >
+              <Button
+                danger
+                icon={<DeleteOutlined />}
+                loading={loading}
+              >
+                Hủy đơn hàng
+              </Button>
+            </Popconfirm>
+          ),
           <Button key="close" onClick={() => setDetailModalOpen(false)}>
             Đóng
           </Button>
-        ]}
+        ].filter(Boolean)}
         width={900}
       >
         {selectedBooking && (

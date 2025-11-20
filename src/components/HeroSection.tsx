@@ -179,7 +179,7 @@ export default function HeroSection() {
           transition={{ duration: 0.8, delay: 0.6, ease: "easeOut" }}
         >
           {/* Tabs */}
-          <div className="flex flex-wrap gap-2 mb-6">
+          {/* <div className="flex flex-wrap gap-2 mb-6">
             <motion.button
               onClick={() => setRentalType("self-drive")}
               className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all ${
@@ -213,13 +213,14 @@ export default function HeroSection() {
               <span>Xe có tài xế</span>
             </motion.button>
 
-          </div>
+          </div> */}
 
-          <div className="flex flex-col lg:flex-row gap-6 mb-6">
+          <div className="flex flex-col lg:flex-row gap-6 mb-6 bg-white/30 rounded-2xl p-4" >
             {/* Location Select */}
             <div className="flex-1 flex flex-col gap-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
-                <MapPin size={16} /> Địa điểm thuê xe
+              <label className="block text-sm  text-white mb-2 flex items-center gap-1">
+                <MapPin size={40} />
+                <h2 className="text-2xl font-bold text-white">Địa điểm thuê xe</h2>
               </label>
               <Select
                 size="large"

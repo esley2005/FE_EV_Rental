@@ -1135,7 +1135,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
       
             <div className="bg-white rounded-lg shadow-lg p-6">
              
-            <h2 className="text-xl font-bold text-gray-900 mb-4">
+            {/* <h2 className="text-xl font-bold text-gray-900 mb-4">
                 <MapPin className="inline-block mr-2 text-blue-600" /> Vị trí xe
               </h2>
 
@@ -1171,7 +1171,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                     />
                   </div>
                 </>
-              )}
+              )} */}
 
               {!loading && !carCoords && carAddress && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
