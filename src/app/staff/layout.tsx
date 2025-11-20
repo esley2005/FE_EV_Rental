@@ -30,7 +30,6 @@ import CarStatusList from "@/components/CarStatusList";
 import DeliveryForm from "@/components/DeliveryForm";
 import ReturnForm from "@/components/ReturnForm";
 import DocumentVerification from "@/components/DocumentVerification";
-import CarManagement from "@/components/admin/CarManagement";
 import RentalOrderManagement from "@/components/staff/RentalOrderManagement";
 import { authUtils } from "@/utils/auth";
 import { carsApi as carsApiWrapped, bookingsApi as bookingsApiWrapped, rentalOrderApi, type ApiResponse } from "@/services/api";
@@ -44,7 +43,7 @@ const { Header, Sider, Content, Footer } = Layout;
 const mainMenu = [
   { key: "orders", label: "Quản lý đơn hàng", icon: <FileOutlined /> },
   // { key: "tasks", label: "Giao / Nhận xe", icon: <PieChartOutlined /> },
-  // { key: "customers", label: "Xác thực khách hàng", icon: <UserOutlined /> },
+  // { key: "customers", label: "Xác thực giấy tờ", icon: <UserOutlined /> },
   // { key: "payments", label: "Thanh toán tại điểm", icon: <DesktopOutlined /> },
   { key: "vehicles", label: "Xe tại điểm", icon: <TeamOutlined /> },
 
@@ -390,7 +389,10 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               />
             ) : selectedModule === "vehicles" ? (
               selectedSubMenu === "1" ? (
-                <CarManagement />
+                <div>
+                  <p className="text-gray-600 mb-4">Danh sách xe tại điểm thuê</p>
+                  <p className="text-sm text-gray-500">Tính năng đang được phát triển...</p>
+                </div>
               ) : selectedSubMenu === "2" ? (
                 <p>Trang theo dõi trạng thái pin & kỹ thuật</p>
               ) : (

@@ -761,6 +761,8 @@ export default function RentalOrderManagement() {
           return <Tag color="blue">Có tài xế</Tag>;
         }
         
+        // Kiểm tra có giấy tờ được upload chưa
+        const hasDocuments = record.driverLicense || record.citizenIdDoc;
         const hasPendingDocs = 
           (record.driverLicense && (record.driverLicense.status === '0' || record.driverLicense.status === 'Pending')) ||
           (record.citizenIdDoc && (record.citizenIdDoc.status === '0' || record.citizenIdDoc.status === 'Pending'));
@@ -775,16 +777,20 @@ export default function RentalOrderManagement() {
               <IdcardOutlined className="mr-1" />
               <span className="text-xs">CCCD:</span> {getDocumentStatusTag(record.citizenIdDoc?.status)}
             </div>
-            {hasPendingDocs && (
+            {hasDocuments && (
               <Button 
-                type="primary" 
+                type={hasPendingDocs ? "primary" : "default"}
                 size="small" 
                 icon={<IdcardOutlined />}
                 onClick={() => showDocumentVerificationModal(record)}
                 block
+                className={hasPendingDocs ? "bg-orange-500 hover:bg-orange-600 border-orange-500" : ""}
               >
-                Xác thực giấy tờ
+                {hasPendingDocs ? "Xác thực giấy tờ" : "Xem giấy tờ"}
               </Button>
+            )}
+            {!hasDocuments && (
+              <Tag color="default" className="text-xs">Chưa nộp giấy tờ</Tag>
             )}
           </Space>
         );
@@ -1466,9 +1472,15 @@ export default function RentalOrderManagement() {
             <Form.Item
               label="Số CCCD"
               name="citizenIdNumber"
-              rules={[{ required: true, message: 'Vui lòng nhập số CCCD' }]}
+              rules={[
+                { required: true, message: 'Vui lòng nhập số CCCD' },
+                { 
+                  pattern: /^[0-9]{9,10}$/, 
+                  message: "Số căn cước công dân phải có 9-10 chữ số" 
+                }
+              ]}
             >
-              <Input />
+              <Input placeholder="Nhập số CCCD (9-10 chữ số)" maxLength={10} />
             </Form.Item>
             <Form.Item
               label="Ngày sinh"
