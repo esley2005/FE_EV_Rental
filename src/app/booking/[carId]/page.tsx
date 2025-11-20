@@ -353,13 +353,23 @@ export default function BookingPage() {
     
     // Lấy giá theo loại (có tài xế hay không)
     const pricePerDay = withDriver ? car.rentPricePerDayWithDriver : car.rentPricePerDay;
+    // Sử dụng giá/giờ trực tiếp từ database
+    const pricePerHour = withDriver ? car.rentPricePerHourWithDriver : car.rentPricePerHour;
     
-    // Tính giá/giờ từ giá/ngày (chia 24) để đảm bảo tính chính xác
-    const pricePerHour = pricePerDay / 24;
+    // Debug: log để kiểm tra giá
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[calculateRentalFee]', {
+        withDriver,
+        pricePerDay,
+        pricePerHour,
+        rentPricePerHour: car.rentPricePerHour,
+        rentPricePerHourWithDriver: car.rentPricePerHourWithDriver,
+      });
+    }
     
-    // Tính tổng: (số ngày * giá/ngày) + (số giờ * giá/giờ) - không làm tròn
+    // Tính tổng: (số ngày * giá/ngày) + (số giờ * giá/giờ)
     const dayFee = fullDays * pricePerDay;
-    const hourFee = remainingHours * pricePerHour;
+    const hourFee = remainingHours * (pricePerHour || 0);
     
     return dayFee + hourFee;
   };
@@ -508,13 +518,23 @@ export default function BookingPage() {
     
     // Lấy giá theo loại (có tài xế hay không)
     const pricePerDay = withDriverValue ? car.rentPricePerDayWithDriver : car.rentPricePerDay;
+    // Sử dụng giá/giờ trực tiếp từ database
+    const pricePerHour = withDriverValue ? car.rentPricePerHourWithDriver : car.rentPricePerHour;
     
-    // Tính giá/giờ từ giá/ngày (chia 24) để đảm bảo tính chính xác
-    const pricePerHour = pricePerDay / 24;
+    // Debug: log để kiểm tra giá
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[calculateRentalFeeWithDates]', {
+        withDriver: withDriverValue,
+        pricePerDay,
+        pricePerHour,
+        rentPricePerHour: car.rentPricePerHour,
+        rentPricePerHourWithDriver: car.rentPricePerHourWithDriver,
+      });
+    }
     
-    // Tính tổng: (số ngày * giá/ngày) + (số giờ * giá/giờ) - không làm tròn
+    // Tính tổng: (số ngày * giá/ngày) + (số giờ * giá/giờ)
     const dayFee = fullDays * pricePerDay;
-    const hourFee = remainingHours * pricePerHour;
+    const hourFee = remainingHours * (pricePerHour || 0);
     
     return dayFee + hourFee;
   };
