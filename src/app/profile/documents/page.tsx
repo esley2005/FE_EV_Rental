@@ -732,8 +732,18 @@ export default function DocumentsPage() {
                   <Input placeholder="Nhập đầy đủ họ tên" />
                 </Form.Item>
 
-                <Form.Item label="Số căn cước công dân" name="citizenIdNumber" rules={[{ required: true, message: "Nhập số căn cước công dân" }]}>
-                  <Input placeholder="Nhập số CCCD" />
+                <Form.Item 
+                  label="Số căn cước công dân" 
+                  name="citizenIdNumber" 
+                  rules={[
+                    { required: true, message: "Nhập số căn cước công dân" },
+                    { 
+                      pattern: /^[0-9]{9,10}$/, 
+                      message: "Số căn cước công dân phải có 9-10 chữ số" 
+                    }
+                  ]}
+                >
+                  <Input placeholder="Nhập số CCCD (9-10 chữ số)" maxLength={10} />
                 </Form.Item>
 
                 <Form.Item 
