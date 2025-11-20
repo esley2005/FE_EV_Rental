@@ -16,15 +16,15 @@ export default function Home() {
         {/* Hero Section với ảnh nền và form tìm kiếm */}
         <HeroSection />
         
-        {/* About Section */}
-        <AboutSection />
-        
         {/* Cars Section */}
         <div className="bg-gradient-to-br from-blue-50 to-blue-100 py-12">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <CarsSection />
           </div>
         </div>
+        
+        {/* About Section */}
+        <AboutSection />
       </main>
 
       <Footer />
