@@ -1173,7 +1173,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                 </>
               )} */}
 
-              {/* {!loading && !carCoords && carAddress && (
+              {!loading && !carCoords && carAddress && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                   <p className="text-sm text-gray-700 mb-2">
                     <MapPin className="inline-block mr-2 text-yellow-600" />
@@ -1187,7 +1187,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                   </p>
                 </div>
               )}
-               */}
+              
 
               {!loading && !carCoords && !carAddress && (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
@@ -1264,11 +1264,11 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                             {location.address && (
                               <p className="text-sm text-gray-600">{location.address}</p>
                             )}
-                            {/* {location.quantity !== null && location.quantity !== undefined && (
+                            {location.quantity !== null && location.quantity !== undefined && (
                               <p className="text-xs text-gray-500 mt-1">
                                 Số lượng xe sẵn có: {location.quantity}
                               </p>
-                            )} */}
+                            )}
                           </div>
                         </div>
                       ))}
@@ -1448,7 +1448,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
               <div className="bg-orange-100 border border-orange-200 rounded-lg p-4">
                 <p className="text-gray-900 text-sm">
-                  Khi thuê xe, bạn phải cọc 20% giá trị đơn thuê xe trước khi nhận xe.
+                  Không yêu cầu khách thuê thế chấp Tiền mặt hoặc Xe máy
                 </p>
               </div>
             </div>
@@ -1500,7 +1500,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                           Phụ phí phát sinh khi xe hoàn trả không đảm bảo vệ sinh (nhiều vết bẩn, bùn cát, sình lầy...)
                         </p>
                       </div>
-                      <span className="text-blue-600 font-bold text-sm whitespace-nowrap">100.000₫ - 200.000₫</span>
+                      <span className="text-blue-600 font-bold text-sm whitespace-nowrap">70.000₫</span>
                     </div>
                   </div>
                 </div>
@@ -1516,7 +1516,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                           Phụ phí phát sinh khi xe hoàn trả bị ám mùi khó chịu (mùi thuốc lá, thực phẩm nặng mùi...)
                         </p>
                       </div>
-                      <span className="text-blue-600 font-bold text-sm whitespace-nowrap">300.000₫ - 500.000₫</span>
+                      <span className="text-blue-600 font-bold text-sm whitespace-nowrap">500.000₫</span>
                     </div>
                   </div>
                 </div>
@@ -1537,12 +1537,12 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   <div className="flex justify-between items-center mb-3">
     <div>
       <p className="text-xs text-gray-600">Theo giờ (Tự lái)</p>
-      {/* <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2">
         <span className="text-sm text-gray-500 line-through">
           {formatCurrency(Math.round(car.rentPricePerHour * 1.1))}
         </span>
-        
-      </div> */}
+        <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span>
+      </div>
     </div>
     <p className="text-lg font-bold text-gray-900 text-right">
       {formatCurrency(car.rentPricePerHour)}/giờ
@@ -1554,10 +1554,10 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     <div>
       <p className="text-xs text-gray-600">Theo ngày (Tự lái)</p>
       <div className="flex items-center gap-2">
-        {/* <span className="text-sm text-gray-500 line-through">
+        <span className="text-sm text-gray-500 line-through">
           {formatCurrency(Math.round(car.rentPricePerDay * 1.1))}
-        </span> */}
-        {/* <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span> */}
+        </span>
+        <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span>
       </div>
     </div>
     <p className="text-lg font-bold text-gray-900 text-right">
@@ -1570,10 +1570,10 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     <div>
       <p className="text-xs text-gray-600">Theo giờ (Có tài xế)</p>
       <div className="flex items-center gap-2">
-        {/* <span className="text-sm text-gray-500 line-through">
+        <span className="text-sm text-gray-500 line-through">
           {formatCurrency(Math.round(car.rentPricePerHourWithDriver * 1.1))}
-        </span> */}
-        {/* <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span> */}
+        </span>
+        <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span>
       </div>
     </div>
     <p className="text-lg font-bold text-gray-900 text-right">
@@ -1586,10 +1586,10 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     <div>
       <p className="text-xs text-gray-600">Theo ngày (Có tài xế)</p>
       <div className="flex items-center gap-2">
-        {/* <span className="text-sm text-gray-500 line-through">
+        <span className="text-sm text-gray-500 line-through">
           {formatCurrency(Math.round(car.rentPricePerDayWithDriver * 1.1))}
-        </span> */}
-        {/* <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span> */}
+        </span>
+        <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span>
       </div>
     </div>
     <p className="text-lg font-bold text-gray-900 text-right">
