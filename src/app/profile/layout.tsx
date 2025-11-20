@@ -12,9 +12,7 @@ export default function ProfileLayout({
       <main className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
         {children}
       </main>
-      <div style={{ marginLeft: "17rem" }}>
-        <Footer />
-      </div>
+      <Footer />
     </>
   );
 }

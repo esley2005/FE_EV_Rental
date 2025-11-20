@@ -12,7 +12,6 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   WarningOutlined,
-  IdcardOutlined,
 } from "@ant-design/icons";
 import {
   Layout,
@@ -101,7 +100,7 @@ if (response.data.driverLicenseStatus !== undefined) {
     loadUserProfile();
   }, [router, api, profileForm]);
 
-  const handleUpdateProfile = async (values: any) => {
+  const handleUpdateProfile = async (values: { fullName: string; email: string }) => {
     setLoading(true);
     try {
       const updateData: UpdateProfileData = {
@@ -194,22 +193,12 @@ placement: "topRight",
     <Layout className="min-h-screen bg-gray-50 text-gray-900">
       {contextHolder}
 
-      <div className="flex mt-20">
-        {/* Sidebar (kept simple) */}
-        <aside className="w-64 bg-white border-r shadow-sm p-6 h-[calc(100vh-80px)] fixed left-0 top-20">
-          <h2 className="text-2xl font-bold mb-4">Xin chào bạn!</h2>
-          <nav className="flex flex-col space-y-2">
-            <button className="flex items-center gap-3 px-3 py-2 rounded-lg text-green-600 bg-green-50 font-medium">
-              <UserOutlined />
-              <span>Tài khoản của tôi</span>
-            </button>
-          </nav>
-        </aside>
-
+      <div className="mt-20">
         {/* Main Content */}
-        <Content style={{ marginLeft: "17rem", padding: "24px", width: "100%" }}>
+        <Content style={{ padding: "24px", width: "100%" }}>
+          <div style={{ maxWidth: 1000, margin: "0 auto" }}>
           {/* === SUMMARY CARD (avatar, name, email, small meta) === */}
-          <div style={{ width: "100%", maxWidth: 1000, marginBottom: 18 }}>
+          <div style={{ width: "100%", marginBottom: 18 }}>
             <Card className="shadow-lg rounded-xl">
               <div className="flex items-start gap-6">
                 <div>
@@ -264,7 +253,7 @@ placement: "topRight",
           </div>
 
           {/* === TABS (Thông tin cá nhân + Đổi mật khẩu) === */}
-          <div style={{ width: "100%", maxWidth: 1000, marginBottom: 18 }}>
+          <div style={{ width: "100%", marginBottom: 18 }}>
             <Card className="shadow-lg rounded-xl">
               <Tabs
                 defaultActiveKey="1"
@@ -354,6 +343,7 @@ placement: "topRight",
                 ]}
               />
             </Card>
+          </div>
           </div>
         </Content>
       </div>

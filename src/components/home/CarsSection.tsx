@@ -30,8 +30,9 @@ export default function CarsSection() {
           viewport={{ once: true }}
           transition={{ duration: 0.6, delay: 0.2 }}
         >
-          <h2 className="text-3xl font-bold text-gray-800">
+          <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-2">
             Xe điện cho thuê
+            <span className="text-blue-600">→</span>
           </h2>
           <motion.div
             whileHover={{ x: 5 }}
