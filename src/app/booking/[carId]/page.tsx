@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { Form, Input, DatePicker, Button, message, Checkbox, Radio, Select, notification } from "antd";
+import { Form, Input, DatePicker, Button, message, Checkbox, Radio, notification } from "antd";
 import { Calendar, MapPin, Phone, User as UserIcon, Search, Car as CarIcon, FileText, Download, Percent, Info } from "lucide-react";
 import dayjs, { Dayjs } from "dayjs";
-import { carsApi, rentalOrderApi, rentalLocationApi, authApi } from "@/services/api";
+import { carsApi, rentalOrderApi, rentalLocationApi, carRentalLocationApi, authApi } from "@/services/api";
 import type { Car } from "@/types/car";
 import type { User, CreateRentalOrderData, RentalLocationData } from "@/services/api";
 import { authUtils } from "@/utils/auth";
@@ -28,14 +28,238 @@ export default function BookingPage() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [rentalLocations, setRentalLocations] = useState<RentalLocationData[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<RentalLocationData | null>(null);
   const [pickupOption, setPickupOption] = useState<'self' | 'delivery'>('self');
   const [discountOption, setDiscountOption] = useState<'program' | 'promo'>('program');
   const [promoCode, setPromoCode] = useState('');
   const [vatInvoice, setVatInvoice] = useState(false);
-  const [carLocationIds, setCarLocationIds] = useState<number[]>([]); // Danh sách ID các vị trí có xe
-  const [locationError, setLocationError] = useState<string | null>(null);
+
+  // Helper functions tương tự trang chi tiết xe
+  const extractCarRentalLocationList = (source: any): any[] => {
+    if (!source) return [];
+    const raw = source?.carRentalLocations ?? source;
+    if (!raw) return [];
+
+    if (Array.isArray(raw)) {
+      return raw;
+    }
+
+    if (Array.isArray(raw?.$values)) {
+      return raw.$values;
+    }
+
+    if (raw?.data) {
+      if (Array.isArray(raw.data)) {
+        return raw.data;
+      }
+      if (Array.isArray(raw.data?.$values)) {
+        return raw.data.$values;
+      }
+    }
+
+    return [];
+  };
+
+  const getLocationIdFromRelation = (relation: any): number | null => {
+    const candidates = [
+      relation?.locationId,
+      relation?.LocationId,
+      relation?.rentalLocationId,
+      relation?.RentalLocationId,
+      relation?.rentalLocation?.id,
+      relation?.rentalLocation?.Id,
+      relation?.rentalLocation?.locationId,
+      relation?.rentalLocation?.LocationId,
+      relation?.RentalLocation?.id,
+      relation?.RentalLocation?.Id,
+      relation?.RentalLocation?.locationId,
+      relation?.RentalLocation?.LocationId,
+    ];
+
+    for (const candidate of candidates) {
+      if (candidate !== undefined && candidate !== null && !Number.isNaN(Number(candidate))) {
+        return Number(candidate);
+      }
+    }
+
+    return null;
+  };
+
+  const getNameFromSource = (source: any): string | null => {
+    const candidates = [
+      source?.name,
+      source?.Name,
+      source?.locationName,
+      source?.LocationName,
+      source?.rentalLocation?.name,
+      source?.rentalLocation?.Name,
+      source?.RentalLocation?.name,
+      source?.RentalLocation?.Name,
+    ];
+
+    for (const candidate of candidates) {
+      if (typeof candidate === 'string' && candidate.trim()) {
+        return candidate.trim();
+      }
+    }
+
+    return null;
+  };
+
+  const getAddressFromSource = (source: any): string | null => {
+    const candidates = [
+      source?.address,
+      source?.Address,
+      source?.locationAddress,
+      source?.LocationAddress,
+      source?.rentalLocation?.address,
+      source?.rentalLocation?.Address,
+      source?.RentalLocation?.address,
+      source?.RentalLocation?.Address,
+    ];
+
+    for (const candidate of candidates) {
+      if (typeof candidate === 'string' && candidate.trim()) {
+        return candidate.trim();
+      }
+    }
+
+    return null;
+  };
+
+  const resolveCarLocation = useCallback(async (carData: Car) => {
+    if (!carData) {
+      console.warn("resolveCarLocation: carData is null");
+      return;
+    }
+
+    console.log("resolveCarLocation: carData", carData);
+
+    // Extract carRentalLocations list
+    let relations = extractCarRentalLocationList(carData);
+    console.log("resolveCarLocation: relations from carData", relations);
+
+    // Nếu không có trong carData, thử fetch từ API
+    if (!relations.length) {
+      try {
+        const relationResponse = await carRentalLocationApi.getByCarId(Number(carData.id));
+        if (relationResponse.success && relationResponse.data) {
+          relations = extractCarRentalLocationList({ carRentalLocations: relationResponse.data });
+          console.log("resolveCarLocation: relations from API", relations);
+        }
+      } catch (error) {
+        console.warn("resolveCarLocation: Failed to load carRentalLocations via API", error);
+      }
+    }
+
+    if (!relations.length) {
+      console.warn("resolveCarLocation: No relations found");
+      setSelectedLocation(null);
+      form.setFieldsValue({ rentalLocationId: undefined });
+      return;
+    }
+
+    // Lấy relation đầu tiên (active nếu có)
+    const primaryRelation =
+      relations.find(
+        (rel: any) =>
+          (rel?.isActive ?? rel?.IsActive ?? true) &&
+          !(rel?.isDeleted ?? rel?.IsDeleted)
+      ) || relations[0];
+
+    console.log("resolveCarLocation: primaryRelation", primaryRelation);
+
+    // Lấy locationId từ relation
+    const locationId = getLocationIdFromRelation(primaryRelation);
+    console.log("resolveCarLocation: locationId", locationId);
+
+    if (!locationId) {
+      console.warn("resolveCarLocation: Could not extract locationId");
+      setSelectedLocation(null);
+      form.setFieldsValue({ rentalLocationId: undefined });
+      return;
+    }
+
+    // Thử lấy name và address từ relation trước
+    const infoSource = primaryRelation?.rentalLocation ?? primaryRelation?.RentalLocation ?? primaryRelation;
+    const name = getNameFromSource(infoSource);
+    const address = getAddressFromSource(infoSource);
+
+    console.log("resolveCarLocation: name from relation", name);
+    console.log("resolveCarLocation: address from relation", address);
+
+    // Nếu đã có đủ thông tin từ relation (có name hoặc address)
+    if (name || address) {
+      const location: RentalLocationData = {
+        id: locationId,
+        name: name ?? "",
+        address: address ?? "",
+        coordinates: infoSource?.coordinates ?? infoSource?.Coordinates ?? "",
+        isActive: infoSource?.isActive ?? infoSource?.IsActive ?? true,
+      };
+      console.log("resolveCarLocation: Found location from relation", location);
+      setSelectedLocation(location);
+      form.setFieldsValue({ rentalLocationId: location.id });
+      setPickupOption('self');
+      return;
+    }
+
+    // Nếu chưa đủ thông tin, thử fetch từ getAll() trước (public endpoint)
+    try {
+      console.log("resolveCarLocation: Fetching all locations from API to find id:", locationId);
+      const allLocationsResponse = await rentalLocationApi.getAll();
+      console.log("resolveCarLocation: getAll API response", allLocationsResponse);
+
+      if (allLocationsResponse.success && allLocationsResponse.data) {
+        const locationsList = Array.isArray(allLocationsResponse.data)
+          ? allLocationsResponse.data
+          : allLocationsResponse.data?.$values || [];
+
+        const foundLocation = locationsList.find((loc: any) => {
+          const locId = loc?.id ?? loc?.Id ?? loc?.locationId ?? loc?.LocationId;
+          return Number(locId) === Number(locationId);
+        });
+
+        if (foundLocation) {
+          const locationData: RentalLocationData = {
+            id: foundLocation.id ?? foundLocation.Id ?? locationId,
+            name: foundLocation.name ?? foundLocation.Name ?? "",
+            address: foundLocation.address ?? foundLocation.Address ?? "",
+            coordinates: foundLocation.coordinates ?? foundLocation.Coordinates ?? "",
+            isActive: foundLocation.isActive ?? foundLocation.IsActive ?? true,
+          };
+          console.log("resolveCarLocation: Found location from getAll", locationData);
+          setSelectedLocation(locationData);
+          form.setFieldsValue({ rentalLocationId: locationData.id });
+          setPickupOption('self');
+          return;
+        }
+      }
+    } catch (error) {
+      console.warn("resolveCarLocation: getAll API error", error);
+    }
+
+    // Fallback: Nếu vẫn không tìm thấy, tạo location object với id (ít nhất có id để submit form)
+    if (locationId) {
+      const location: RentalLocationData = {
+        id: locationId,
+        name: `Địa điểm #${locationId}`,
+        address: "",
+        coordinates: "",
+        isActive: true,
+      };
+      console.log("resolveCarLocation: Created fallback location with id only", location);
+      setSelectedLocation(location);
+      form.setFieldsValue({ rentalLocationId: location.id });
+      setPickupOption('self');
+      return;
+    }
+
+    // Không tìm thấy location
+    console.warn("resolveCarLocation: Could not find location for car", carData.id);
+    setSelectedLocation(null);
+    form.setFieldsValue({ rentalLocationId: undefined });
+  }, [form]);
 
   const carId = params?.carId as string;
 
@@ -69,107 +293,8 @@ export default function BookingPage() {
           }
         }
 
-        // Load rental locations - CHỈ lấy những location có xe
-        const locationsResponse = await rentalLocationApi.getAll();
-        if (locationsResponse.success && locationsResponse.data) {
-          const raw = locationsResponse.data as any;
-          let locations: RentalLocationData[] = [];
-          
-          if (Array.isArray(raw)) {
-            locations = raw;
-          } else if (Array.isArray(raw.$values)) {
-            locations = raw.$values;
-          } else if (raw.data && Array.isArray(raw.data.$values)) {
-            locations = raw.data.$values;
-          } else if (raw.data && Array.isArray(raw.data)) {
-            locations = raw.data;
-          }
-          
-          const activeLocations = locations.filter((loc: any) => loc.isActive !== false);
-          
-          // Tạm thời set tất cả, sẽ filter sau khi có carLocationIds
-          setRentalLocations(activeLocations);
-          
-          // Thu thập tất cả các vị trí có xe
-          const carData = carResponse.data;
-          const locationIds: number[] = [];
-          let foundLocation: RentalLocationData | null = null;
-          
-          // Thử tìm từ carRentalLocations
-          if (carData?.carRentalLocations) {
-            const carLocations = carData.carRentalLocations;
-            const carLocationList = Array.isArray(carLocations) ? carLocations : carLocations.$values || [];
-            if (carLocationList.length > 0) {
-              // Thu thập tất cả location IDs
-              carLocationList.forEach((cl: any) => {
-                const locId = cl?.rentalLocationId || 
-                             cl?.RentalLocationId ||
-                             cl?.rentalLocation?.id ||
-                             cl?.rentalLocation?.Id;
-                if (locId && !locationIds.includes(locId)) {
-                  locationIds.push(locId);
-                }
-              });
-              
-              // Tìm location active đầu tiên để set mặc định
-              const activeCarLocation = carLocationList.find((cl: any) => 
-                (cl?.isActive ?? cl?.IsActive) !== false && 
-                !(cl?.isDeleted ?? cl?.IsDeleted)
-              ) || carLocationList[0];
-              
-              const carLocationId = activeCarLocation?.rentalLocationId || 
-                                   activeCarLocation?.RentalLocationId ||
-                                   activeCarLocation?.rentalLocation?.id ||
-                                   activeCarLocation?.rentalLocation?.Id;
-              
-              if (carLocationId) {
-                foundLocation = activeLocations.find(loc => loc.id === carLocationId) || null;
-                
-                // Nếu không tìm thấy trong activeLocations, thử fetch từ API
-                if (!foundLocation) {
-                  try {
-                    const locationResponse = await rentalLocationApi.getById(carLocationId);
-                    if (locationResponse.success && locationResponse.data) {
-                      foundLocation = locationResponse.data as RentalLocationData;
-                    }
-                  } catch (error) {
-                    console.error("Error fetching location:", error);
-                  }
-                }
-              }
-            }
-          }
-          
-          // Fallback: Thử lấy từ rentalLocationId trực tiếp trên car
-          if (!foundLocation && carData?.rentalLocationId) {
-            if (!locationIds.includes(carData.rentalLocationId)) {
-              locationIds.push(carData.rentalLocationId);
-            }
-            foundLocation = activeLocations.find(loc => loc.id === carData.rentalLocationId) || null;
-            if (!foundLocation) {
-              try {
-                const locationResponse = await rentalLocationApi.getById(carData.rentalLocationId);
-                if (locationResponse.success && locationResponse.data) {
-                  foundLocation = locationResponse.data as RentalLocationData;
-                }
-              } catch (error) {
-                console.error("Error fetching location:", error);
-              }
-            }
-          }
-          
-          // Lưu danh sách các vị trí có xe
-          setCarLocationIds(locationIds);
-          
-          // Nếu tìm thấy location, tự động set
-          if (foundLocation) {
-            setSelectedLocation(foundLocation);
-            form.setFieldsValue({ rentalLocationId: foundLocation.id });
-            setPickupOption('self');
-            setLocationError(null);
-            console.log("Auto-selected location:", foundLocation);
-          }
-        }
+        // Resolve car location từ data của xe
+        await resolveCarLocation(carResponse.data);
       } catch (error) {
         console.error("Load data error:", error);
         message.error("Có lỗi xảy ra khi tải dữ liệu!");
@@ -179,7 +304,7 @@ export default function BookingPage() {
     };
 
     loadData();
-  }, [carId, form, router]);
+  }, [carId, form, router, resolveCarLocation]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
@@ -479,12 +604,11 @@ export default function BookingPage() {
                 <span className="font-semibold text-gray-900">Địa điểm giao nhận xe</span>
               </div>
               
-              {/* Hiển thị vị trí xe nếu đã chọn đúng vị trí có xe */}
-              {selectedLocation && carLocationIds.length > 0 && carLocationIds.includes(selectedLocation.id) ? (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              {selectedLocation ? (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
-                      <p className="font-medium text-gray-900 mb-1">Nhận xe tại vị trí hiện tại</p>
+                      <p className="font-medium text-gray-900 mb-1">Nhận xe tại vị trí cố định</p>
                       <p className="text-sm text-gray-700">
                         {selectedLocation.name && `${selectedLocation.name} - `}
                         {selectedLocation.address}
@@ -495,115 +619,25 @@ export default function BookingPage() {
                   <Form.Item
                     name="rentalLocationId"
                     initialValue={selectedLocation.id}
+                    rules={[{ required: true, message: "Không xác định được địa điểm nhận xe. Vui lòng liên hệ hỗ trợ." }]}
                     hidden
                   >
                     <Input type="hidden" />
                   </Form.Item>
                 </div>
-              ) : null}
-              
-              {/* Luôn hiển thị Select để cho phép chọn vị trí */}
-              <Form.Item
-                name="rentalLocationId"
-                rules={[
-                  { required: true, message: "Vui lòng chọn địa điểm" },
-                  {
-                    validator: (_, value) => {
-                      if (!value) {
-                        return Promise.reject(new Error("Vui lòng chọn địa điểm"));
-                      }
-                      if (carLocationIds.length > 0 && !carLocationIds.includes(value)) {
-                        return Promise.reject(new Error("Xe không có sẵn tại vị trí này"));
-                      }
-                      return Promise.resolve();
-                    }
-                  }
-                ]}
-                className="mt-4"
-                validateStatus={locationError ? 'error' : ''}
-                help={locationError}
-              >
-                <Select
-                  size="large"
-                  placeholder="Chọn địa điểm"
-                  value={selectedLocation && (carLocationIds.length === 0 || carLocationIds.includes(selectedLocation.id)) ? selectedLocation.id : undefined}
-                  onChange={(value: number) => {
-                    const location = rentalLocations.find(loc => loc.id === value);
-                    
-                    // Kiểm tra xem vị trí được chọn có xe không
-                    if (location) {
-                      if (carLocationIds.length > 0 && !carLocationIds.includes(location.id)) {
-                        // Hiển thị thông báo lỗi
-                        setLocationError(`Xe không có sẵn tại "${location.name || location.address}". Vui lòng chọn vị trí khác có xe.`);
-                        setSelectedLocation(null);
-                        form.setFieldsValue({ rentalLocationId: undefined });
-                        api.warning({
-                          message: "Xe không có sẵn tại vị trí này",
-                          description: `Vị trí "${location.name || location.address}" không có xe. Vui lòng chọn vị trí khác có xe sẵn sàng.`,
-                          placement: "topRight",
-                          duration: 5,
-                        });
-                      } else {
-                        setLocationError(null);
-                        setSelectedLocation(location);
-                        form.setFieldsValue({ rentalLocationId: value });
-                        api.success({
-                          message: "Đã chọn vị trí nhận xe",
-                          description: `${location.name || location.address}`,
-                          placement: "topRight",
-                          duration: 2,
-                        });
-                      }
-                    }
-                  }}
-                >
-                  {rentalLocations.map((location) => {
-                    const hasCar = carLocationIds.length > 0 ? carLocationIds.includes(location.id) : true;
-                    return (
-                      <Select.Option 
-                        key={location.id} 
-                        value={location.id}
-                        disabled={carLocationIds.length > 0 && !hasCar}
-                      >
-                        <div className="flex items-center justify-between w-full">
-                          <span>
-                            {location.name} - {location.address}
-                          </span>
-                          {carLocationIds.length > 0 && (
-                            <>
-                              {hasCar && (
-                                <span className="text-green-600 text-xs ml-2 font-medium">✓ Có xe</span>
-                              )}
-                              {!hasCar && (
-                                <span className="text-red-500 text-xs ml-2 font-medium">✗ Không có xe</span>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </Select.Option>
-                    );
-                  })}
-                </Select>
-              </Form.Item>
-              
-              {locationError && (
-                <div className="mt-3 p-4 bg-red-50 border-2 border-red-300 rounded-lg shadow-sm">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center flex-shrink-0">
-                      <span className="text-white text-lg">⚠️</span>
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-base text-red-800 font-bold mb-1">
-                        Xe không có sẵn tại vị trí này
-                      </p>
-                      <p className="text-sm text-red-700 mb-2">
-                        {locationError}
-                      </p>
-                      <p className="text-xs text-red-600">
-                        💡 Vui lòng chọn một vị trí khác có xe sẵn sàng (có dấu ✓ Có xe).
-                      </p>
-                    </div>
-                  </div>
+              ) : (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <p className="font-semibold text-red-800 mb-1">Chưa xác định được vị trí xe</p>
+                  <p className="text-sm text-red-600">
+                    Vui lòng liên hệ tổng đài hoặc quay lại trang trước để chọn xe khác có vị trí rõ ràng.
+                  </p>
+                  <Form.Item
+                    name="rentalLocationId"
+                    rules={[{ required: true, message: "Không xác định được địa điểm nhận xe. Vui lòng liên hệ hỗ trợ." }]}
+                    hidden
+                  >
+                    <Input type="hidden" />
+                  </Form.Item>
                 </div>
               )}
             </div>

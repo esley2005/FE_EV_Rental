@@ -1,16 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Car, MapPin, Search } from "lucide-react";
-import { DatePicker, Select, message } from "antd";
-import type { RangePickerProps } from "antd/es/date-picker";
-import dayjs, { Dayjs } from "dayjs";
+import { Select, message } from "antd";
 import { rentalLocationApi } from "@/services/api";
 import type { RentalLocationData } from "@/services/api";
 import { motion } from "framer-motion";
-
-const { RangePicker } = DatePicker;
 
 type RentalType = "self-drive" | "with-driver" | "long-term";
 
@@ -20,11 +16,6 @@ export default function HeroSection() {
   const [locations, setLocations] = useState<RentalLocationData[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
   const [loadingLocations, setLoadingLocations] = useState(true);
-  const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null] | null>([
-    dayjs().add(1, "day").hour(21).minute(0),
-    dayjs().add(2, "day").hour(20).minute(0)
-  ]);
-
   const loadLocations = async () => {
     try {
       setLoadingLocations(true);
@@ -76,6 +67,32 @@ export default function HeroSection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const selectedLocation = useMemo(
+    () => locations.find((loc) => loc.id === selectedLocationId) || null,
+    [locations, selectedLocationId]
+  );
+
+  const mapEmbedUrl = useMemo(() => {
+    if (!selectedLocation) return null;
+
+    const buildUrl = (query: string) =>
+      `https://www.google.com/maps?q=${query}&z=15&output=embed&iwloc=0`;
+
+    if (selectedLocation.coordinates) {
+      const [lat, lng] = selectedLocation.coordinates.split(",").map((c) => parseFloat(c.trim()));
+      if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
+        return buildUrl(`${lat},${lng}`);
+      }
+    }
+
+    if (selectedLocation.address) {
+      const query = encodeURIComponent(`${selectedLocation.name ?? ""} ${selectedLocation.address}`);
+      return `https://www.google.com/maps?q=${query}&z=14&output=embed&iwloc=0`;
+    }
+
+    return null;
+  }, [selectedLocation]);
+
   const handleSearch = () => {
     if (!selectedLocationId) {
       message.warning('Vui lòng chọn địa điểm');
@@ -86,7 +103,6 @@ export default function HeroSection() {
     const params = new URLSearchParams();
     
     // Thêm locationId và location info
-    const selectedLocation = locations.find(loc => loc.id === selectedLocationId);
     if (selectedLocation) {
       params.set("locationId", selectedLocationId.toString());
       params.set("location", selectedLocation.name);
@@ -95,19 +111,10 @@ export default function HeroSection() {
       }
     }
     
-    if (dateRange && dateRange[0] && dateRange[1]) {
-      params.set("startDate", dateRange[0].format("YYYY-MM-DD HH:mm"));
-      params.set("endDate", dateRange[1].format("YYYY-MM-DD HH:mm"));
-    }
     params.set("type", rentalType);
     
     // Chuyển đến trang cars/all với filters
     router.push(`/cars/all?${params.toString()}`);
-  };
-
-  const disabledDate: RangePickerProps["disabledDate"] = (current) => {
-    // Không cho chọn ngày trong quá khứ
-    return current && current < dayjs().startOf("day");
   };
 
   return (
@@ -124,7 +131,7 @@ export default function HeroSection() {
       </div>
 
       {/* Content Container */}
-      <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-20">
+      <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 pb-12 lg:pt-32 lg:pb-20">
         {/* Text Overlay */}
         <motion.div 
           className="text-center mb-8 lg:mb-12"
@@ -166,7 +173,7 @@ export default function HeroSection() {
 
         {/* Search Form */}
         <motion.div 
-          className="bg-white rounded-2xl shadow-2xl p-6 lg:p-8 max-w-5xl mx-auto"
+          className="rounded-2xl p-0 lg:p-2 max-w-6xl w-full mx-auto bg-transparent shadow-none"
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.6, ease: "easeOut" }}
@@ -208,88 +215,86 @@ export default function HeroSection() {
 
           </div>
 
-       {/* Input Fields */}
-<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-  {/* Location Select */}
-  <div className="relative">
-    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
-      <MapPin size={16} /> Địa điểm thuê xe
-    </label>
-    <Select
-      size="large"
-      value={selectedLocationId}
-      onChange={setSelectedLocationId}
-      placeholder="Chọn địa điểm thuê xe"
-      className="w-full location-select"
-      loading={loadingLocations}
-      showSearch
-      optionFilterProp="label"
-      filterOption={(input, option) => {
-        const label = option?.label?.toString() || '';
-        return label.toLowerCase().includes(input.toLowerCase());
-      }}
-      optionLabelProp="children"
-      dropdownClassName="!z-50" // Đảm bảo dropdown nổi trên các phần tử khác
-      getPopupContainer={(triggerNode) => document.body} // Dropdown không bị cắt bởi overflow của parent
-    >
-      {locations.map((location) => (
-        <Select.Option
-          key={location.id}
-          value={location.id}
-          label={`${location.name} - ${location.address}`}
-        >
-          <div className="flex flex-col leading-tight">
-            <span className="text-base font-medium text-gray-900">
-              {location.name}
-            </span>
-            {location.address && (
-              <span className="text-xs text-gray-500">{location.address}</span>
-            )}
-          </div>
-        </Select.Option>
-      ))}
-    </Select>
-  </div>
-
-            {/* Date Range Picker */}
-            {/* <div className="relative">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Thời gian thuê
+          <div className="flex flex-col lg:flex-row gap-6 mb-6">
+            {/* Location Select */}
+            <div className="flex-1 flex flex-col gap-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                <MapPin size={16} /> Địa điểm thuê xe
               </label>
-              <RangePicker
+              <Select
                 size="large"
-                showTime={{
-                  format: "HH:mm",
-                  defaultValue: [dayjs().hour(21).minute(0), dayjs().add(1, "day").hour(20).minute(0)],
+                value={selectedLocationId}
+                onChange={setSelectedLocationId}
+                placeholder="Chọn địa điểm thuê xe"
+                className="w-full location-select"
+                loading={loadingLocations}
+                showSearch
+                optionFilterProp="label"
+                filterOption={(input, option) => {
+                  const label = option?.label?.toString() || "";
+                  return label.toLowerCase().includes(input.toLowerCase());
                 }}
-                format="HH:mm, DD/MM/YYYY"
-                value={dateRange}
-                onChange={(dates) => setDateRange(dates as [Dayjs | null, Dayjs | null] | null)}
-                disabledDate={disabledDate}
-                className="w-full time-range-picker"
-                placeholder={["Thời gian bắt đầu", "Thời gian kết thúc"]}
-              />
-            </div> */}
-          </div>
+                optionLabelProp="children"
+                dropdownClassName="!z-50"
+                getPopupContainer={() => document.body}
+              >
+                {locations.map((location) => (
+                  <Select.Option
+                    key={location.id}
+                    value={location.id}
+                    label={`${location.name} - ${location.address}`}
+                  >
+                    <div className="flex flex-col leading-tight">
+                      <span className="text-base font-medium text-gray-900">{location.name}</span>
+                      {location.address && <span className="text-xs text-gray-500">{location.address}</span>}
+                    </div>
+                  </Select.Option>
+                ))}
+              </Select>
 
-          {/* Search Button */}
-          <motion.button
-            onClick={handleSearch}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-lg transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
-            whileHover={{ scale: 1.02, boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)" }}
-            whileTap={{ scale: 0.98 }}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 1.1 }}
-          >
-            <motion.div
-              animate={{ rotate: [0, 10, -10, 0] }}
-              transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
-            >
-              <Search />
-            </motion.div>
-            <span>Tìm Xe</span>
-          </motion.button>
+              <motion.button
+                onClick={handleSearch}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg text-lg transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 mt-4"
+                whileHover={{ scale: 1.02, boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)" }}
+                whileTap={{ scale: 0.98 }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 1.1 }}
+              >
+                <motion.div
+                  animate={{ rotate: [0, 10, -10, 0] }}
+                  transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+                >
+                  <Search />
+                </motion.div>
+
+                <span>Tìm Xe</span>
+              </motion.button>
+            </div>
+
+            {/* Map Preview */}
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Vị trí trên bản đồ
+              </label>
+              {mapEmbedUrl ? (
+                <div className="w-full h-[280px] rounded-2xl overflow-hidden border border-gray-200 shadow-sm">
+                  <iframe
+                    title="location-map"
+                    src={mapEmbedUrl}
+                    className="w-full h-full"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    allowFullScreen
+                  />
+                </div>
+              ) : (
+                <div className="w-full h-[280px] rounded-2xl border border-dashed border-gray-300 flex items-center justify-center text-gray-500 text-sm bg-gray-50">
+                  Chọn địa điểm để xem bản đồ
+                </div>
+              )}
+            </div>
+          </div>
         </motion.div>
       </div>
     </div>

@@ -6,6 +6,7 @@ import { paymentApi } from "@/services/api";
 interface RevenueByLocation {
   rentalLocationName: string;
   totalRevenue: number;
+  rentalLocationId?: number;
 }
 
 const RevenueByLocationComponent: React.FC = () => {
@@ -39,14 +40,13 @@ const RevenueByLocationComponent: React.FC = () => {
   }, []);
 
   const columns = [
- 
     {
-      title: "Location Name",
+      title: "Tên địa điểm",
       dataIndex: "rentalLocationName",
       key: "rentalLocationName",
     },
     {
-      title: "Total Revenue",
+      title: "Tổng doanh thu",
       dataIndex: "totalRevenue",
       key: "totalRevenue",
       render: (value: number) => new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(value),

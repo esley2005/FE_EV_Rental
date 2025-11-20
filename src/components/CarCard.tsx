@@ -124,13 +124,13 @@ export default function CarCard({ car }: CarCardProps) {
             transition={{ delay: 0.3 }}
           >
             <motion.span
-              className={`px-2 py-1 text-[10px] font-semibold rounded-lg shadow-md ${car.status === 0
+              className={`px-2 py-1 text-[10px] font-semibold rounded-lg shadow-md ${car.status === 1
                   ? "bg-blue-600 text-white"
                   : "bg-red-500 text-white"
                 }`}
               whileHover={{ scale: 1.1 }}
             >
-              {car.status === 0 ? "Sẵn sàng" : "Hết xe"}
+              {car.status === 1 ? "Sẵn sàng" : "Hết xe"}
             </motion.span>
           </motion.div>
         </div>

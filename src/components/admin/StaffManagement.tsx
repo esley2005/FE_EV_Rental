@@ -74,29 +74,54 @@ export default function StaffManagement() {
       if (response.success && response.data) {
         // Xử lý nhiều format: trực tiếp array, { $values: [...] }, hoặc { data: { $values: [...] } }
         const raw = response.data as any;
-        let locationsData: RentalLocationData[] = [];
+        let list: any[] = [];
 
         if (Array.isArray(raw)) {
-          locationsData = raw;
+          list = raw;
         } else if (Array.isArray(raw.$values)) {
-          locationsData = raw.$values;
+          list = raw.$values;
         } else if (raw.data && Array.isArray(raw.data.$values)) {
-          locationsData = raw.data.$values;
+          list = raw.data.$values;
         } else if (raw.data && Array.isArray(raw.data)) {
-          locationsData = raw.data;
+          list = raw.data;
         }
 
-        setLocations(locationsData);
+        // Chuẩn hóa key id/name/address để tránh lệch chữ hoa/chữ thường từ .NET
+        const normalized: RentalLocationData[] = list
+          .map((l: any) => ({
+            id: Number(l?.id ?? l?.Id),
+            name: l?.name ?? l?.Name ?? `#${l?.id ?? l?.Id}`,
+            address: l?.address ?? l?.Address ?? "",
+            coordinates: l?.coordinates ?? null,
+            isActive: l?.isActive ?? l?.IsActive,
+          }))
+          .filter((l: any) => !!l.id);
+
+        setLocations(normalized as any);
         // Tạo map để dễ dàng lookup
         const map: Record<number, RentalLocationData> = {};
-        locationsData.forEach((loc) => {
-          map[loc.id] = loc;
+        normalized.forEach((loc: any) => {
+          map[Number(loc.id)] = loc as RentalLocationData;
         });
         setLocationMap(map);
       }
     } catch (error) {
       console.error("Load locations error:", error);
     }
+  };
+
+  // Helper: Điền rentalLocation từ locationMap nếu thiếu
+  const fillStaffWithLocation = (list: any[], locMap: Record<number, RentalLocationData>) => {
+    return list.map((u: any) => {
+      const existing = u.rentalLocation || u.RentalLocation;
+      if (existing && (existing.name || existing.Name)) return u;
+      const id = Number(u.rentalLocationId || u.locationId || u.RentalLocationId || u.LocationId || 0);
+      const loc = id ? locMap[id] : undefined;
+      if (loc) {
+        return { ...u, rentalLocation: loc };
+      }
+      return u;
+    });
   };
 
   const loadStaff = async () => {
@@ -108,7 +133,7 @@ export default function StaffManagement() {
           (user: User) => user.role?.toLowerCase() === "staff"
         );
 
-        const normalized = filtered.map((u: any) => ({
+        let normalized = filtered.map((u: any) => ({
           id: u.userId ?? u.id,
           email: u.email,
           fullName: u.fullName ?? u.name,
@@ -126,8 +151,10 @@ export default function StaffManagement() {
           isActive: u.isActive,
         })) as User[];
 
-        setStaff(normalized);
-        setFilteredStaff(normalized);
+        // Điền rentalLocation nếu thiếu bằng map hiện có
+        normalized = fillStaffWithLocation(normalized as any[], locationMap) as any;
+        setStaff(normalized as any);
+        setFilteredStaff(normalized as any);
       } else {
         api.error({
           message: "Lỗi tải danh sách nhân viên",
@@ -168,8 +195,8 @@ export default function StaffManagement() {
           staffList = raw.data;
         }
 
-        // Normalize field names to match User type
-        const normalized = staffList.map((u: any) => ({
+        // Normalize field names to match User type (bao gồm rentalLocation nếu có)
+        let normalized = staffList.map((u: any) => ({
           id: u.userId ?? u.id,
           email: u.email,
           fullName: u.fullName ?? u.name,
@@ -180,11 +207,13 @@ export default function StaffManagement() {
           avatar: u.avatar,
           locationId: u.locationId ?? u.rentalLocationId ?? u.LocationId ?? u.RentalLocationId,
           rentalLocationId: u.rentalLocationId ?? u.locationId ?? u.RentalLocationId ?? u.LocationId,
+          rentalLocation: u.rentalLocation ?? u.RentalLocation ?? null,
           createdAt: u.createdAt,
         })) as User[];
-
-        setStaff(normalized);
-        setFilteredStaff(normalized);
+        // Điền rentalLocation nếu thiếu bằng map hiện có
+        normalized = fillStaffWithLocation(normalized as any[], locationMap) as any;
+        setStaff(normalized as any);
+        setFilteredStaff(normalized as any);
       } else {
         api.error({
           message: "Lỗi tải danh sách nhân viên",
@@ -271,24 +300,26 @@ export default function StaffManagement() {
     {
       title: "Điểm thuê",
       key: "location",
-      sorter: (a: User, b: User) => {
-        const locA = locationMap[a.locationId || a.rentalLocationId || 0]?.name || "";
-        const locB = locationMap[b.locationId || b.rentalLocationId || 0]?.name || "";
+      sorter: (a: any, b: any) => {
+        const aId = Number(a.locationId || a.rentalLocationId || 0);
+        const bId = Number(b.locationId || b.rentalLocationId || 0);
+        const locA = locationMap[aId]?.name || "";
+        const locB = locationMap[bId]?.name || "";
         return locA.localeCompare(locB);
       },
-      render: (_: any, record: User) => {
+      render: (_: any, record: any) => {
         // Ưu tiên sử dụng rentalLocation navigation property nếu có
-        const location = record.rentalLocation;
-        const locationId = record.rentalLocationId || record.locationId;
+        const location = (record as any).rentalLocation || (record as any).RentalLocation;
+        const locationId = record.rentalLocationId || record.locationId || (record as any).RentalLocationId || (record as any).LocationId;
         
         if (location) {
           return (
             <Space>
               <EnvironmentOutlined style={{ color: "#52c41a" }} />
               <div>
-                <div style={{ fontWeight: 500 }}>{location.name}</div>
-                {location.address && (
-                  <div style={{ fontSize: 12, color: "#8c8c8c" }}>{location.address}</div>
+                <div style={{ fontWeight: 500 }}>{location.name || location.Name}</div>
+                {(location.address || location.Address) && (
+                  <div style={{ fontSize: 12, color: "#8c8c8c" }}>{location.address || location.Address}</div>
                 )}
               </div>
             </Space>
@@ -296,7 +327,8 @@ export default function StaffManagement() {
         }
         
         // Fallback to locationMap if navigation property not available
-        const locationFromMap = locationId ? locationMap[locationId] : null;
+        const idNum = Number(locationId);
+        const locationFromMap = idNum ? locationMap[idNum] : null;
         if (locationFromMap) {
           return (
             <Space>
@@ -307,7 +339,7 @@ export default function StaffManagement() {
                   <div style={{ fontSize: 12, color: "#8c8c8c" }}>{locationFromMap.address}</div>
                 )}
                 <Tag color="default" style={{ marginTop: 4 }}>
-                  ID: {locationId}
+                  ID: {idNum}
                 </Tag>
               </div>
             </Space>
@@ -332,7 +364,7 @@ export default function StaffManagement() {
     {
       title: "Trạng thái",
       key: "status",
-      render: (_: any, record: User) => (
+      render: (_: any, record: any) => (
         <Space direction="vertical" size="small">
           {record.isEmailConfirmed ? (
             <Tag color="success" icon={<CheckCircleOutlined />}>
@@ -349,37 +381,7 @@ export default function StaffManagement() {
         </Space>
       ),
     },
-    {
-      title: "Ngày tạo",
-      dataIndex: "createdAt",
-      key: "createdAt",
-      sorter: (a: User, b: User) => {
-        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return dateA - dateB;
-      },
-      render: (text: string) =>
-        text ? dayjs(text).format("DD/MM/YYYY HH:mm") : "N/A",
-    },
-    {
-      title: "Ngày cập nhật",
-      dataIndex: "updatedAt",
-      key: "updatedAt",
-      sorter: (a: User, b: User) => {
-        const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-        const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-        return dateA - dateB;
-      },
-      render: (text: string) =>
-        text ? (
-          <Space>
-            <ClockCircleOutlined />
-            <span>{dayjs(text).format("DD/MM/YYYY HH:mm")}</span>
-          </Space>
-        ) : (
-          "Chưa cập nhật"
-        ),
-    },
+    
   ];
 
   return (

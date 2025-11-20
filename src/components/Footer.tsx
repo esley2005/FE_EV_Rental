@@ -16,7 +16,7 @@ export default function Footer() {
     >
       {/* Main Footer Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-12">
           {/* Column 1: Contact Information & Social Media */}
           <motion.div 
             className="space-y-4"
@@ -97,12 +97,13 @@ export default function Footer() {
 
           {/* Column 2: Chính Sách */}
           <motion.div
+            className="flex flex-col gap-4"
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5, delay: 0.1 }}
           >
-            <h3 className="text-lg font-bold text-gray-900 mb-4">Chính Sách</h3>
+            <h3 className="text-lg font-bold text-gray-900">Chính Sách</h3>
             <ul className="space-y-3">
               <li>
                 <Link 
@@ -141,12 +142,13 @@ export default function Footer() {
 
           {/* Column 3: Tìm Hiểu Thêm */}
           <motion.div
+            className="flex flex-col gap-4"
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5, delay: 0.2 }}
           >
-            <h3 className="text-lg font-bold text-gray-900 mb-4">Tìm Hiểu Thêm</h3>
+            <h3 className="text-lg font-bold text-gray-900">Tìm Hiểu Thêm</h3>
             <ul className="space-y-3">
               <li>
                 <Link 
@@ -183,41 +185,7 @@ export default function Footer() {
             </ul>
           </motion.div>
 
-          {/* Column 4: Đối Tác */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-          >
-            <h3 className="text-lg font-bold text-gray-900 mb-4">Đối Tác</h3>
-            <ul className="space-y-3">
-              <li>
-                <Link 
-                  href="/partners/register-owner" 
-                  className="text-gray-700 hover:text-green-600 transition-colors"
-                >
-                  Đăng ký chủ xe EV Rental
-                </Link>
-              </li>
-              <li>
-                <Link 
-                  href="/partners/register-gps" 
-                  className="text-gray-700 hover:text-green-600 transition-colors"
-                >
-                  Đăng ký GPS Tracking
-                </Link>
-              </li>
-              <li>
-                <Link 
-                  href="/partners/long-term-rental" 
-                  className="text-gray-700 hover:text-green-600 transition-colors"
-                >
-                  Đăng ký cho thuê xe dài hạn
-                </Link>
-              </li>
-            </ul>
-          </motion.div>
+          {/* (Đã bỏ cột Đối Tác để cân đều 3 cột) */}
         </div>
       </div>
 
