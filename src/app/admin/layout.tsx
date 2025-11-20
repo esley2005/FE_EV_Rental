@@ -28,6 +28,7 @@ import StaffManagement from "@/components/admin/StaffManagement";
 import AIAnalysis from "@/components/admin/AIAnalysis";
 import RevenueByLocation from "@/components/admin/RevenueByLocation";
 import TransactionHistory from "@/components/admin/TransactionHistory";
+import RentalHistory from "@/components/admin/RentalHistory";
 
 
 const { Header, Sider, Content, Footer } = Layout;
@@ -50,8 +51,8 @@ const subMenus: Record<string, { key: string; label: string; icon: React.ReactNo
 
   customers: [
     { key: "1", label: "Hồ sơ khách hàng", icon: <User /> },
-
-    // { key: "2", label: "Danh sách khách hàng có rủi ro", icon: <Users /> },
+    { key: "2", label: "Lịch sử thuê xe", icon: <History /> },
+    // { key: "3", label: "Danh sách khách hàng có rủi ro", icon: <Users /> },
   ],
 
   staff: [
@@ -129,8 +130,9 @@ export default function AdminLayout() {
         switch (selectedSubMenu) {
           case "1":
             return <CustomerManagement />;
- 
-          // case "2":
+          case "2":
+            return <RentalHistory />;
+          // case "3":
           //   return <p>Chưa có</p>;
           default:
             return <p>Chưa có nội dung.</p>;
