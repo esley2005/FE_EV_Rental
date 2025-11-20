@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeftOutlined,
   UploadOutlined,
@@ -36,6 +36,7 @@ const { Content } = Layout;
 
 export default function DocumentsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [api, contextHolder] = antdNotification.useNotification();
 
   const [user, setUser] = useState<User | null>(null);
@@ -197,6 +198,21 @@ export default function DocumentsPage() {
 
     loadOrders();
   }, [user]);
+
+  // Load orderId from URL query params
+  useEffect(() => {
+    const orderIdParam = searchParams.get('orderId');
+    if (orderIdParam && orderIdParam !== 'undefined' && orderIdParam !== 'null') {
+      const orderId = parseInt(orderIdParam);
+      if (!isNaN(orderId) && orderId > 0) {
+        setSelectedOrderId(orderId);
+        // Clean URL nếu có orderId=undefined
+        if (orderIdParam === 'undefined') {
+          router.replace('/profile/documents');
+        }
+      }
+    }
+  }, [searchParams, router]);
 
   // Update selected car when order changes
   useEffect(() => {
@@ -717,8 +733,62 @@ export default function DocumentsPage() {
                   <Input placeholder="Nhập số CCCD" />
                 </Form.Item>
 
-                <Form.Item label="Ngày sinh (trên CCCD)" name="citizenBirthDate" rules={[{ required: true, message: "Chọn ngày sinh" }]}>
-                  <DatePicker className="w-full" format="DD/MM/YYYY" placeholder="Chọn ngày sinh" />
+                <Form.Item 
+                  label="Ngày sinh (trên CCCD)" 
+                  name="citizenBirthDate" 
+                  rules={[
+                    { required: true, message: "Chọn ngày sinh" },
+                    {
+                      validator: (_, value) => {
+                        if (!value) {
+                          return Promise.resolve();
+                        }
+                        const birthDate = dayjs(value);
+                        const today = dayjs();
+                        const age = today.diff(birthDate, 'year');
+                        
+                        if (age < 18) {
+                          return Promise.reject(new Error("Bạn phải đủ 18 tuổi trở lên để thuê xe!"));
+                        }
+                        
+                        // Kiểm tra ngày sinh không được trong tương lai
+                        if (birthDate.isAfter(today)) {
+                          return Promise.reject(new Error("Ngày sinh không được trong tương lai!"));
+                        }
+                        
+                        // Kiểm tra ngày sinh không quá cũ (ví dụ: hơn 100 năm)
+                        if (age > 100) {
+                          return Promise.reject(new Error("Ngày sinh không hợp lệ!"));
+                        }
+                        
+                        return Promise.resolve();
+                      }
+                    }
+                  ]}
+                  help="Bạn phải đủ 18 tuổi trở lên để thuê xe"
+                >
+                  <DatePicker 
+                    className="w-full" 
+                    format="DD/MM/YYYY" 
+                    placeholder="Chọn ngày sinh"
+                    disabledDate={(current) => {
+                      // Disable các ngày trong tương lai
+                      if (current && current > dayjs().endOf('day')) {
+                        return true;
+                      }
+                      // Disable các ngày mà tuổi < 18
+                      const minDate = dayjs().subtract(18, 'year');
+                      if (current && current > minDate) {
+                        return true;
+                      }
+                      // Disable các ngày quá cũ (hơn 100 năm)
+                      const maxDate = dayjs().subtract(100, 'year');
+                      if (current && current < maxDate) {
+                        return true;
+                      }
+                      return false;
+                    }}
+                  />
                 </Form.Item>
 
                 <div className="flex gap-3 mt-4">

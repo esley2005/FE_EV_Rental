@@ -436,9 +436,13 @@ export default function BookingPage() {
             placement: "topRight",
             duration: 2,
           });
-          // Tự động chuyển đến trang upload giấy tờ với orderId
+          // Tự động chuyển đến trang upload giấy tờ với orderId (chỉ khi có orderId hợp lệ)
           setTimeout(() => {
-            router.push(`/profile/documents?orderId=${orderId}`);
+            if (orderId && orderId > 0) {
+              router.push(`/profile/documents?orderId=${orderId}`);
+            } else {
+              router.push('/profile/documents');
+            }
           }, 1000);
         } else {
           // Có tài xế, chỉ thông báo thành công và chuyển đến trang đơn hàng
@@ -449,7 +453,11 @@ export default function BookingPage() {
             duration: 3,
           });
           setTimeout(() => {
-            router.push(`/my-bookings?orderId=${orderId}`);
+            if (orderId && orderId > 0) {
+              router.push(`/my-bookings?orderId=${orderId}`);
+            } else {
+              router.push('/my-bookings');
+            }
           }, 1500);
         }
       } else {
