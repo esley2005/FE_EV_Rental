@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
-import axios from "axios";
 import { MessageCircle, Send, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { apiCall } from "@/services/api";
 
 export default function ChatBox() {
   const [messages, setMessages] = useState([
@@ -48,9 +48,25 @@ export default function ChatBox() {
     setInput("");
     setIsLoading(true);
 
+    // Normalize text để so sánh (lowercase, loại bỏ dấu câu)
+    const normalizeText = (str: string) => {
+      return str
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "") // Loại bỏ dấu
+        .replace(/[^\w\s]/g, "") // Loại bỏ dấu câu
+        .trim();
+    };
+
+    const normalizedMsg = normalizeText(msgText);
+    
     const matched = autoReplies.find((item) =>
-      item.keywords.some((kw) => msgText.toLowerCase().includes(kw))
+      item.keywords.some((kw) => {
+        const normalizedKw = normalizeText(kw);
+        return normalizedMsg.includes(normalizedKw) || normalizedKw.includes(normalizedMsg);
+      })
     );
+    
     if (matched) {
       setTimeout(() => {
         setMessages((prev) => [...prev, { sender: "ai", text: matched.reply }]);
@@ -60,9 +76,18 @@ export default function ChatBox() {
     }
 
     try {
-      const res = await axios.post("https://localhost:7200/api/AI/chat", { message: msgText });
-      const aiReply = res.data?.reply || res.data?.response || "🤖 Xin lỗi, tôi chưa hiểu.";
-      setMessages((prev) => [...prev, { sender: "ai", text: aiReply }]);
+      const response = await apiCall<{ reply?: string; response?: string }>("/AI/chat", {
+        method: "POST",
+        body: JSON.stringify({ message: msgText }),
+        skipAuth: true, // Chat endpoint có thể là public
+      });
+      
+      if (response.success && response.data) {
+        const aiReply = response.data.reply || response.data.response || "🤖 Xin lỗi, tôi chưa hiểu.";
+        setMessages((prev) => [...prev, { sender: "ai", text: aiReply }]);
+      } else {
+        setMessages((prev) => [...prev, { sender: "ai", text: response.error || "🤖 Xin lỗi, tôi chưa hiểu." }]);
+      }
     } catch (err) {
       console.error("Chat API Error:", err);
       setMessages((prev) => [...prev, { sender: "ai", text: "⚠️ Không thể kết nối tới máy chủ." }]);
