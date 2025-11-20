@@ -97,7 +97,11 @@ type CarFormValues = {
   rentalLocationId?: number;
 };
 
-export default function CarManagement() {
+interface CarManagementProps {
+  staffMode?: boolean; // Nếu true, ẩn nút thêm mới và xóa
+}
+
+export default function CarManagement({ staffMode = false }: CarManagementProps) {
   const [api, contextHolder] = antdNotification.useNotification();
   const [cars, setCars] = useState<Car[]>([]);
   const [loading, setLoading] = useState(false);
@@ -676,7 +680,7 @@ export default function CarManagement() {
               Xóa
             </Button>
           </Popconfirm>
-        </Space>
+        </Space> 
       ),
     },
   ];
@@ -691,14 +695,16 @@ export default function CarManagement() {
           </div>
         }
         extra={
-          <Button
-            type="primary"
-            icon={<Plus />}
-            onClick={handleAdd}
-            className="bg-blue-600"
-          >
-            Thêm xe mới
-          </Button>
+          !staffMode ? (
+            <Button
+              type="primary"
+              icon={<Plus />}
+              onClick={handleAdd}
+              className="bg-blue-600"
+            >
+              Thêm xe mới
+            </Button>
+          ) : null
         }
       >
         <Table
