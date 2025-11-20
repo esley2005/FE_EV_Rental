@@ -353,11 +353,9 @@ export default function BookingPage() {
     
     // Lấy giá theo loại (có tài xế hay không)
     const pricePerDay = withDriver ? car.rentPricePerDayWithDriver : car.rentPricePerDay;
+    const pricePerHour = withDriver ? car.rentPricePerHourWithDriver : car.rentPricePerHour;
     
-    // Tính giá/giờ từ giá/ngày (chia 24) để đảm bảo tính chính xác
-    const pricePerHour = pricePerDay / 24;
-    
-    // Tính tổng: (số ngày * giá/ngày) + (số giờ * giá/giờ) - không làm tròn
+    // Tính tổng: (số ngày * giá/ngày) + (số giờ * giá/giờ)
     const dayFee = fullDays * pricePerDay;
     const hourFee = remainingHours * pricePerHour;
     
@@ -370,7 +368,9 @@ export default function BookingPage() {
   };
 
   const calculateDeposit = () => {
-    return 500000; // Fixed deposit amount
+    const total = calculateTotal();
+    // Tiền cọc = 20% của tổng tiền
+    return Math.round(total * 0.2);
   };
 
   const calculateRemaining = () => {
@@ -508,11 +508,9 @@ export default function BookingPage() {
     
     // Lấy giá theo loại (có tài xế hay không)
     const pricePerDay = withDriverValue ? car.rentPricePerDayWithDriver : car.rentPricePerDay;
+    const pricePerHour = withDriverValue ? car.rentPricePerHourWithDriver : car.rentPricePerHour;
     
-    // Tính giá/giờ từ giá/ngày (chia 24) để đảm bảo tính chính xác
-    const pricePerHour = pricePerDay / 24;
-    
-    // Tính tổng: (số ngày * giá/ngày) + (số giờ * giá/giờ) - không làm tròn
+    // Tính tổng: (số ngày * giá/ngày) + (số giờ * giá/giờ)
     const dayFee = fullDays * pricePerDay;
     const hourFee = remainingHours * pricePerHour;
     
@@ -521,7 +519,7 @@ export default function BookingPage() {
 
   const rentalFee = calculateRentalFeeWithDates(getDateRange());
   const total = rentalFee;
-  const deposit = calculateDeposit();
+  const deposit = Math.round(total * 0.2); 
   const remaining = total - deposit;
 
   return (
@@ -790,6 +788,14 @@ export default function BookingPage() {
                 <span className="font-bold text-gray-900">Tổng cộng tiền thuê (Tạm tính)</span>
                 <span className="font-bold text-gray-900 text-lg">{formatCurrency(total)}</span>
               </div>
+              {/* <div className="flex justify-between items-center text-sm text-gray-600 pt-2">
+                <span>Tiền cọc (20%)</span>
+                <span>{formatCurrency(deposit)}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm text-gray-600">
+                <span>Còn lại khi nhận xe</span>
+                <span className="font-semibold">{formatCurrency(remaining)}</span>
+              </div> */}
             </div>
           </div>
 

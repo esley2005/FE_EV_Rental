@@ -422,8 +422,18 @@ function DocumentUploadModal({ visible, rentalOrderId, onComplete, onCancel }: D
             <Form.Item label="Họ và tên (trên CCCD)" name="citizenName" rules={[{ required: true }]}>
               <Input placeholder="Nhập đầy đủ họ tên" />
             </Form.Item>
-            <Form.Item label="Số căn cước công dân" name="citizenIdNumber" rules={[{ required: true }]}>
-              <Input placeholder="Nhập số CCCD" />
+            <Form.Item 
+              label="Số căn cước công dân" 
+              name="citizenIdNumber" 
+              rules={[
+                { required: true, message: "Nhập số căn cước công dân" },
+                { 
+                  pattern: /^[0-9]{9,10}$/, 
+                  message: "Số căn cước công dân phải có 9-10 chữ số" 
+                }
+              ]}
+            >
+              <Input placeholder="Nhập số CCCD (9-10 chữ số)" maxLength={10} />
             </Form.Item>
             <Form.Item label="Ngày sinh (trên CCCD)" name="citizenBirthDate" rules={[{ required: true }]}>
               <DatePicker className="w-full" format="DD/MM/YYYY" placeholder="Chọn ngày sinh" />
