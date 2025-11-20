@@ -338,9 +338,7 @@ export default function StaffManagement() {
                 {locationFromMap.address && (
                   <div style={{ fontSize: 12, color: "#8c8c8c" }}>{locationFromMap.address}</div>
                 )}
-                <Tag color="default" style={{ marginTop: 4 }}>
-                  ID: {idNum}
-                </Tag>
+               
               </div>
             </Space>
           );
