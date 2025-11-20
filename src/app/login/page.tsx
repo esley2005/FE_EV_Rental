@@ -165,9 +165,9 @@ export default function LoginPage() {
         const roleLC = (savedUser.role || role)?.toLowerCase();
         setTimeout(() => {
           if (roleLC === "admin") {
-            router.push("/");
+            router.push("/admin");
           } else if (roleLC === "staff") {
-            router.push("/");
+            router.push("/staff");
           } else {
             router.push("/");
           }

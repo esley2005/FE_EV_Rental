@@ -680,7 +680,7 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
               Xóa
             </Button>
           </Popconfirm>
-        </Space>
+        </Space> 
       ),
     },
   ];
