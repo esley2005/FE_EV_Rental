@@ -1167,6 +1167,7 @@ export const rentalOrderApi = {
   // Cập nhật trạng thái đơn hàng (Admin/Staff only)
   // Status enum: Pending=0, DocumentsSubmitted=1, DepositPending=2, Confirmed=3, 
   // Renting=4, Returned=5, PaymentPending=6, Cancelled=7, Completed=8
+  // Note: Backend endpoint này có thể không tồn tại, cần kiểm tra backend
   updateStatus: (orderId: number, status: number) => {
     return apiCall<RentalOrderData>('/RentalOrder/UpdateStatus', {
       method: 'PUT',
@@ -1220,7 +1221,59 @@ export const rentalOrderApi = {
       },
     });
   },
+
+  // Xác nhận giấy tờ ở quầy (Staff only) - chuyển từ DocumentsSubmitted sang DepositPending
+  confirmDocuments: (orderId: number) => {
+    return apiCall<{ success: boolean; message?: string }>(`/RentalOrder/ConfirmDocuments?orderId=${orderId}`, {
+      method: 'PUT',
+    });
+  },
 };
+
+export const carDeliveryHistoryApi = {
+  // Tạo lịch sử giao xe (Bắt đầu thuê)
+  create: (data: {
+    deliveryDate: string;
+    odometerStart: number;
+    batteryLevelStart: number;
+    vehicleConditionStart: string;
+    orderId: number;
+  }) => {
+    return apiCall<{ message: string }>('/CarDeliveryHistory', {
+      method: 'POST',
+      body: JSON.stringify({
+        DeliveryDate: data.deliveryDate,
+        OdometerStart: data.odometerStart,
+        BatteryLevelStart: data.batteryLevelStart,
+        VehicleConditionStart: data.vehicleConditionStart,
+        OrderId: data.orderId,
+      }),
+    });
+  },
+};
+
+export const carReturnHistoryApi = {
+  // Tạo lịch sử trả xe
+  create: (data: {
+    returnDate: string;
+    odometerEnd: number;
+    batteryLevelEnd: number;
+    vehicleConditionEnd: string;
+    orderId: number;
+  }) => {
+    return apiCall<{ message: string }>('/CarReturnHistory', {
+      method: 'POST',
+      body: JSON.stringify({
+        ReturnDate: data.returnDate,
+        OdometerEnd: data.odometerEnd,
+        BatteryLevelEnd: data.batteryLevelEnd,
+        VehicleConditionEnd: data.vehicleConditionEnd,
+        OrderId: data.orderId,
+      }),
+    });
+  },
+};
+
 export const paymentApi = {
   // Lấy doanh thu theo từng điểm thuê (Admin/Staff)
   getRevenueByLocation: () =>

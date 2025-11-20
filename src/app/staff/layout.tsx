@@ -44,9 +44,9 @@ const { Header, Sider, Content, Footer } = Layout;
  ========================================================= */
 const mainMenu = [
   { key: "orders", label: "Quản lý đơn hàng", icon: <FileOutlined /> },
-  { key: "tasks", label: "Giao / Nhận xe", icon: <PieChartOutlined /> },
-  { key: "customers", label: "Xác thực khách hàng", icon: <UserOutlined /> },
-  { key: "payments", label: "Thanh toán tại điểm", icon: <DesktopOutlined /> },
+  // { key: "tasks", label: "Giao / Nhận xe", icon: <PieChartOutlined /> },
+  // { key: "customers", label: "Xác thực khách hàng", icon: <UserOutlined /> },
+  // { key: "payments", label: "Thanh toán tại điểm", icon: <DesktopOutlined /> },
   { key: "vehicles", label: "Xe tại điểm", icon: <TeamOutlined /> },
 
 ];
@@ -77,8 +77,8 @@ const subMenus: Record<string, { key: string; label: string; icon: React.ReactNo
 
   vehicles: [
     { key: "1", label: "Quản lý xe", icon: <TeamOutlined /> },
-    { key: "2", label: "Trạng thái pin & kỹ thuật", icon: <TeamOutlined /> },
-    { key: "3", label: "Báo cáo sự cố / hỏng hóc", icon: <FileOutlined /> },
+    // { key: "2", label: "Trạng thái pin & kỹ thuật", icon: <TeamOutlined /> },
+    // { key: "3", label: "Báo cáo sự cố / hỏng hóc", icon: <FileOutlined /> },
   ],
 
   documents: [

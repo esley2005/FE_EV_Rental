@@ -30,11 +30,9 @@ export default function BookingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<RentalLocationData | null>(null);
   const [pickupOption, setPickupOption] = useState<'self' | 'delivery'>('self');
-  const [discountOption, setDiscountOption] = useState<'program' | 'promo'>('program');
-  const [promoCode, setPromoCode] = useState('');
-  const [vatInvoice, setVatInvoice] = useState(false);
   const [withDriver, setWithDriver] = useState<boolean>(false);
   const [hasDocuments, setHasDocuments] = useState<boolean | null>(null);
+  const [dateRangeValue, setDateRangeValue] = useState<[Dayjs, Dayjs] | null>(null);
 
   // Helper functions tương tự trang chi tiết xe
   const extractCarRentalLocationList = (source: any): any[] => {
@@ -343,38 +341,32 @@ export default function BookingPage() {
     if (!pickupTime || !returnTime) return 0;
     
     const withDriver = form.getFieldValue('withDriver') || false;
-    const days = returnTime.diff(pickupTime, 'day', true);
     
-    if (days < 1) {
-      // Tính theo giờ
-      const hours = returnTime.diff(pickupTime, 'hour', true);
-      return Math.ceil(hours) * (withDriver ? car.rentPricePerHourWithDriver : car.rentPricePerHour);
-    } else {
-      // Tính theo ngày
-      return Math.ceil(days) * (withDriver ? car.rentPricePerDayWithDriver : car.rentPricePerDay);
-    }
-  };
-
-  const calculateDiscount = () => {
-    const rentalFee = calculateRentalFee();
-    if (discountOption === 'program') {
-      return Math.round(rentalFee * 0.1); // 10% discount
-    }
-    // TODO: Apply promo code discount
-    return 0;
-  };
-
-  const calculateVAT = () => {
-    const rentalFee = calculateRentalFee();
-    const discount = calculateDiscount();
-    return Math.round((rentalFee - discount) * 0.1); // 10% VAT
+    // Tính tổng số giờ (chính xác, không làm tròn)
+    const totalHours = returnTime.diff(pickupTime, 'hour', true);
+    
+    if (totalHours <= 0) return 0;
+    
+    // Tính số ngày đầy đủ và số giờ còn lại
+    const fullDays = Math.floor(totalHours / 24);
+    const remainingHours = totalHours % 24;
+    
+    // Lấy giá theo loại (có tài xế hay không)
+    const pricePerDay = withDriver ? car.rentPricePerDayWithDriver : car.rentPricePerDay;
+    
+    // Tính giá/giờ từ giá/ngày (chia 24) để đảm bảo tính chính xác
+    const pricePerHour = pricePerDay / 24;
+    
+    // Tính tổng: (số ngày * giá/ngày) + (số giờ * giá/giờ) - không làm tròn
+    const dayFee = fullDays * pricePerDay;
+    const hourFee = remainingHours * pricePerHour;
+    
+    return dayFee + hourFee;
   };
 
   const calculateTotal = () => {
     const rentalFee = calculateRentalFee();
-    const discount = calculateDiscount();
-    const vat = calculateVAT();
-    return rentalFee - discount + vat;
+    return rentalFee;
   };
 
   const calculateDeposit = () => {
@@ -492,12 +484,45 @@ export default function BookingPage() {
     );
   }
 
-  const rentalFee = calculateRentalFee();
-  const discount = calculateDiscount();
-  const vat = calculateVAT();
-  const total = calculateTotal();
+  // Tính giá dựa trên dateRangeValue hoặc form value
+  const getDateRange = () => {
+    return dateRangeValue || form.getFieldValue('dateRange');
+  };
+
+  const calculateRentalFeeWithDates = (dates: [Dayjs, Dayjs] | null) => {
+    if (!car || !dates) return 0;
+    
+    const [pickupTime, returnTime] = dates;
+    if (!pickupTime || !returnTime) return 0;
+    
+    const withDriverValue = withDriver;
+    
+    // Tính tổng số giờ (chính xác, không làm tròn)
+    const totalHours = returnTime.diff(pickupTime, 'hour', true);
+    
+    if (totalHours <= 0) return 0;
+    
+    // Tính số ngày đầy đủ và số giờ còn lại
+    const fullDays = Math.floor(totalHours / 24);
+    const remainingHours = totalHours % 24;
+    
+    // Lấy giá theo loại (có tài xế hay không)
+    const pricePerDay = withDriverValue ? car.rentPricePerDayWithDriver : car.rentPricePerDay;
+    
+    // Tính giá/giờ từ giá/ngày (chia 24) để đảm bảo tính chính xác
+    const pricePerHour = pricePerDay / 24;
+    
+    // Tính tổng: (số ngày * giá/ngày) + (số giờ * giá/giờ) - không làm tròn
+    const dayFee = fullDays * pricePerDay;
+    const hourFee = remainingHours * pricePerHour;
+    
+    return dayFee + hourFee;
+  };
+
+  const rentalFee = calculateRentalFeeWithDates(getDateRange());
+  const total = rentalFee;
   const deposit = calculateDeposit();
-  const remaining = calculateRemaining();
+  const remaining = total - deposit;
 
   return (
     <>
@@ -612,6 +637,13 @@ export default function BookingPage() {
                   size="large"
                   className="w-full"
                   placeholder={["Thời gian nhận xe", "Thời gian trả xe"]}
+                  onChange={(dates) => {
+                    if (dates && dates[0] && dates[1]) {
+                      setDateRangeValue([dates[0], dates[1]]);
+                    } else {
+                      setDateRangeValue(null);
+                    }
+                  }}
                   disabledDate={(current) => {
                     // Chặn các ngày trong quá khứ
                     return current && current < dayjs().startOf('day');
@@ -706,7 +738,10 @@ export default function BookingPage() {
                 rules={[{ required: true, message: "Vui lòng chọn loại thuê xe" }]}
               >
                 <Radio.Group 
-                  onChange={(e) => setWithDriver(e.target.value)}
+                  onChange={(e) => {
+                    setWithDriver(e.target.value);
+                    // Force re-render để cập nhật giá
+                  }}
                   className="w-full"
                 >
                   <div className="flex gap-4">
@@ -748,27 +783,11 @@ export default function BookingPage() {
             {/* Cost Breakdown */}
             <div className="border-t border-gray-200 pt-4 space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-gray-700">Phí thuê xe</span>
+                <span className="text-gray-700">Phí thuê xe (Tạm tính)</span>
                 <span className="font-semibold text-gray-900">{formatCurrency(rentalFee)}</span>
               </div>
-              <div className="flex justify-between items-center">
-                <div>
-                  <span className="text-gray-700">Giảm giá</span>
-                  {discountOption === 'program' && (
-                    <p className="text-xs text-gray-500 mt-1">GR5EV</p>
-                  )}
-                </div>
-                <span className="font-semibold text-red-500">-{formatCurrency(discount)}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-700">Thuế VAT</span>
-                  <Info className="w-4 h-4 text-gray-400" />
-                </div>
-                <span className="font-semibold text-gray-900">{formatCurrency(vat)}</span>
-              </div>
               <div className="flex justify-between items-center pt-3 border-t border-gray-200">
-                <span className="font-bold text-gray-900">Tổng cộng tiền thuê</span>
+                <span className="font-bold text-gray-900">Tổng cộng tiền thuê (Tạm tính)</span>
                 <span className="font-bold text-gray-900 text-lg">{formatCurrency(total)}</span>
               </div>
             </div>
@@ -820,12 +839,6 @@ export default function BookingPage() {
 
         
 
-          {/* VAT Invoice */}
-          {/* <div className="bg-white rounded-lg shadow-sm p-6">
-            <Checkbox checked={vatInvoice} onChange={(e) => setVatInvoice(e.target.checked)}>
-              <span className="font-medium text-gray-900">Xuất hóa đơn VAT</span>
-            </Checkbox>
-          </div> */}
 
           {/* Thành tiền và nút xác nhận */}
           <div className="bg-white rounded-lg shadow-sm p-6">

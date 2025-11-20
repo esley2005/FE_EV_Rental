@@ -491,13 +491,13 @@ export default function DocumentsPage() {
         {/* Main Content */}
         <Content style={{ margin: "24px auto", padding: "24px", width: "100%", maxWidth: 1000 }}>
           {/* Back Button */}
-          <Button
+          {/* <Button
             icon={<ArrowLeftOutlined />}
             onClick={() => router.push("/profile")}
             className="mb-4"
           >
             Quay lại trang cá nhân
-          </Button>
+          </Button> */}
 
           <h1 className="text-3xl font-bold mb-6">Upload Giấy Tờ</h1>
 

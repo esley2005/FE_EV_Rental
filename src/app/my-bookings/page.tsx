@@ -38,7 +38,8 @@ import {
   Image,
   Alert,
   notification as antdNotification,
-  Popconfirm
+  Popconfirm,
+  message
 } from "antd";
 import { rentalOrderApi, carsApi, rentalLocationApi, authApi, driverLicenseApi, citizenIdApi } from "@/services/api";
 import type { RentalOrderData, RentalLocationData, User, DriverLicenseData, CitizenIdData } from "@/services/api";
@@ -70,6 +71,21 @@ export default function MyBookingsPage() {
   useEffect(() => {
     loadUserAndBookings();
   }, []);
+
+  // Auto-refresh bookings mỗi 30 giây để cập nhật trạng thái khi staff thay đổi
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    const refreshInterval = setInterval(() => {
+      loadBookings(user.id).catch(err => {
+        console.error('Auto-refresh bookings error:', err);
+      });
+    }, 30000); // 30 giây
+    
+    return () => {
+      clearInterval(refreshInterval);
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     filterBookings();
@@ -107,11 +123,13 @@ export default function MyBookingsPage() {
       }
     } catch (error) {
       console.error('Load user error:', error);
-      api.error({
-        message: 'Có lỗi xảy ra',
-        description: 'Không thể tải thông tin người dùng!',
-        placement: 'topRight',
-      });
+      setTimeout(() => {
+        api.error({
+          message: 'Có lỗi xảy ra',
+          description: 'Không thể tải thông tin người dùng!',
+          placement: 'topRight',
+        });
+      }, 0);
       setLoading(false);
     }
   };
@@ -194,12 +212,14 @@ export default function MyBookingsPage() {
       setBookings(bookingsWithDetails);
     } catch (error) {
       console.error('Load bookings error:', error);
-      api.error({
-        message: 'Có lỗi xảy ra',
-        description: 'Không thể tải danh sách đơn hàng!',
-        placement: 'topRight',
-        icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
-      });
+      setTimeout(() => {
+        api.error({
+          message: 'Có lỗi xảy ra',
+          description: 'Không thể tải danh sách đơn hàng!',
+          placement: 'topRight',
+          icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+        });
+      }, 0);
     } finally {
       setLoading(false);
     }
@@ -230,21 +250,53 @@ export default function MyBookingsPage() {
     setFilteredBookings(filtered);
   };
 
-  const normalizeStatus = (status?: string): string => {
-    if (!status) return 'pending';
-    const statusLower = status.toLowerCase();
-    if (statusLower.includes('pending') || statusLower.includes('chờ')) return 'pending';
+  const normalizeStatus = (status?: string | number): string => {
+    if (status === undefined || status === null) return 'pending';
+    
+    // Xử lý nếu status là số (enum từ backend)
+    if (typeof status === 'number') {
+      const statusMap: Record<number, string> = {
+        0: 'pending',
+        1: 'documentssubmitted',
+        2: 'depositpending',
+        3: 'confirmed',
+        4: 'renting',
+        5: 'returned',
+        6: 'paymentpending',
+        7: 'cancelled',
+        8: 'completed',
+      };
+      return statusMap[status] || 'pending';
+    }
+    
+    // Xử lý nếu status là string
+    const statusStr = String(status);
+    const statusLower = statusStr.toLowerCase();
+    
+    // Check DepositPending first before generic pending
+    if (statusLower.includes('depositpending') || statusLower.includes('chờ tiền cọc') || statusLower.includes('chờ đặt cọc')) return 'depositpending';
+    if (statusLower.includes('documentssubmitted') || statusLower.includes('đã nộp giấy tờ')) return 'documentssubmitted';
     if (statusLower.includes('confirmed') || statusLower.includes('xác nhận')) return 'confirmed';
+    if (statusLower.includes('renting') || statusLower.includes('đang thuê')) return 'renting';
+    if (statusLower.includes('returned') || statusLower.includes('đã trả xe')) return 'returned';
+    if (statusLower.includes('paymentpending') || statusLower.includes('chờ thanh toán')) return 'paymentpending';
     if (statusLower.includes('completed') || statusLower.includes('hoàn thành')) return 'completed';
     if (statusLower.includes('cancelled') || statusLower.includes('hủy')) return 'cancelled';
+    if (statusLower.includes('pending') || statusLower.includes('chờ')) return 'pending';
+    
     return 'pending';
   };
 
-  const getStatusTag = (status?: string) => {
+  const getStatusTag = (status?: string | number) => {
     const normalized = normalizeStatus(status);
     const statusConfig: Record<string, { color: string; text: string; icon: any }> = {
       pending: { color: 'gold', text: 'Chờ xác nhận', icon: <ClockCircleOutlined /> },
+      documentssubmitted: { color: 'orange', text: 'Đã nộp giấy tờ', icon: <IdcardOutlined /> },
+      depositpending: { color: 'purple', text: 'Chờ thanh toán đặt cọc', icon: <DollarOutlined /> },
       confirmed: { color: 'blue', text: 'Đã xác nhận', icon: <CheckCircleOutlined /> },
+      renting: { color: 'green', text: 'Đang thuê', icon: <CarOutlined /> },
+      returned: { color: 'cyan', text: 'Đã trả xe', icon: <CarOutlined /> },
+      paymentpending: { color: 'orange', text: 'Chờ thanh toán', icon: <DollarOutlined /> },
       completed: { color: 'green', text: 'Hoàn thành', icon: <CheckCircleOutlined /> },
       cancelled: { color: 'red', text: 'Đã hủy', icon: <CloseCircleOutlined /> }
     };
@@ -278,10 +330,12 @@ export default function MyBookingsPage() {
       if (updatedBooking) {
         setSelectedBooking(updatedBooking);
       }
-      api.success({
-        message: 'Đã làm mới thông tin',
-        placement: 'topRight',
-      });
+      setTimeout(() => {
+        api.success({
+          message: 'Đã làm mới thông tin',
+          placement: 'topRight',
+        });
+      }, 0);
     } catch (error) {
       console.error('Refresh booking error:', error);
     } finally {
@@ -296,13 +350,6 @@ export default function MyBookingsPage() {
       const response = await rentalOrderApi.cancelOrder(booking.id);
       
       if (response.success) {
-        api.success({
-          message: 'Hủy đơn hàng thành công',
-          description: 'Đơn hàng đã được hủy thành công.',
-          placement: 'topRight',
-          icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
-        });
-        
         // Reload bookings
         if (user) {
           await loadBookings(user.id);
@@ -312,6 +359,16 @@ export default function MyBookingsPage() {
         if (selectedBooking?.id === booking.id) {
           setDetailModalOpen(false);
         }
+        
+        // Wrap notification trong setTimeout để tránh warning về render
+        setTimeout(() => {
+          api.success({
+            message: 'Hủy đơn hàng thành công',
+            description: 'Đơn hàng đã được hủy thành công.',
+            placement: 'topRight',
+            icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+          });
+        }, 0);
       } else {
         const errorMsg = response.error || response.message || 'Không thể hủy đơn hàng';
         throw new Error(errorMsg);
@@ -319,12 +376,15 @@ export default function MyBookingsPage() {
     } catch (error: any) {
       console.error('Cancel booking error:', error);
       const errorMessage = error?.message || error?.error || 'Có lỗi xảy ra khi hủy đơn hàng. Vui lòng thử lại.';
-      api.error({
-        message: 'Không thể hủy đơn hàng',
-        description: errorMessage,
-        placement: 'topRight',
-        icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
-      });
+      // Wrap notification trong setTimeout để tránh warning về render
+      setTimeout(() => {
+        api.error({
+          message: 'Không thể hủy đơn hàng',
+          description: errorMessage,
+          placement: 'topRight',
+          icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+        });
+      }, 0);
     } finally {
       setLoading(false);
     }
@@ -332,8 +392,12 @@ export default function MyBookingsPage() {
 
   const canCancelBooking = (booking: BookingWithDetails): boolean => {
     const status = normalizeStatus(booking.status);
-    // Chỉ cho phép hủy khi đơn hàng đang ở trạng thái pending hoặc chưa được xác nhận
-    return status === 'pending' || status === 'confirmed';
+
+    return status === 'pending' || 
+           status === 'documentssubmitted' || 
+           status === 'depositpending';
+          //   || 
+          //  status === 'confirmed';
   };
 
   const showBookingDetail = (booking: BookingWithDetails) => {
@@ -407,7 +471,12 @@ export default function MyBookingsPage() {
               >
                 <Select.Option value="all">Tất cả trạng thái</Select.Option>
                 <Select.Option value="pending">Chờ xác nhận</Select.Option>
+                <Select.Option value="documentssubmitted">Đã nộp giấy tờ</Select.Option>
+                <Select.Option value="depositpending">Chờ thanh toán đặt cọc</Select.Option>
                 <Select.Option value="confirmed">Đã xác nhận</Select.Option>
+                <Select.Option value="renting">Đang thuê</Select.Option>
+                <Select.Option value="returned">Đã trả xe</Select.Option>
+                <Select.Option value="paymentpending">Chờ thanh toán</Select.Option>
                 <Select.Option value="completed">Hoàn thành</Select.Option>
                 <Select.Option value="cancelled">Đã hủy</Select.Option>
               </Select>
@@ -486,7 +555,7 @@ export default function MyBookingsPage() {
                             description={
                               <div>
                                 <p className="mb-2">
-                                  Đơn hàng đã được xác nhận, bạn hãy đến vị trí thuê của bạn để tiến hành thanh toán và nhận xe.
+                                  Đơn hàng đã được xác nhận, Bạn có thể nhận xe ngay bây giờ. 
                                 </p>
                                 <p className="mb-2">
                                   <strong>Địa điểm nhận xe:</strong> {locationName}
