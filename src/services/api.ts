@@ -567,8 +567,8 @@ export interface User {
   address?: string;
   dateOfBirth?: string;
   avatar?: string;
-  driverLicenseStatus?: number; // 0 = chưa cập nhật/chưa xác thực, 1 = đã xác thực
-  citizenIdStatus?: number; // 0 = chưa cập nhật/chưa xác thực, 1 = đã xác thực
+  driverLicenseStatus?: number; // 0 = chưa cập nhật/chưa xác thực, 1 = đã xác thực, 2 = bị từ chối
+  citizenIdStatus?: number; // 0 = chưa cập nhật/chưa xác thực, 1 = đã xác thực, 2 = bị từ chối
   isEmailConfirmed?: boolean;
   isActive?: boolean;
   createdAt?: string;

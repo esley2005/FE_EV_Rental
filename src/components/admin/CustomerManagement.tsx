@@ -52,6 +52,9 @@ export default function CustomerManagement() {
   const [loadingDocuments, setLoadingDocuments] = useState(false);
   const [driverLicenses, setDriverLicenses] = useState<DriverLicenseData[]>([]);
   const [citizenIds, setCitizenIds] = useState<CitizenIdData[]>([]);
+  
+  // Map để lưu documents mới nhất cho mỗi user (userId -> { driverLicense, citizenId })
+  const [userDocumentsMap, setUserDocumentsMap] = useState<Map<number, { driverLicense?: DriverLicenseData; citizenId?: CitizenIdData }>>(new Map());
 
   useEffect(() => {
     loadCustomers();
@@ -75,22 +78,137 @@ export default function CustomerManagement() {
   const loadCustomers = async () => {
     setLoading(true);
     try {
-      const response = await authApi.getAllUsers();
-      if (response.success && response.data) {
-        // Filter only customers (role = "Customer")
-        const customerList = response.data.filter(
-          (user: User) => user.role?.toLowerCase() === "customer"
-        );
-        setCustomers(customerList);
-        setFilteredCustomers(customerList);
-      } else {
+      // Load customers và documents song song
+      const [usersResponse, licenseRes, citizenRes, ordersRes] = await Promise.all([
+        authApi.getAllUsers(),
+        driverLicenseApi.getAll(),
+        citizenIdApi.getAll(),
+        rentalOrderApi.getAll(),
+      ]);
+
+      if (!usersResponse.success || !usersResponse.data) {
         api.error({
           message: "Lỗi tải danh sách khách hàng",
-          description: response.error || "Không thể tải danh sách khách hàng!",
+          description: usersResponse.error || "Không thể tải danh sách khách hàng!",
           placement: "topRight",
           icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
         });
+        return;
       }
+
+      // Filter only customers (role = "Customer")
+      const customerList = usersResponse.data.filter(
+        (user: User) => user.role?.toLowerCase() === "customer"
+      );
+
+      // Tạo map userId -> orderIds
+      const userIdToOrderIdsMap = new Map<number, number[]>();
+      if (ordersRes.success && ordersRes.data) {
+        const orders = Array.isArray(ordersRes.data)
+          ? ordersRes.data
+          : (ordersRes.data as any)?.$values || [];
+        
+        orders.forEach((order: RentalOrderData) => {
+          const userId = order.userId || (order as any).UserId;
+          if (userId) {
+            if (!userIdToOrderIdsMap.has(userId)) {
+              userIdToOrderIdsMap.set(userId, []);
+            }
+            userIdToOrderIdsMap.get(userId)?.push(order.id);
+          }
+        });
+      }
+
+      // Tạo map userId -> latest documents
+      const documentsMap = new Map<number, { driverLicense?: DriverLicenseData; citizenId?: CitizenIdData }>();
+
+      // Xử lý driver licenses - lấy document mới nhất cho mỗi user
+      if (licenseRes.success && licenseRes.data) {
+        const allLicenses = Array.isArray(licenseRes.data)
+          ? licenseRes.data
+          : (licenseRes.data as any)?.$values || [];
+        
+        allLicenses.forEach((license: DriverLicenseData) => {
+          if (license.rentalOrderId) {
+            // Tìm userId từ rentalOrderId
+            for (const [userId, orderIds] of userIdToOrderIdsMap.entries()) {
+              if (orderIds.includes(license.rentalOrderId)) {
+                const current = documentsMap.get(userId);
+                const currentLicense = current?.driverLicense;
+                
+                // Chuyển đổi status sang number để so sánh
+                const licenseStatus = typeof license.status === 'number' 
+                  ? license.status 
+                  : (license.status === '1' || license.status === 'approved' ? 1 : 
+                     (license.status === '2' || license.status === 'rejected' ? 2 : 0));
+                const currentStatus = currentLicense 
+                  ? (typeof currentLicense.status === 'number' 
+                      ? currentLicense.status 
+                      : (currentLicense.status === '1' || currentLicense.status === 'approved' ? 1 : 
+                         (currentLicense.status === '2' || currentLicense.status === 'rejected' ? 2 : 0)))
+                  : 0;
+                
+                // Lấy license mới nhất (ưu tiên status = 1, sau đó là mới nhất theo id)
+                if (!currentLicense || 
+                    (licenseStatus === 1 && currentStatus !== 1) ||
+                    (licenseStatus === currentStatus && (license.id ?? 0) > (currentLicense.id ?? 0))) {
+                  documentsMap.set(userId, {
+                    driverLicense: license,
+                    citizenId: current?.citizenId,
+                  });
+                }
+                break;
+              }
+            }
+          }
+        });
+      }
+
+      // Xử lý citizen IDs - lấy document mới nhất cho mỗi user
+      if (citizenRes.success && citizenRes.data) {
+        const allCitizenIds = Array.isArray(citizenRes.data)
+          ? citizenRes.data
+          : (citizenRes.data as any)?.$values || [];
+        
+        allCitizenIds.forEach((citizenId: CitizenIdData) => {
+          if (citizenId.rentalOrderId) {
+            // Tìm userId từ rentalOrderId
+            for (const [userId, orderIds] of userIdToOrderIdsMap.entries()) {
+              if (orderIds.includes(citizenId.rentalOrderId)) {
+                const current = documentsMap.get(userId);
+                const currentCitizenId = current?.citizenId;
+                
+                // Chuyển đổi status sang number để so sánh
+                const citizenIdStatus = typeof citizenId.status === 'number' 
+                  ? citizenId.status 
+                  : (citizenId.status === '1' || citizenId.status === 'approved' ? 1 : 
+                     (citizenId.status === '2' || citizenId.status === 'rejected' ? 2 : 0));
+                const currentStatus = currentCitizenId 
+                  ? (typeof currentCitizenId.status === 'number' 
+                      ? currentCitizenId.status 
+                      : (currentCitizenId.status === '1' || currentCitizenId.status === 'approved' ? 1 : 
+                         (currentCitizenId.status === '2' || currentCitizenId.status === 'rejected' ? 2 : 0)))
+                  : 0;
+                
+                // Lấy citizenId mới nhất (ưu tiên status = 1, sau đó là mới nhất theo id)
+                if (!currentCitizenId || 
+                    (citizenIdStatus === 1 && currentStatus !== 1) ||
+                    (citizenIdStatus === currentStatus && (citizenId.id ?? 0) > (currentCitizenId.id ?? 0))) {
+                  documentsMap.set(userId, {
+                    driverLicense: current?.driverLicense,
+                    citizenId: citizenId,
+                  });
+                }
+                break;
+              }
+            }
+          }
+        });
+      }
+
+      setUserDocumentsMap(documentsMap);
+      setCustomers(customerList);
+      setFilteredCustomers(customerList);
     } catch (error) {
       console.error("Load customers error:", error);
       api.error({
@@ -250,6 +368,7 @@ export default function CustomerManagement() {
               Email đã xác thực
             </Tag>
           ) : (
+            
             <Tag color="warning">Email chưa xác thực</Tag>
           )}
           {record.isActive !== false ? (
@@ -263,33 +382,45 @@ export default function CustomerManagement() {
     {
       title: "Trạng thái xác thực",
       key: "verification",
-      render: (_: any, record: User) => (
-        <Space direction="vertical" size="small">
-          {record.driverLicenseStatus === 1 ? (
-            <Tag color="success" icon={<CheckCircleOutlined />}>
-              GPLX: Đã xác thực
-            </Tag>
-          ) : (
-            <Tag color="default">GPLX: Chưa xác thực</Tag>
-          )}
-          {record.citizenIdStatus === 1 ? (
-            <Tag color="success" icon={<CheckCircleOutlined />}>
-              CCCD: Đã xác thực
-            </Tag>
-          ) : (
-            <Tag color="default">CCCD: Chưa xác thực</Tag>
-          )}
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleViewDocuments(record)}
-            style={{ padding: 0 }}
-          >
-            Xem giấy tờ
-          </Button>
-        </Space>
-      ),
+      render: (_: any, record: User) => {
+        const userDocs = userDocumentsMap.get(record.id);
+        const driverLicense = userDocs?.driverLicense;
+        const citizenId = userDocs?.citizenId;
+        
+        // Chuyển đổi status từ number sang string để getStatusTag hoạt động
+        const licenseStatus = driverLicense?.status !== undefined 
+          ? String(driverLicense.status) 
+          : undefined;
+        const citizenIdStatus = citizenId?.status !== undefined 
+          ? String(citizenId.status) 
+          : undefined;
+        
+        return (
+          <Space direction="vertical" size="small">
+            <div className="flex flex-col">
+  <div className="flex items-center">
+    <span className="text-xs text-gray-500 mr-2">GPLX:</span>
+    {getStatusTag(licenseStatus)}
+  </div>
+
+  <div className="flex items-center mt-1">
+    <span className="text-xs text-gray-500 mr-2">CCCD:</span>
+    {getStatusTag(citizenIdStatus)}
+  </div>
+</div>
+
+            <Button
+              type="link"
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={() => handleViewDocuments(record)}
+              style={{ padding: 0 }}
+            >
+              Xem giấy tờ
+            </Button>
+          </Space>
+        );
+      },
     },
   
     {
