@@ -77,13 +77,63 @@ body {
   background: rgb(156 163 175);
 }
 
-@keyframes fadeInUp {
+/* Animations cho carousel - slide effects */
+@keyframes slide-in-left {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateX(-100px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateX(0);
   }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(100px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slide-out-left {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-100px);
+  }
+}
+
+@keyframes slide-out-right {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100px);
+  }
+}
+
+.animate-slide-in-left {
+  animation: slide-in-left 1s ease-out;
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 1s ease-out;
+}
+
+.animate-slide-out-left {
+  animation: slide-out-left 1s ease-out;
+}
+
+.animate-slide-out-right {
+  animation: slide-out-right 1s ease-out;
 }
