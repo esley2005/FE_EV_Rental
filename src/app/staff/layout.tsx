@@ -34,7 +34,6 @@ import CarManagement from "@/components/admin/CarManagement";
 import RentalOrderManagement from "@/components/staff/RentalOrderManagement";
 import { authUtils } from "@/utils/auth";
 import { carsApi as carsApiWrapped, bookingsApi as bookingsApiWrapped, rentalOrderApi, type ApiResponse } from "@/services/api";
-import { getUsers } from "@/services/userService";
 import { useRouter } from "next/navigation"; 
 
 const { Header, Sider, Content, Footer } = Layout;
@@ -134,14 +133,12 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
         type UnknownApi = ApiResponse<unknown> | unknown;
         const rentalApi = (rentalOrderApi as unknown as { getAll?: () => Promise<ApiResponse<unknown>> }).getAll?.();
-        const [ordersRes, carsRes, usersRes] = await Promise.all<[
+        const [ordersRes, carsRes] = await Promise.all<[
           UnknownApi,
-          UnknownApi,
-          unknown
+          UnknownApi
         ]>([
           (rentalApi as Promise<UnknownApi>) ?? (bookingsApiWrapped.getAll() as Promise<UnknownApi>),
           carsApiWrapped.getAll() as Promise<UnknownApi>,
-          getUsers().catch(() => []) as Promise<unknown>,
         ]);
 
         // Orders and revenue
@@ -176,8 +173,8 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         const vehiclesArray = getArray(carsRes);
         const vehiclesCount = vehiclesArray.length;
 
-        // Clients count
-        const clientsCount = Array.isArray(usersRes) ? usersRes.length : 0;
+        // Clients count - API không tồn tại, đặt mặc định 0
+        const clientsCount = 0;
 
         if (mounted) {
           setMetrics({ revenue, orders, templates: vehiclesCount, clients: clientsCount });
@@ -334,22 +331,22 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           {/* ElaAdmin-like top summary cards */}
           <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
             <Col xs={24} sm={12} md={6}>
-              <Card bordered hoverable loading={metricsLoading}>
+              <Card variant="outlined" hoverable loading={metricsLoading}>
                 <Statistic title="Doanh thu" prefix={<span>₫</span>} value={metrics.revenue} precision={0} />
               </Card>
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <Card bordered hoverable loading={metricsLoading}>
+              <Card variant="outlined" hoverable loading={metricsLoading}>
                 <Statistic title="Đơn hàng" value={metrics.orders} />
               </Card>
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <Card bordered hoverable loading={metricsLoading}>
+              <Card variant="outlined" hoverable loading={metricsLoading}>
                 <Statistic title="Số xe" value={metrics.templates} />
               </Card>
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <Card bordered hoverable loading={metricsLoading}>
+              <Card variant="outlined" hoverable loading={metricsLoading}>
                 <Statistic title="Khách hàng" value={metrics.clients} />
               </Card>
             </Col>
@@ -409,7 +406,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               open={showDelivery}
               onCancel={() => setShowDelivery(false)}
               footer={null}
-              destroyOnClose
+              destroyOnHidden
             >
               {selectedCar && (
                 <DeliveryForm
@@ -425,7 +422,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               open={showReturn}
               onCancel={() => setShowReturn(false)}
               footer={null}
-              destroyOnClose
+              destroyOnHidden
             >
               {selectedCar && (
                 <ReturnForm

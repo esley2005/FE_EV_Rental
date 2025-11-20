@@ -79,7 +79,7 @@ export default function AIAnalysis({ variant = "general" }: AIAnalysisProps) {
 
   return (
     <Card
-      bordered
+      variant="outlined"
       title={
         <Space align="center">
           <div

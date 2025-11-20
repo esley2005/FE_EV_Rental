@@ -46,6 +46,7 @@ import type { RentalOrderData, RentalLocationData, User, DriverLicenseData, Citi
 import type { Car } from "@/types/car";
 import dayjs from "dayjs";
 import Link from "next/link";
+import { formatDateTime, formatDateOnly } from "@/utils/dateFormat";
 
 // Extended interface với thông tin car và location
 interface BookingWithDetails extends RentalOrderData {
@@ -410,15 +411,8 @@ export default function MyBookingsPage() {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
   };
 
-  const formatDate = (dateStr?: string) => {
-    if (!dateStr) return '-';
-    return dayjs(dateStr).format('DD/MM/YYYY HH:mm');
-  };
-
-  const formatDateOnly = (dateStr?: string) => {
-    if (!dateStr) return '-';
-    return dayjs(dateStr).format('DD/MM/YYYY');
-  };
+  // Sử dụng utility function từ dateFormat.ts để đảm bảo timezone đúng
+  const formatDate = (dateStr?: string) => formatDateTime(dateStr);
 
   const calculateDays = (startDate?: string, endDate?: string) => {
     if (!startDate || !endDate) return 0;
@@ -604,7 +598,7 @@ export default function MyBookingsPage() {
                         <div className="flex items-center justify-between pt-3 border-t">
                           <div className="text-sm text-gray-600 flex items-center gap-4 flex-wrap">
                             <span>
-                              <InfoCircleOutlined /> Đặt ngày: {formatDateOnly(booking.orderDate || booking.createdAt)}
+                              <InfoCircleOutlined /> Đặt ngày: {formatDate(booking.orderDate || booking.createdAt)}
                             </span>
                             {booking.withDriver && (
                               <Tag color="blue">Có tài xế</Tag>

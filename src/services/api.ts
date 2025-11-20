@@ -737,8 +737,13 @@ export const authApi = {
   // Lấy tất cả user (khách hàng) từ hệ thống auth
   getAllUsers: async () => {
     const candidates = [
-      '/user', '/users', '/user/all', '/auth/users',
-      '/User', '/User/all', '/User/GetAll', '/User/List'
+      '/User', 
+      // '/users', 
+      // '/user/all',
+      //  '/auth/users',
+      // '/User', '/User/all', 
+      // '/User/GetAll', 
+      // '/User/List'
     ];
     for (const ep of candidates) {
       const res = await apiCall<any>(ep, { method: 'GET' });
