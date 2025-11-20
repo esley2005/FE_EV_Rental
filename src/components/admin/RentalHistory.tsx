@@ -92,6 +92,24 @@ const getStatusNumber = (status: string | number | undefined): number => {
   return 0;
 };
 
+// Helper function để xử lý status của giấy tờ (có thể là string hoặc number)
+const getDocumentStatusInfo = (status: string | number | undefined) => {
+  const isApproved = 
+    (typeof status === 'number' && status === 1) ||
+    (typeof status === 'string' && (status === '1' || status.toLowerCase() === 'approved'));
+  
+  const isRejected = 
+    (typeof status === 'number' && status === 2) ||
+    (typeof status === 'string' && (status === '2' || status.toLowerCase() === 'rejected'));
+  
+  return {
+    isApproved,
+    isRejected,
+    color: isApproved ? 'success' : isRejected ? 'error' : 'warning',
+    text: isApproved ? 'Đã xác thực' : isRejected ? 'Đã từ chối' : 'Chờ xác thực'
+  };
+};
+
 export default function RentalHistory() {
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState<OrderWithDetails[]>([]);
@@ -238,7 +256,7 @@ export default function RentalHistory() {
       render: (record: OrderWithDetails) => (
         <div>
           <div className="font-medium">{record.car?.name || "N/A"}</div>
-          <div className="text-xs text-gray-500">{record.car?.licensePlate || "-"}</div>
+          <div className="text-xs text-gray-500">{record.car?.model || "-"}</div>
         </div>
       ),
     },
@@ -261,14 +279,18 @@ export default function RentalHistory() {
     },
     {
       title: "Tổng tiền",
-      dataIndex: "totalAmount",
-      key: "totalAmount",
+      key: "total",
       width: 150,
-      render: (amount: number) => (
-        <span className="font-semibold text-blue-600">
-          {amount ? amount.toLocaleString("vi-VN") : 0} đ
-        </span>
-      ),
+      render: (record: OrderWithDetails) => {
+        // Tính tổng tiền: total hoặc subTotal + extraFee + damageFee
+        const total = record.total || 
+          ((record.subTotal || 0) + (record.extraFee || 0) + (record.damageFee || 0));
+        return (
+          <span className="font-semibold text-blue-600">
+            {total ? total.toLocaleString("vi-VN") : 0} đ
+          </span>
+        );
+      },
     },
     {
       title: "Trạng thái",
@@ -398,15 +420,15 @@ export default function RentalHistory() {
                 {selectedOrder.user?.fullName || selectedOrder.user?.email || "N/A"}
               </Descriptions.Item>
               <Descriptions.Item label="Email">{selectedOrder.user?.email || "-"}</Descriptions.Item>
-              <Descriptions.Item label="Số điện thoại">{selectedOrder.user?.phoneNumber || "-"}</Descriptions.Item>
+              <Descriptions.Item label="Số điện thoại">{selectedOrder.user?.phone || "-"}</Descriptions.Item>
               <Descriptions.Item label="Địa chỉ">{selectedOrder.user?.address || "-"}</Descriptions.Item>
             </Descriptions>
 
             <Descriptions title="Thông tin xe" bordered column={2} style={{ marginTop: 16 }}>
               <Descriptions.Item label="Tên xe">{selectedOrder.car?.name || "N/A"}</Descriptions.Item>
-              <Descriptions.Item label="Biển số">{selectedOrder.car?.licensePlate || "-"}</Descriptions.Item>
-              <Descriptions.Item label="Loại xe">{selectedOrder.car?.carType || "-"}</Descriptions.Item>
-              <Descriptions.Item label="Màu sắc">{selectedOrder.car?.color || "-"}</Descriptions.Item>
+              <Descriptions.Item label="Model">{selectedOrder.car?.model || "-"}</Descriptions.Item>
+              <Descriptions.Item label="Loại kích thước">{selectedOrder.car?.sizeType || "-"}</Descriptions.Item>
+              <Descriptions.Item label="Số chỗ ngồi">{selectedOrder.car?.seats || "-"}</Descriptions.Item>
             </Descriptions>
 
             <Descriptions title="Thông tin thuê" bordered column={2} style={{ marginTop: 16 }}>
@@ -425,12 +447,42 @@ export default function RentalHistory() {
               </Descriptions.Item>
               <Descriptions.Item label="Tổng tiền">
                 <span className="font-semibold text-blue-600">
-                  {selectedOrder.totalAmount
-                    ? selectedOrder.totalAmount.toLocaleString("vi-VN")
-                    : 0}{" "}
+                  {(() => {
+                    const total = selectedOrder.total || 
+                      ((selectedOrder.subTotal || 0) + (selectedOrder.extraFee || 0) + (selectedOrder.damageFee || 0));
+                    return total ? total.toLocaleString("vi-VN") : 0;
+                  })()}{" "}
                   đ
                 </span>
               </Descriptions.Item>
+              {selectedOrder.subTotal && (
+                <Descriptions.Item label="Tổng phụ">
+                  <span className="text-gray-600">
+                    {selectedOrder.subTotal.toLocaleString("vi-VN")} đ
+                  </span>
+                </Descriptions.Item>
+              )}
+              {selectedOrder.extraFee && selectedOrder.extraFee > 0 && (
+                <Descriptions.Item label="Phí phát sinh">
+                  <span className="text-orange-600">
+                    +{selectedOrder.extraFee.toLocaleString("vi-VN")} đ
+                  </span>
+                </Descriptions.Item>
+              )}
+              {selectedOrder.damageFee && selectedOrder.damageFee > 0 && (
+                <Descriptions.Item label="Phí hỏng hóc">
+                  <span className="text-red-600">
+                    +{selectedOrder.damageFee.toLocaleString("vi-VN")} đ
+                  </span>
+                </Descriptions.Item>
+              )}
+              {selectedOrder.deposit && (
+                <Descriptions.Item label="Tiền cọc">
+                  <span className="text-blue-600">
+                    {selectedOrder.deposit.toLocaleString("vi-VN")} đ
+                  </span>
+                </Descriptions.Item>
+              )}
             </Descriptions>
 
             {(selectedOrder.driverLicense || selectedOrder.citizenIdDoc) && (
@@ -452,20 +504,8 @@ export default function RentalHistory() {
                           alt="Bằng lái mặt sau"
                         />
                       )}
-                      <Tag
-                        color={
-                          selectedOrder.driverLicense.status === 1
-                            ? "success"
-                            : selectedOrder.driverLicense.status === 2
-                            ? "error"
-                            : "warning"
-                        }
-                      >
-                        {selectedOrder.driverLicense.status === 1
-                          ? "Đã xác thực"
-                          : selectedOrder.driverLicense.status === 2
-                          ? "Đã từ chối"
-                          : "Chờ xác thực"}
+                      <Tag color={getDocumentStatusInfo(selectedOrder.driverLicense.status).color}>
+                        {getDocumentStatusInfo(selectedOrder.driverLicense.status).text}
                       </Tag>
                     </Space>
                   </Descriptions.Item>
@@ -487,20 +527,8 @@ export default function RentalHistory() {
                           alt="CCCD mặt sau"
                         />
                       )}
-                      <Tag
-                        color={
-                          selectedOrder.citizenIdDoc.status === 1
-                            ? "success"
-                            : selectedOrder.citizenIdDoc.status === 2
-                            ? "error"
-                            : "warning"
-                        }
-                      >
-                        {selectedOrder.citizenIdDoc.status === 1
-                          ? "Đã xác thực"
-                          : selectedOrder.citizenIdDoc.status === 2
-                          ? "Đã từ chối"
-                          : "Chờ xác thực"}
+                      <Tag color={getDocumentStatusInfo(selectedOrder.citizenIdDoc.status).color}>
+                        {getDocumentStatusInfo(selectedOrder.citizenIdDoc.status).text}
                       </Tag>
                     </Space>
                   </Descriptions.Item>
