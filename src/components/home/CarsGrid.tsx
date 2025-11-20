@@ -12,6 +12,7 @@ interface CarsGridProps {
 
 export default function CarsGrid({ cars, className = '' }: CarsGridProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [direction, setDirection] = useState<'left' | 'right' | null>(null);
 
   if (cars.length === 0) {
     return (
@@ -22,11 +23,22 @@ export default function CarsGrid({ cars, className = '' }: CarsGridProps) {
   }
 
   const handlePrevious = () => {
+    setDirection('right');
     setCurrentIndex((prev) => (prev === 0 ? cars.length - 1 : prev - 1));
+    setTimeout(() => setDirection(null), 1000);
   };
 
   const handleNext = () => {
+    setDirection('left');
     setCurrentIndex((prev) => (prev === cars.length - 1 ? 0 : prev + 1));
+    setTimeout(() => setDirection(null), 1000);
+  };
+
+  const handleDotClick = (index: number) => {
+    if (index === currentIndex) return;
+    setDirection(index > currentIndex ? 'left' : 'right');
+    setCurrentIndex(index);
+    setTimeout(() => setDirection(null), 1000);
   };
 
   const getPreviousIndex = () => (currentIndex === 0 ? cars.length - 1 : currentIndex - 1);
@@ -39,24 +51,42 @@ export default function CarsGrid({ cars, className = '' }: CarsGridProps) {
         <div className="flex items-center justify-center gap-4 relative">
           {/* Previous Card (Left) - Peek */}
           {cars.length > 1 && (
-            <div className="flex-shrink-0 w-[280px] opacity-40 scale-90 transition-all duration-300 ease-out">
-              <div className="overflow-hidden rounded-lg">
+            <div className="flex-shrink-0 w-[280px] opacity-40 scale-90 transition-all duration-300 ease-out overflow-hidden">
+              <div 
+                key={`prev-${getPreviousIndex()}-${currentIndex}`}
+                className={`transition-all duration-400 ease-out ${
+                  direction === 'right' ? 'animate-slide-in-left' : 
+                  direction === 'left' ? 'animate-slide-out-left' : ''
+                }`}
+              >
                 <CarCard car={cars[getPreviousIndex()]} />
               </div>
             </div>
           )}
 
           {/* Current Card (Center) - Main */}
-          <div className="flex-shrink-0 w-[380px] opacity-100 scale-100 z-10 transition-all duration-300 ease-out">
-            <div className="transition-transform duration-200 hover:-translate-y-1">
+          <div className="flex-shrink-0 w-[380px] opacity-100 scale-100 z-10 transition-all duration-300 ease-out overflow-hidden">
+            <div 
+              key={`current-${currentIndex}`}
+              className={`transition-all duration-400 ease-out hover:-translate-y-1 ${
+                direction === 'left' ? 'animate-slide-in-right' : 
+                direction === 'right' ? 'animate-slide-in-left' : ''
+              }`}
+            >
               <CarCard car={cars[currentIndex]} />
             </div>
           </div>
 
           {/* Next Card (Right) - Peek */}
           {cars.length > 1 && (
-            <div className="flex-shrink-0 w-[280px] opacity-40 scale-90 transition-all duration-300 ease-out">
-              <div className="overflow-hidden rounded-lg">
+            <div className="flex-shrink-0 w-[280px] opacity-40 scale-90 transition-all duration-300 ease-out overflow-hidden">
+              <div 
+                key={`next-${getNextIndex()}-${currentIndex}`}
+                className={`transition-all duration-400 ease-out ${
+                  direction === 'left' ? 'animate-slide-in-right' : 
+                  direction === 'right' ? 'animate-slide-out-right' : ''
+                }`}
+              >
                 <CarCard car={cars[getNextIndex()]} />
               </div>
             </div>
@@ -92,7 +122,7 @@ export default function CarsGrid({ cars, className = '' }: CarsGridProps) {
             {cars.map((_, index) => (
               <button
                 key={index}
-                onClick={() => setCurrentIndex(index)}
+                onClick={() => handleDotClick(index)}
                 className={`rounded-full transition-all duration-300 ${
                   index === currentIndex
                     ? 'bg-blue-600 w-8'
