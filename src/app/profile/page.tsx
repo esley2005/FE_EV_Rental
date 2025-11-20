@@ -41,6 +41,11 @@ export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null);
   const [profileForm] = Form.useForm();
   const [passwordForm] = Form.useForm();
+  
+  // State cho xác nhận qua email/OTP
+  const [useEmailVerification, setUseEmailVerification] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpForm] = Form.useForm();
 
   // Document verification status (for display only)
   const [licenseVerified, setLicenseVerified] = useState<boolean | null>(null);
@@ -100,27 +105,51 @@ if (response.data.driverLicenseStatus !== undefined) {
     loadUserProfile();
   }, [router, api, profileForm]);
 
-  const handleUpdateProfile = async (values: { fullName: string; email: string }) => {
+  const handleUpdateProfile = async (values: { fullName: string }) => {
     setLoading(true);
     try {
+      const trimmedFullName = values.fullName?.trim() || "";
+      
+      if (!trimmedFullName || trimmedFullName.length < 2) {
+        api.error({
+          message: "Lỗi xác thực",
+          description: "Họ và tên phải có ít nhất 2 ký tự!",
+          placement: "topRight",
+          icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+        });
+        setLoading(false);
+        return;
+      }
+
       const updateData: UpdateProfileData = {
-        fullName: values.fullName,
+        fullName: trimmedFullName,
+        userId: user?.id, // Truyền userId từ user state
       };
 
       const response = await authApi.updateProfile(updateData);
 
       if (response.success) {
+        // Cập nhật user state và localStorage
+        const updatedUser = response.data || user;
+        if (updatedUser) {
+          updatedUser.fullName = trimmedFullName;
+          setUser({ ...updatedUser });
+          localStorage.setItem("user", JSON.stringify(updatedUser));
+          
+          // Cập nhật form values
+          profileForm.setFieldsValue({
+            fullName: trimmedFullName,
+            email: updatedUser.email || user?.email,
+          });
+        }
+
         api.success({
           message: "Cập nhật thành công!",
-          description: "Thông tin tài khoản đã được cập nhật.",
+          description: "Tên của bạn đã được cập nhật.",
           placement: "topRight",
           icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
         });
 
-        if (response.data) {
-          setUser(response.data);
-          localStorage.setItem("user", JSON.stringify(response.data));
-        }
         setEditing(false);
       } else {
         api.error({
@@ -130,11 +159,12 @@ if (response.data.driverLicenseStatus !== undefined) {
           icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
         });
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Update profile error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Không thể cập nhật thông tin. Vui lòng thử lại!";
       api.error({
         message: "Có lỗi xảy ra",
-        description: "Không thể cập nhật thông tin. Vui lòng thử lại!",
+        description: errorMessage,
         placement: "topRight",
         icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
       });
@@ -143,33 +173,284 @@ if (response.data.driverLicenseStatus !== undefined) {
     }
   };
 
-  const handleChangePassword = async (values: ChangePasswordData) => {
+  const handleSendOTP = async () => {
+    if (!user?.email) {
+      api.error({
+        message: "Lỗi",
+        description: "Không tìm thấy email của bạn!",
+        placement: "topRight",
+        icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      const response = await authApi.changePassword(values);
-
+      const response = await authApi.forgotPassword({ email: user.email });
+      
       if (response.success) {
         api.success({
-          message: "Đổi mật khẩu thành công!",
-          description: "Mật khẩu của bạn đã được cập nhật.",
+          message: "OTP đã được gửi!",
+          description: `Mã OTP đã được gửi đến email ${user.email}. Vui lòng kiểm tra hộp thư!`,
           placement: "topRight",
           icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
         });
-        passwordForm.resetFields();
       } else {
         api.error({
-          message: "Đổi mật khẩu thất bại",
-          description: response.error || "Mật khẩu cũ không đúng hoặc có lỗi xảy ra!",
+          message: "Gửi OTP thất bại",
+          description: response.error || "Không thể gửi OTP. Vui lòng thử lại!",
           placement: "topRight",
           icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
         });
       }
-    } catch (error) {
-      console.error("Change password error:", error);
+    } catch (error: unknown) {
+      console.error("Send OTP error:", error);
       api.error({
         message: "Có lỗi xảy ra",
-        description: "Không thể đổi mật khẩu. Vui lòng thử lại!",
-placement: "topRight",
+        description: "Không thể gửi OTP. Vui lòng thử lại!",
+        placement: "topRight",
+        icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOTP = async (values: { otp: string }) => {
+    if (!user?.email) {
+      api.error({
+        message: "Lỗi",
+        description: "Không tìm thấy email của bạn!",
+        placement: "topRight",
+        icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Verify OTP - Backend sẽ verify OTP khi gọi resetPassword
+      // Ở đây chúng ta chỉ lưu OTP vào form để dùng sau khi đổi mật khẩu
+      // OTP sẽ được verify khi gọi resetPassword với OTP và password mới
+      // Lưu OTP vào form để dùng khi reset password
+      otpForm.setFieldsValue({ otp: values.otp });
+      setOtpVerified(true);
+      api.success({
+        message: "Xác nhận OTP thành công!",
+        description: "Bạn có thể đổi mật khẩu mà không cần nhập mật khẩu cũ.",
+        placement: "topRight",
+        icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
+      });
+    } catch (error: unknown) {
+      console.error("Verify OTP error:", error);
+      api.error({
+        message: "Có lỗi xảy ra",
+        description: "Không thể xác nhận OTP. Vui lòng thử lại!",
+        placement: "topRight",
+        icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleChangePassword = async (values: ChangePasswordData & { confirmPassword?: string }) => {
+    setLoading(true);
+    try {
+      // Không trim password để giữ nguyên, giống như login
+      // Password có thể có khoảng trắng hợp lệ
+      const oldPassword = values.oldPassword || "";
+      const newPassword = values.newPassword || "";
+      const confirmPassword = values.confirmPassword || "";
+
+      // Lấy userId từ nhiều nguồn để đảm bảo luôn có giá trị
+      let userId = user?.id;
+      
+      // Nếu không có userId từ state, lấy từ localStorage
+      if (!userId) {
+        const userStr = localStorage.getItem("user");
+        if (userStr) {
+          try {
+            const userData = JSON.parse(userStr);
+            userId = userData.id || userData.userId;
+          } catch (e) {
+            console.error("Error parsing user from localStorage:", e);
+          }
+        }
+      }
+      
+      // Nếu vẫn không có userId, thử load lại profile
+      if (!userId) {
+        try {
+          const profileResponse = await authApi.getProfile();
+          if (profileResponse.success && profileResponse.data) {
+            userId = profileResponse.data.id;
+            // Cập nhật user state và localStorage
+            setUser(profileResponse.data);
+            localStorage.setItem("user", JSON.stringify(profileResponse.data));
+          }
+        } catch (e) {
+          console.error("Error loading profile:", e);
+        }
+      }
+      
+      // Nếu vẫn không có userId, báo lỗi
+      if (!userId) {
+        api.error({
+          message: "Lỗi xác thực",
+          description: "Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại!",
+          placement: "topRight",
+          icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Validation sẽ được xử lý bởi Form.Item rules
+      // Chỉ validate ở đây nếu cần thiết
+
+      // Nếu đã xác nhận OTP, không cần oldPassword
+      
+      if (otpVerified) {
+        // Đổi mật khẩu bằng cách reset password với OTP đã verify
+        if (!user?.email) {
+          api.error({
+            message: "Lỗi",
+            description: "Không tìm thấy email của bạn!",
+            placement: "topRight",
+            icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+          });
+          setLoading(false);
+          return;
+        }
+        
+        // Sử dụng resetPassword với OTP đã verify
+        const otpValue = otpForm.getFieldValue('otp');
+        const resetResponse = await authApi.resetPassword({
+          email: user.email,
+          otp: otpValue,
+          newPassword: newPassword
+        });
+        
+        if (resetResponse.success) {
+          api.success({
+            message: "Đổi mật khẩu thành công!",
+            description: "Mật khẩu của bạn đã được cập nhật. Vui lòng đăng nhập lại với mật khẩu mới.",
+            placement: "topRight",
+            icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
+            duration: 5,
+          });
+          passwordForm.resetFields();
+          otpForm.resetFields();
+          setOtpVerified(false);
+          setUseEmailVerification(false);
+        } else {
+          api.error({
+            message: "Đổi mật khẩu thất bại",
+            description: resetResponse.error || "Không thể đổi mật khẩu. Vui lòng thử lại!",
+            placement: "topRight",
+            icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+            duration: 5,
+          });
+        }
+        setLoading(false);
+        return;
+      }
+      
+      // Nếu không dùng OTP, dùng cách thông thường với oldPassword
+      const changePasswordData: ChangePasswordData = {
+        oldPassword: oldPassword, // Không trim để giữ nguyên password (có thể có khoảng trắng hợp lệ)
+        newPassword: newPassword, // Không trim để giữ nguyên password
+        userId: userId, // Truyền userId đã được lấy từ nhiều nguồn
+      };
+
+      console.log('[ChangePassword] Calling API with:', {
+        userId: changePasswordData.userId,
+        oldPasswordLength: changePasswordData.oldPassword.length,
+        newPasswordLength: changePasswordData.newPassword.length
+      });
+      const response = await authApi.changePassword(changePasswordData);
+      console.log('[ChangePassword] API Response:', response);
+
+      if (response.success) {
+        // Lấy message từ response nếu có
+        const successMessage = response.message || "Mật khẩu của bạn đã được cập nhật thành công.";
+        
+        api.success({
+          message: "Đổi mật khẩu thành công!",
+          description: successMessage + " Vui lòng đăng nhập lại với mật khẩu mới.",
+          placement: "topRight",
+          icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
+          duration: 5,
+        });
+        passwordForm.resetFields();
+      } else {
+        // Lấy error message từ response và phân tích loại lỗi
+        const errorMessage = response.error || response.message || "";
+        
+        // Phân tích loại lỗi để hiển thị thông báo phù hợp
+        let fieldError = "";
+        let errorTitle = "Đổi mật khẩu thất bại";
+        let errorDescription = errorMessage;
+        
+        if (errorMessage.toLowerCase().includes("mật khẩu cũ") || 
+            errorMessage.toLowerCase().includes("old password") ||
+            errorMessage.toLowerCase().includes("password không đúng") ||
+            errorMessage.toLowerCase().includes("incorrect password") ||
+            errorMessage.toLowerCase().includes("sai")) {
+          errorTitle = "Mật khẩu cũ không đúng";
+          errorDescription = "Mật khẩu hiện tại bạn nhập không đúng. Vui lòng kiểm tra lại và thử lại!";
+          fieldError = "Mật khẩu hiện tại không đúng. Vui lòng kiểm tra lại!";
+          // Set error vào field oldPassword để hiển thị ngay dưới input
+          passwordForm.setFields([
+            { 
+              name: 'oldPassword', 
+              errors: [fieldError],
+              value: oldPassword // Giữ giá trị để người dùng sửa
+            }
+          ]);
+        } else if (errorMessage.toLowerCase().includes("xác nhận") || 
+                   errorMessage.toLowerCase().includes("confirm") ||
+                   errorMessage.toLowerCase().includes("không khớp") ||
+                   errorMessage.toLowerCase().includes("not match")) {
+          errorTitle = "Mật khẩu xác nhận không khớp";
+          errorDescription = "Mật khẩu xác nhận không khớp với mật khẩu mới. Vui lòng kiểm tra lại!";
+          fieldError = "Mật khẩu xác nhận không khớp với mật khẩu mới!";
+          passwordForm.setFields([
+            { 
+              name: 'confirmPassword', 
+              errors: [fieldError],
+              value: confirmPassword
+            }
+          ]);
+        } else if (!errorMessage) {
+          errorDescription = "Mật khẩu cũ không đúng hoặc có lỗi xảy ra. Vui lòng thử lại!";
+          fieldError = "Mật khẩu cũ không đúng hoặc có lỗi xảy ra!";
+          passwordForm.setFields([
+            { 
+              name: 'oldPassword', 
+              errors: [fieldError],
+              value: oldPassword
+            }
+          ]);
+        }
+        
+        // Vẫn hiển thị notification để người dùng chú ý
+        api.error({
+          message: errorTitle,
+          description: errorDescription,
+          placement: "topRight",
+          icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+          duration: 5,
+        });
+      }
+    } catch (error: unknown) {
+      console.error("Change password error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Không thể đổi mật khẩu. Vui lòng thử lại!";
+      api.error({
+        message: "Có lỗi xảy ra",
+        description: errorMessage,
+        placement: "topRight",
         icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
       });
     } finally {
@@ -284,8 +565,16 @@ placement: "topRight",
                           </>
                         ) : (
                           <Form form={profileForm} layout="vertical" onFinish={handleUpdateProfile}>
-                            <Form.Item label="Họ và tên" name="fullName" rules={[{ required: true }]}>
-                              <Input size="large" prefix={<UserOutlined />} />
+                            <Form.Item 
+                              label="Họ và tên" 
+                              name="fullName" 
+                              rules={[
+                                { required: true, message: "Vui lòng nhập họ và tên!" },
+                                { min: 2, message: "Họ và tên phải có ít nhất 2 ký tự!" },
+                                { max: 100, message: "Họ và tên không được vượt quá 100 ký tự!" }
+                              ]}
+                            >
+                              <Input size="large" prefix={<UserOutlined />} placeholder="Nhập họ và tên" />
                             </Form.Item>
                             {user.id !== 3 && (
                               <Form.Item label="Email" name="email">
@@ -313,33 +602,226 @@ placement: "topRight",
                       </span>
                     ),
                     children: (
-                      <Form form={passwordForm} layout="vertical" onFinish={handleChangePassword}>
-                        <Form.Item label="Mật khẩu hiện tại" name="oldPassword" rules={[{ required: true }]}>
-                          <Input.Password size="large" prefix={<LockOutlined />} />
+                      <div>
+                        {!useEmailVerification ? (
+                          <div>
+                            <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                              <p className="text-sm text-gray-700 mb-2">
+                                Bạn có thể đổi mật khẩu bằng 2 cách:
+                              </p>
+                              <ul className="text-xs text-gray-600 list-disc list-inside mb-2">
+                                <li>Nhập mật khẩu cũ và mật khẩu mới (nếu bạn nhớ mật khẩu cũ)</li>
+                                <li>Sử dụng mã OTP gửi qua email (nếu bạn quên mật khẩu cũ)</li>
+                              </ul>
+                              <Button
+                                type="link"
+                                onClick={() => {
+                                  passwordForm.resetFields();
+                                  setUseEmailVerification(true);
+                                  handleSendOTP();
+                                }}
+                                className="p-0 text-blue-600 hover:text-blue-700 text-sm"
+                              >
+                                <MailOutlined className="mr-1" />
+                                Quên mật khẩu? Xác nhận qua email
+                              </Button>
+                            </div>
+                            <Form form={passwordForm} layout="vertical" onFinish={handleChangePassword}>
+                              <Form.Item 
+                                label="Mật khẩu hiện tại" 
+                                name="oldPassword" 
+                                rules={[
+                                  { required: true, message: "Vui lòng nhập mật khẩu hiện tại!" }
+                                ]}
+                                validateStatus=""
+                                help=""
+                              >
+                                <Input.Password 
+                                  size="large" 
+                                  prefix={<LockOutlined />} 
+                                  placeholder="Nhập mật khẩu hiện tại"
+                                />
+                              </Form.Item>
+                        <Form.Item 
+                          label="Mật khẩu mới" 
+                          name="newPassword" 
+                          rules={[
+                            { required: true, message: "Vui lòng nhập mật khẩu mới!" },
+                            { min: 6, message: "Mật khẩu phải có ít nhất 6 ký tự!" }
+                          ]}
+                          help="Mật khẩu phải có ít nhất 6 ký tự"
+                        >
+                          <Input.Password 
+                            size="large" 
+                            prefix={<LockOutlined />} 
+                            placeholder="Nhập mật khẩu mới (tối thiểu 6 ký tự)"
+                          />
                         </Form.Item>
-                        <Form.Item label="Mật khẩu mới" name="newPassword" rules={[{ required: true, min: 6 }]}>
-                          <Input.Password size="large" prefix={<LockOutlined />} />
-</Form.Item>
                         <Form.Item
                           label="Xác nhận mật khẩu mới"
                           name="confirmPassword"
                           dependencies={["newPassword"]}
                           rules={[
-                            { required: true },
+                            { required: true, message: "Vui lòng xác nhận mật khẩu mới!" },
                             ({ getFieldValue }) => ({
                               validator(_, value) {
-                                if (!value || getFieldValue("newPassword") === value) return Promise.resolve();
-                                return Promise.reject(new Error("Mật khẩu xác nhận không khớp!"));
+                                if (!value) {
+                                  return Promise.reject(new Error("Vui lòng xác nhận mật khẩu mới!"));
+                                }
+                                if (getFieldValue("newPassword") === value) {
+                                  return Promise.resolve();
+                                }
+                                return Promise.reject(new Error("Mật khẩu xác nhận không khớp với mật khẩu mới!"));
                               },
                             }),
                           ]}
+                          validateTrigger="onBlur"
                         >
-                          <Input.Password size="large" prefix={<LockOutlined />} />
+                          <Input.Password 
+                            size="large" 
+                            prefix={<LockOutlined />} 
+                            placeholder="Nhập lại mật khẩu mới"
+                          />
                         </Form.Item>
-                        <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading} className="bg-blue-600">
-                          Đổi mật khẩu
-                        </Button>
-                      </Form>
+                              <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading} className="bg-blue-600">
+                                Đổi mật khẩu
+                              </Button>
+                            </Form>
+                          </div>
+                        ) : (
+                          <div>
+                            {!otpVerified ? (
+                              <Form form={otpForm} layout="vertical" onFinish={handleVerifyOTP}>
+                                <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                                  <p className="text-sm text-gray-700 mb-2">
+                                    <MailOutlined className="mr-2" />
+                                    Mã OTP đã được gửi đến email <strong>{user?.email}</strong>
+                                  </p>
+                                  <p className="text-xs text-gray-600">
+                                    Vui lòng kiểm tra hộp thư và nhập mã OTP để xác nhận.
+                                  </p>
+                                </div>
+                                
+                                <Form.Item 
+                                  label="Mã OTP" 
+                                  name="otp" 
+                                  rules={[
+                                    { required: true, message: "Vui lòng nhập mã OTP!" },
+                                    { len: 6, message: "Mã OTP phải có 6 ký tự!" }
+                                  ]}
+                                >
+                                  <Input 
+                                    size="large" 
+                                    prefix={<MailOutlined />} 
+                                    placeholder="Nhập mã OTP 6 số"
+                                    maxLength={6}
+                                  />
+                                </Form.Item>
+                                
+                                <Space>
+                                  <Button 
+                                    type="primary" 
+                                    htmlType="submit" 
+                                    loading={loading} 
+                                    className="bg-blue-600"
+                                  >
+                                    Xác nhận OTP
+                                  </Button>
+                                  <Button 
+                                    onClick={() => {
+                                      setUseEmailVerification(false);
+                                      otpForm.resetFields();
+                                    }}
+                                  >
+                                    Hủy
+                                  </Button>
+                                  <Button 
+                                    type="link"
+                                    onClick={handleSendOTP}
+                                    loading={loading}
+                                  >
+                                    Gửi lại OTP
+                                  </Button>
+                                </Space>
+                              </Form>
+                            ) : (
+                              <Form form={passwordForm} layout="vertical" onFinish={handleChangePassword}>
+                                <div className="mb-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                                  <p className="text-sm text-gray-700">
+                                    <CheckCircleOutlined className="mr-2 text-green-600" />
+                                    Đã xác nhận OTP thành công. Bạn có thể đổi mật khẩu mà không cần nhập mật khẩu cũ.
+                                  </p>
+                                </div>
+                                
+                                <Form.Item 
+                                  label="Mật khẩu mới" 
+                                  name="newPassword" 
+                                  rules={[
+                                    { required: true, message: "Vui lòng nhập mật khẩu mới!" },
+                                    { min: 6, message: "Mật khẩu phải có ít nhất 6 ký tự!" }
+                                  ]}
+                                  help="Mật khẩu phải có ít nhất 6 ký tự"
+                                >
+                                  <Input.Password 
+                                    size="large" 
+                                    prefix={<LockOutlined />} 
+                                    placeholder="Nhập mật khẩu mới (tối thiểu 6 ký tự)"
+                                  />
+                                </Form.Item>
+                                
+                                <Form.Item
+                                  label="Xác nhận mật khẩu mới"
+                                  name="confirmPassword"
+                                  dependencies={["newPassword"]}
+                                  rules={[
+                                    { required: true, message: "Vui lòng xác nhận mật khẩu mới!" },
+                                    ({ getFieldValue }) => ({
+                                      validator(_, value) {
+                                        if (!value) {
+                                          return Promise.reject(new Error("Vui lòng xác nhận mật khẩu mới!"));
+                                        }
+                                        if (getFieldValue("newPassword") === value) {
+                                          return Promise.resolve();
+                                        }
+                                        return Promise.reject(new Error("Mật khẩu xác nhận không khớp với mật khẩu mới!"));
+                                      },
+                                    }),
+                                  ]}
+                                  validateTrigger="onBlur"
+                                >
+                                  <Input.Password 
+                                    size="large" 
+                                    prefix={<LockOutlined />} 
+                                    placeholder="Nhập lại mật khẩu mới"
+                                  />
+                                </Form.Item>
+                                
+                                <Space>
+                                  <Button 
+                                    type="primary" 
+                                    htmlType="submit" 
+                                    icon={<SaveOutlined />} 
+                                    loading={loading} 
+                                    className="bg-blue-600"
+                                  >
+                                    Đổi mật khẩu
+                                  </Button>
+                                  <Button 
+                                    onClick={() => {
+                                      setUseEmailVerification(false);
+                                      setOtpVerified(false);
+                                      passwordForm.resetFields();
+                                      otpForm.resetFields();
+                                    }}
+                                  >
+                                    Hủy
+                                  </Button>
+                                </Space>
+                              </Form>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     ),
                   },
                 ]}

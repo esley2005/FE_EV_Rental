@@ -603,11 +603,13 @@ export interface UpdateProfileData {
   address?: string;
   dateOfBirth?: string;
   avatar?: string;
+  userId?: number; // Optional userId, sẽ lấy từ localStorage nếu không có
 }
 
 export interface ChangePasswordData {
   oldPassword: string;
   newPassword: string;
+  userId?: number; // Optional userId, sẽ lấy từ localStorage nếu không có
 }
 
 // Driver License API
@@ -772,18 +774,82 @@ export const authApi = {
   },
 
   // Cập nhật thông tin user
-  updateProfile: (data: UpdateProfileData) =>
-    apiCall<User>('/user/profile', {
+  updateProfile: async (data: UpdateProfileData) => {
+    // Backend yêu cầu endpoint /User/UpdateCustomerName với userId và fullName
+    // Lấy userId từ data hoặc localStorage
+    let userId: number | undefined = data.userId;
+    
+    // Nếu không có trong data, thử lấy từ localStorage
+    if (!userId) {
+      try {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const userData = JSON.parse(userStr);
+          userId = userData.id || userData.userId;
+        }
+      } catch (e) {
+        console.error('Error parsing user from localStorage:', e);
+      }
+    }
+    
+    // Nếu vẫn không có userId, trả về lỗi
+    if (!userId) {
+      return {
+        success: false,
+        error: 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.'
+      };
+    }
+    
+    // Format dữ liệu theo yêu cầu backend: { userId, fullName }
+    const requestData = {
+      userId: userId,
+      fullName: data.fullName || ''
+    };
+    
+    // Gọi endpoint đúng theo Swagger: PUT /User/UpdateCustomerName
+    return await apiCall<User>('/User/UpdateCustomerName', {
       method: 'PUT',
-      body: JSON.stringify(data),
-    }),
+      body: JSON.stringify(requestData),
+    });
+  },
 
   // Đổi mật khẩu
-  changePassword: (data: ChangePasswordData) =>
-    apiCall<{ message: string }>('/user/change-password', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  changePassword: async (data: ChangePasswordData) => {
+    // Backend yêu cầu endpoint /User/UpdateCustomerPassword với userId, oldPassword, newPassword
+    // Lấy userId từ localStorage
+    let userId: number | undefined;
+    
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const userData = JSON.parse(userStr);
+        userId = userData.id;
+      }
+    } catch (e) {
+      console.error('Error parsing user from localStorage:', e);
+    }
+    
+    // Nếu không có userId, trả về lỗi
+    if (!userId) {
+      return {
+        success: false,
+        error: 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.'
+      };
+    }
+    
+    // Format dữ liệu theo yêu cầu backend: { userId, oldPassword, newPassword }
+    const requestData = {
+      userId: userId,
+      oldPassword: data.oldPassword,
+      newPassword: data.newPassword
+    };
+    
+    // Gọi endpoint đúng theo Swagger: PUT /User/UpdateCustomerPassword
+    return await apiCall<{ message: string }>('/User/UpdateCustomerPassword', {
+      method: 'PUT',
+      body: JSON.stringify(requestData),
+    });
+  },
 
   // Đăng xuất
   logout: () => {

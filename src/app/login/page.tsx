@@ -24,7 +24,15 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await authApi.login(formData);
+      // Đảm bảo email và password được trim để nhất quán với change password
+      const loginData = {
+        email: formData.email.trim(),
+        password: formData.password // Không trim password vì có thể có khoảng trắng hợp lệ
+      };
+      
+      console.log('[Login] Sending login data:', { email: loginData.email, passwordLength: loginData.password.length });
+      
+      const response = await authApi.login(loginData);
       
       console.log("Login response:", response);
 

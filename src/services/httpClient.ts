@@ -45,6 +45,14 @@ export async function httpClient<T>(
       };
     }
 
+    // Handle 405 - Method Not Allowed
+    if (response.status === 405) {
+      return {
+        success: false,
+        error: `405 Method Not Allowed: ${endpoint}`
+      };
+    }
+
     // Handle 401 - token expired
     if (response.status === 401) {
       if (authUtils.isAuthenticated()) {
@@ -58,6 +66,8 @@ export async function httpClient<T>(
     }
 
     const text = await response.text();
+    console.log(`[API] Response text (first 500 chars):`, text.substring(0, 500));
+    console.log(`[API] Response full text length:`, text.length);
     
     // Handle empty response
     if (!text || text.trim() === '') {
@@ -75,6 +85,13 @@ export async function httpClient<T>(
     let data;
     try {
       data = JSON.parse(text);
+      console.log('[API] Parsed JSON data:', data);
+      console.log('[API] Response data structure:', {
+        isSuccess: data?.isSuccess,
+        message: data?.message,
+        data: data?.data,
+        hasDataField: !!data?.data
+      });
     } catch (e) {
       console.warn('[API] Response is not JSON:', text.substring(0, 300));
       
@@ -95,6 +112,15 @@ export async function httpClient<T>(
       };
     }
 
+    // Backend có thể trả về isSuccess trong response body ngay cả khi status là 200
+    // Kiểm tra isSuccess trước khi check response.ok
+    if (data?.isSuccess === false) {
+      return {
+        success: false,
+        error: data?.message || data?.Message || 'Operation failed'
+      };
+    }
+
     // Handle error responses
     if (!response.ok) {
       if (response.status === 400 && data?.errors) {
@@ -112,11 +138,15 @@ export async function httpClient<T>(
       return { success: false, error: errorMsg };
     }
 
-    return {
+    // Nếu có isSuccess và là true, hoặc response.ok, coi như thành công
+    // Backend có thể wrap data trong field 'data'
+    const result = {
       success: true,
-      data: data,
-      message: data.message || data.Message || 'Success'
+      data: data?.data || data, // Unwrap data nếu backend wrap nó
+      message: data?.message || data?.Message || 'Success'
     };
+    console.log('[API] Final result:', result);
+    return result;
   } catch (error) {
     console.error(`API call failed for ${endpoint}:`, error);
     return {
