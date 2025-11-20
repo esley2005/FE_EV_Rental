@@ -504,7 +504,10 @@ export default function DocumentsPage() {
           {/* === SELECT ORDER CARD === */}
           <div style={{ width: "100%", marginBottom: 18 }}>
             <Card title={<><CarOutlined /> Chọn đơn hàng thuê xe</>} className="shadow-lg rounded-xl">
-              <Form.Item label="Đơn hàng" required>
+              <div>
+                <label className="block mb-2 text-sm font-medium text-gray-700">
+                  Đơn hàng <span className="text-red-500">*</span>
+                </label>
                 <Select
                   placeholder="Chọn đơn hàng thuê xe"
                   value={selectedOrderId}
@@ -521,7 +524,7 @@ export default function DocumentsPage() {
                     </Select.Option>
                   ))}
                 </Select>
-              </Form.Item>
+              </div>
 
               {selectedCar && (
                 <Card className="mt-4" style={{ backgroundColor: "#f9fafb" }}>
