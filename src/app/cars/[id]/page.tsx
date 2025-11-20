@@ -1239,7 +1239,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               {!loading && (
                 <div className="mt-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                    Xe hiện có tại các địa điểm
+                    Xe hiện có tại địa điểm
                   </h3>
 
                   {carLocationsLoading && (

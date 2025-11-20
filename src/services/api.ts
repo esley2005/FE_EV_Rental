@@ -1140,13 +1140,18 @@ export const rentalOrderApi = {
 
   // Hủy đơn hàng
   cancelOrder: (orderId: number) => {
-    // Backend sử dụng HttpDelete với [FromForm], nên cần gửi form data
-    const formData = new FormData();
+    // Backend sử dụng HttpDelete với [FromForm]
+    // Với DELETE, một số browser không hỗ trợ body, nên thử dùng URLSearchParams
+    // hoặc gửi như form-urlencoded
+    const formData = new URLSearchParams();
     formData.append('orderId', orderId.toString());
     
     return apiCall<RentalOrderData>(`/RentalOrder/CancelOrder`, {
       method: 'DELETE',
-      body: formData,
+      body: formData.toString(),
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
     });
   },
 };

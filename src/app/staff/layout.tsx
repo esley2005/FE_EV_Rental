@@ -48,7 +48,7 @@ const mainMenu = [
   { key: "customers", label: "Xác thực khách hàng", icon: <UserOutlined /> },
   { key: "payments", label: "Thanh toán tại điểm", icon: <DesktopOutlined /> },
   { key: "vehicles", label: "Xe tại điểm", icon: <TeamOutlined /> },
-  { key: "documents", label: "Tài liệu", icon: <FileOutlined /> },
+
 ];
 
 /* =========================================================

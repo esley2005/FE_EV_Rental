@@ -270,14 +270,14 @@ placement: "topRight",
                         {citizenIdVerified === null && <Tag color="default">CCCD: Chưa gửi</Tag>}
                       </div>
                       
-                      <Button
+                      {/* <Button
                         type="primary"
                         icon={<IdcardOutlined />}
                         onClick={() => router.push("/profile/documents")}
                         className="bg-green-600 hover:bg-green-700"
                       >
                         Upload Giấy Tờ
-                      </Button>
+                      </Button> */}
                     </div>
                   </div>
                 </div>

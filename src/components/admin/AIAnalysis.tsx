@@ -128,9 +128,10 @@ export default function AIAnalysis({ variant = "general" }: AIAnalysisProps) {
       <Space direction="vertical" size={16} style={{ width: "100%" }}>
         {loading && (
           <div>
-            <Spin tip="Đang phân tích dữ liệu...">
-              <div style={{ height: 0 }} />
-            </Spin>
+            <div className="flex flex-col items-center gap-4 py-4">
+              <Spin size="large" />
+              <p className="text-gray-600">Đang phân tích dữ liệu...</p>
+            </div>
             <Card type="inner" style={{ marginTop: 12 }}>
               <Skeleton active paragraph={{ rows: 6 }} />
             </Card>

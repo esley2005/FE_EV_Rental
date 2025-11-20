@@ -236,7 +236,7 @@ export default function HeroSection() {
                   return label.toLowerCase().includes(input.toLowerCase());
                 }}
                 optionLabelProp="children"
-                dropdownClassName="!z-50"
+                classNames={{ popup: { root: '!z-50' } }}
                 getPopupContainer={() => document.body}
               >
                 {locations.map((location) => (

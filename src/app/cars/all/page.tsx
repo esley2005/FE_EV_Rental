@@ -701,8 +701,9 @@ export default function AllCarsPage() {
 
           {/* Cars Grid */}
           {loading ? (
-            <div className="flex justify-center items-center py-20">
-              <Spin size="large" tip="Đang tải danh sách xe..." />
+            <div className="flex flex-col justify-center items-center py-20 gap-4">
+              <Spin size="large" />
+              <p className="text-gray-600">Đang tải danh sách xe...</p>
             </div>
           ) : cars.length === 0 ? (
             <Card className="shadow-md">

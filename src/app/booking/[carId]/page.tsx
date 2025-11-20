@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { Form, Input, DatePicker, Button, message, Checkbox, Radio, notification } from "antd";
-import { Calendar, MapPin, Phone, User as UserIcon, Search, Car as CarIcon, FileText, Download, Percent, Info } from "lucide-react";
+import { Form, Input, DatePicker, Button, message, Checkbox, Radio, notification, Alert, Modal } from "antd";
+import { Calendar, MapPin, Phone, User as UserIcon, Search, Car as CarIcon, FileText, Download, Percent, Info, UserCheck } from "lucide-react";
 import dayjs, { Dayjs } from "dayjs";
-import { carsApi, rentalOrderApi, rentalLocationApi, carRentalLocationApi, authApi } from "@/services/api";
+import { carsApi, rentalOrderApi, rentalLocationApi, carRentalLocationApi, authApi, driverLicenseApi, citizenIdApi } from "@/services/api";
 import type { Car } from "@/types/car";
 import type { User, CreateRentalOrderData, RentalLocationData } from "@/services/api";
 import { authUtils } from "@/utils/auth";
@@ -33,6 +33,8 @@ export default function BookingPage() {
   const [discountOption, setDiscountOption] = useState<'program' | 'promo'>('program');
   const [promoCode, setPromoCode] = useState('');
   const [vatInvoice, setVatInvoice] = useState(false);
+  const [withDriver, setWithDriver] = useState<boolean>(false);
+  const [hasDocuments, setHasDocuments] = useState<boolean | null>(null);
 
   // Helper functions tương tự trang chi tiết xe
   const extractCarRentalLocationList = (source: any): any[] => {
@@ -211,9 +213,10 @@ export default function BookingPage() {
       console.log("resolveCarLocation: getAll API response", allLocationsResponse);
 
       if (allLocationsResponse.success && allLocationsResponse.data) {
-        const locationsList = Array.isArray(allLocationsResponse.data)
-          ? allLocationsResponse.data
-          : allLocationsResponse.data?.$values || [];
+        const locationsData = allLocationsResponse.data as any;
+        const locationsList = Array.isArray(locationsData)
+          ? locationsData
+          : (locationsData?.$values && Array.isArray(locationsData.$values) ? locationsData.$values : []);
 
         const foundLocation = locationsList.find((loc: any) => {
           const locId = loc?.id ?? loc?.Id ?? loc?.locationId ?? loc?.LocationId;
@@ -290,6 +293,29 @@ export default function BookingPage() {
               name: userData.name || "",
               phoneNumber: userData.phone || "",
             });
+            
+            // Check if user has uploaded documents
+            try {
+              const [licenseRes, citizenIdRes] = await Promise.all([
+                driverLicenseApi.getAll(),
+                citizenIdApi.getAll()
+              ]);
+              
+              const licenseData = licenseRes.data as any;
+              const hasLicense = licenseRes.success && licenseData && 
+                (Array.isArray(licenseData) ? licenseData.length > 0 : 
+                 (licenseData?.$values && Array.isArray(licenseData.$values) ? licenseData.$values.length > 0 : false));
+              
+              const citizenIdData = citizenIdRes.data as any;
+              const hasCitizenId = citizenIdRes.success && citizenIdData && 
+                (Array.isArray(citizenIdData) ? citizenIdData.length > 0 : 
+                 (citizenIdData?.$values && Array.isArray(citizenIdData.$values) ? citizenIdData.$values.length > 0 : false));
+              
+              setHasDocuments(hasLicense && hasCitizenId);
+            } catch (error) {
+              console.error("Check documents error:", error);
+              setHasDocuments(false);
+            }
           }
         }
 
@@ -381,6 +407,8 @@ export default function BookingPage() {
       return;
     }
 
+    const withDriverValue = values.withDriver || false;
+
     setSubmitting(true);
     try {
       const [pickupTime, expectedReturnTime] = values.dateRange;
@@ -389,7 +417,7 @@ export default function BookingPage() {
         phoneNumber: values.phoneNumber,
         pickupTime: pickupTime.toISOString(),
         expectedReturnTime: expectedReturnTime.toISOString(),
-        withDriver: values.withDriver || false,
+        withDriver: withDriverValue,
         userId: user.id,
         carId: car.id,
         rentalLocationId: values.rentalLocationId,
@@ -399,15 +427,31 @@ export default function BookingPage() {
 
       if (response.success && response.data) {
         const orderId = (response.data as any).id || (response.data as any).Id;
-        api.success({
-          message: "Đặt xe thành công",
-          description: "Đơn hàng của bạn đã được tạo thành công. Đang chuyển đến trang đơn hàng...",
-          placement: "topRight",
-          duration: 3,
-        });
-        setTimeout(() => {
-          router.push(`/my-bookings?orderId=${orderId}`);
-        }, 1500);
+        
+        // Nếu không có tài xế, tự động chuyển đến trang upload giấy tờ
+        if (!withDriverValue) {
+          api.success({
+            message: "Đặt xe thành công",
+            description: "Đang chuyển đến trang upload giấy tờ...",
+            placement: "topRight",
+            duration: 2,
+          });
+          // Tự động chuyển đến trang upload giấy tờ với orderId
+          setTimeout(() => {
+            router.push(`/profile/documents?orderId=${orderId}`);
+          }, 1000);
+        } else {
+          // Có tài xế, chỉ thông báo thành công và chuyển đến trang đơn hàng
+          api.success({
+            message: "Đặt xe thành công",
+            description: "Đơn hàng của bạn đã được tạo thành công. Đang chuyển đến trang đơn hàng...",
+            placement: "topRight",
+            duration: 3,
+          });
+          setTimeout(() => {
+            router.push(`/my-bookings?orderId=${orderId}`);
+          }, 1500);
+        }
       } else {
         api.error({
           message: "Đặt xe thất bại",
@@ -639,6 +683,57 @@ export default function BookingPage() {
                     <Input type="hidden" />
                   </Form.Item>
                 </div>
+              )}
+            </div>
+
+            {/* Chọn tài xế */}
+            <div className="mb-6">
+              <div className="flex items-center gap-3 mb-3">
+                <UserCheck className="w-5 h-5 text-blue-500" />
+                <span className="font-semibold text-gray-900">Lựa chọn tài xế</span>
+              </div>
+              <Form.Item
+                name="withDriver"
+                initialValue={false}
+                rules={[{ required: true, message: "Vui lòng chọn loại thuê xe" }]}
+              >
+                <Radio.Group 
+                  onChange={(e) => setWithDriver(e.target.value)}
+                  className="w-full"
+                >
+                  <div className="flex gap-4">
+                    <Radio.Button value={true} className="flex-1 text-center py-3">
+                      <div className="flex flex-col items-center gap-2">
+                        <UserCheck className="w-5 h-5" />
+                        <span>Có tài xế</span>
+                      </div>
+                    </Radio.Button>
+                    <Radio.Button value={false} className="flex-1 text-center py-3">
+                      <div className="flex flex-col items-center gap-2">
+                        <CarIcon className="w-5 h-5" />
+                        <span>Tự lái</span>
+                      </div>
+                    </Radio.Button>
+                  </div>
+                </Radio.Group>
+              </Form.Item>
+              
+              {/* Cảnh báo nếu tự lái và chưa có giấy tờ */}
+              {!withDriver && hasDocuments === false && user && (
+                <Alert
+                  message="CHÚ Ý"
+                  description={
+                    <div>
+                      <p className="mb-2">
+                        Khi tự lái, bạn cần upload giấy phép lái xe (GPLX) và căn cước công dân (CCCD) trước khi đặt xe.
+                      </p>
+                      
+                    </div>
+                  }
+                  type="warning"
+                  showIcon
+                  className="mt-3"
+                />
               )}
             </div>
 

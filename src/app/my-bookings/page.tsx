@@ -313,13 +313,15 @@ export default function MyBookingsPage() {
           setDetailModalOpen(false);
         }
       } else {
-        throw new Error(response.error || 'Không thể hủy đơn hàng');
+        const errorMsg = response.error || response.message || 'Không thể hủy đơn hàng';
+        throw new Error(errorMsg);
       }
     } catch (error: any) {
       console.error('Cancel booking error:', error);
+      const errorMessage = error?.message || error?.error || 'Có lỗi xảy ra khi hủy đơn hàng. Vui lòng thử lại.';
       api.error({
         message: 'Không thể hủy đơn hàng',
-        description: error.message || 'Có lỗi xảy ra khi hủy đơn hàng. Vui lòng thử lại.',
+        description: errorMessage,
         placement: 'topRight',
         icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
       });
