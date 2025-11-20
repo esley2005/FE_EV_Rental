@@ -150,7 +150,8 @@ export async function apiCall<T>(
 
     // Xử lý 404 Not Found
     if (response.status === 404) {
-  logger.error(`[API] ❌ 404 Not Found: ${url}`);
+      // Chỉ log warning thay vì error để tránh spam console khi thử nhiều endpoint
+      logger.warn(`[API] ⚠️ 404 Not Found: ${endpoint} - endpoint may not exist`);
       return {
         success: false,
         error: `Endpoint not found: ${endpoint}`
@@ -737,39 +738,73 @@ export const authApi = {
   // Lấy tất cả user (khách hàng) từ hệ thống auth
   getAllUsers: async () => {
     const candidates = [
-      '/user', '/users', '/user/all', '/auth/users',
-      '/User', '/User/all', '/User/GetAll', '/User/List'
+      '/User/GetAll', '/User', '/User/all', '/User/List',
+      '/user', '/users', '/user/all', '/auth/users'
     ];
+    let lastError: any = null;
+    
     for (const ep of candidates) {
-      const res = await apiCall<any>(ep, { method: 'GET' });
-      const raw = (res as any)?.data ?? res;
-      // Unwrap common server response shapes
-      const data = raw?.data ?? raw; // supports { isSuccess, data } or direct array
-      const values = data?.$values ?? data?.data?.$values; // supports .data.$values
-      const arr = Array.isArray(data)
-        ? data
-        : Array.isArray(values)
-        ? values
-        : Array.isArray((data as any)?.items)
-        ? (data as any).items
-        : null;
-      if (arr) {
-        // Normalize field names to match User type
-        const normalized = (arr as any[]).map((u) => ({
-          id: u.userId ?? u.id,
-          email: u.email,
-          fullName: u.fullName ?? u.name,
-          role: u.role ?? 'Customer',
-          phone: u.phone ?? u.phoneNumber,
-          address: u.address,
-          dateOfBirth: u.dateOfBirth ?? u.dob,
-          avatar: u.avatar,
-          locationId: u.locationId ?? u.rentalLocationId ?? u.LocationId ?? u.RentalLocationId,
-          rentalLocationId: u.rentalLocationId ?? u.locationId ?? u.RentalLocationId ?? u.LocationId,
-        })) as User[];
-        return { success: true, data: normalized } as ApiResponse<User[]>;
+      try {
+        // Sử dụng skipAuth: false để không log lỗi cho mỗi endpoint thử
+        const res = await apiCall<any>(ep, { 
+          method: 'GET',
+          skipAuth: false,
+        });
+        
+        // Kiểm tra nếu response thành công
+        if (res.success || res.data) {
+          const raw = (res as any)?.data ?? res;
+          // Unwrap common server response shapes
+          const data = raw?.data ?? raw; // supports { isSuccess, data } or direct array
+          const values = data?.$values ?? data?.data?.$values; // supports .data.$values
+          const arr = Array.isArray(data)
+            ? data
+            : Array.isArray(values)
+            ? values
+            : Array.isArray((data as any)?.items)
+            ? (data as any).items
+            : null;
+          
+          if (arr && arr.length > 0) {
+            // Normalize field names to match User type
+            const normalized = (arr as any[]).map((u) => ({
+              id: u.userId ?? u.id,
+              email: u.email,
+              fullName: u.fullName ?? u.name,
+              role: u.role ?? 'Customer',
+              phone: u.phone ?? u.phoneNumber,
+              address: u.address,
+              dateOfBirth: u.dateOfBirth ?? u.dob,
+              avatar: u.avatar,
+              locationId: u.locationId ?? u.rentalLocationId ?? u.LocationId ?? u.RentalLocationId,
+              rentalLocationId: u.rentalLocationId ?? u.locationId ?? u.RentalLocationId ?? u.LocationId,
+              isActive: u.isActive ?? u.IsActive ?? false,
+              createdAt: u.createdAt ?? u.CreatedAt,
+              updatedAt: u.updateAt ?? u.UpdateAt ?? u.updatedAt ?? u.UpdatedAt,
+            })) as User[];
+            return { success: true, data: normalized } as ApiResponse<User[]>;
+          }
+        }
+      } catch (error: any) {
+        // Lưu lỗi cuối cùng nhưng không throw, tiếp tục thử endpoint tiếp theo
+        lastError = error;
+        // Chỉ log warning, không log error để tránh spam console
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(`[Auth API] Endpoint ${ep} không khả dụng, thử endpoint tiếp theo...`);
+        }
+        continue;
       }
     }
+    
+    // Nếu tất cả endpoint đều thất bại, trả về lỗi
+    if (lastError) {
+      return { 
+        success: false, 
+        error: 'Không thể tải danh sách người dùng từ bất kỳ endpoint nào.',
+        data: [] 
+      } as ApiResponse<User[]>;
+    }
+    
     return { success: true, data: [] } as ApiResponse<User[]>;
   },
 
@@ -1178,6 +1213,7 @@ export const rentalOrderApi = {
   // Cập nhật trạng thái đơn hàng (Admin/Staff only)
   // Status enum: Pending=0, DocumentsSubmitted=1, DepositPending=2, Confirmed=3, 
   // Renting=4, Returned=5, PaymentPending=6, Cancelled=7, Completed=8
+  // Note: Backend endpoint này có thể không tồn tại, cần kiểm tra backend
   updateStatus: (orderId: number, status: number) => {
     return apiCall<RentalOrderData>('/RentalOrder/UpdateStatus', {
       method: 'PUT',
@@ -1231,7 +1267,59 @@ export const rentalOrderApi = {
       },
     });
   },
+
+  // Xác nhận giấy tờ ở quầy (Staff only) - chuyển từ DocumentsSubmitted sang DepositPending
+  confirmDocuments: (orderId: number) => {
+    return apiCall<{ success: boolean; message?: string }>(`/RentalOrder/ConfirmDocuments?orderId=${orderId}`, {
+      method: 'PUT',
+    });
+  },
 };
+
+export const carDeliveryHistoryApi = {
+  // Tạo lịch sử giao xe (Bắt đầu thuê)
+  create: (data: {
+    deliveryDate: string;
+    odometerStart: number;
+    batteryLevelStart: number;
+    vehicleConditionStart: string;
+    orderId: number;
+  }) => {
+    return apiCall<{ message: string }>('/CarDeliveryHistory', {
+      method: 'POST',
+      body: JSON.stringify({
+        DeliveryDate: data.deliveryDate,
+        OdometerStart: data.odometerStart,
+        BatteryLevelStart: data.batteryLevelStart,
+        VehicleConditionStart: data.vehicleConditionStart,
+        OrderId: data.orderId,
+      }),
+    });
+  },
+};
+
+export const carReturnHistoryApi = {
+  // Tạo lịch sử trả xe
+  create: (data: {
+    returnDate: string;
+    odometerEnd: number;
+    batteryLevelEnd: number;
+    vehicleConditionEnd: string;
+    orderId: number;
+  }) => {
+    return apiCall<{ message: string }>('/CarReturnHistory', {
+      method: 'POST',
+      body: JSON.stringify({
+        ReturnDate: data.returnDate,
+        OdometerEnd: data.odometerEnd,
+        BatteryLevelEnd: data.batteryLevelEnd,
+        VehicleConditionEnd: data.vehicleConditionEnd,
+        OrderId: data.orderId,
+      }),
+    });
+  },
+};
+
 export const paymentApi = {
   // Lấy doanh thu theo từng điểm thuê (Admin/Staff)
   getRevenueByLocation: () =>

@@ -340,12 +340,23 @@ export default function CustomerManagement() {
     try {
       const response = await authApi.updateUserActiveStatus(customer.id, isActive);
       if (response.success) {
-        api.success({
-          message: isActive ? "Mở khóa tài khoản thành công" : "Khóa tài khoản thành công",
-          description: `Tài khoản ${customer.fullName} đã được ${isActive ? 'mở khóa' : 'khóa'}.`,
-          placement: "topRight",
-          icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
-        });
+        if (isActive) {
+          // Mở khóa - màu xanh (success)
+          api.success({
+            message: "Mở khóa tài khoản thành công",
+            description: `Tài khoản ${customer.fullName} đã được mở khóa.`,
+            placement: "topRight",
+            icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
+          });
+        } else {
+          // Khóa - màu đỏ (error)
+          api.error({
+            message: "Khóa tài khoản thành công",
+            description: `Tài khoản ${customer.fullName} đã được khóa.`,
+            placement: "topRight",
+            icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+          });
+        }
         // Reload customers để đồng bộ với database
         await loadCustomers();
       } else {

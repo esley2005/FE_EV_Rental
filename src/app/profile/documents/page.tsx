@@ -491,13 +491,13 @@ export default function DocumentsPage() {
         {/* Main Content */}
         <Content style={{ margin: "24px auto", padding: "24px", width: "100%", maxWidth: 1000 }}>
           {/* Back Button */}
-          <Button
+          {/* <Button
             icon={<ArrowLeftOutlined />}
             onClick={() => router.push("/profile")}
             className="mb-4"
           >
             Quay lại trang cá nhân
-          </Button>
+          </Button> */}
 
           <h1 className="text-3xl font-bold mb-6">Upload Giấy Tờ</h1>
 
@@ -772,20 +772,13 @@ export default function DocumentsPage() {
                     format="DD/MM/YYYY" 
                     placeholder="Chọn ngày sinh"
                     disabledDate={(current) => {
-                      // Disable các ngày trong tương lai
+                      // Chỉ disable các ngày trong tương lai, không chặn ngày khiến tuổi < 18
+                      // Validation tuổi sẽ được kiểm tra sau khi chọn (trong validator)
                       if (current && current > dayjs().endOf('day')) {
                         return true;
                       }
-                      // Disable các ngày mà tuổi < 18
-                      const minDate = dayjs().subtract(18, 'year');
-                      if (current && current > minDate) {
-                        return true;
-                      }
-                      // Disable các ngày quá cũ (hơn 100 năm)
-                      const maxDate = dayjs().subtract(100, 'year');
-                      if (current && current < maxDate) {
-                        return true;
-                      }
+                      // Không disable các ngày khiến tuổi < 18, để người dùng có thể chọn
+                      // Validation sẽ hiển thị lỗi sau khi chọn nếu tuổi < 18
                       return false;
                     }}
                   />
