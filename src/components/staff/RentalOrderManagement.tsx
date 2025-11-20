@@ -60,8 +60,8 @@ const RentalOrderStatus = {
 
 const statusLabels: Record<number, { text: string; color: string; icon: any }> = {
   0: { text: 'Chờ xác nhận', color: 'gold', icon: <ClockCircleOutlined /> },
-  1: { text: 'Đang xác nhận giấy tờ', color: 'orange', icon: <IdcardOutlined /> },
-  2: { text: 'Chờ tiền cọc', color: 'purple', icon: <DollarOutlined /> },
+  1: { text: 'Đã nộp giấy tờ', color: 'blue', icon: <IdcardOutlined /> },
+  2: { text: 'Chờ tiền cọc', color: 'orange', icon: <DollarOutlined /> },
   3: { text: 'Đã xác nhận', color: 'cyan', icon: <CheckCircleOutlined /> },
   4: { text: 'Đang thuê', color: 'green', icon: <CarOutlined /> },
   5: { text: 'Đã trả xe', color: 'purple', icon: <CarOutlined /> },
@@ -76,29 +76,27 @@ export default function RentalOrderManagement() {
   const [selectedOrder, setSelectedOrder] = useState<OrderWithDetails | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [updateTotalModalVisible, setUpdateTotalModalVisible] = useState(false);
-  const [deliveryModalVisible, setDeliveryModalVisible] = useState(false);
-  const [returnModalVisible, setReturnModalVisible] = useState(false);
-  const [selectedOrderForAction, setSelectedOrderForAction] = useState<OrderWithDetails | null>(null);
   const [documentModalVisible, setDocumentModalVisible] = useState(false);
   const [selectedOrderForDocument, setSelectedOrderForDocument] = useState<OrderWithDetails | null>(null);
-  const [selectedLicense, setSelectedLicense] = useState<DriverLicenseData | null>(null);
-  const [selectedCitizenId, setSelectedCitizenId] = useState<CitizenIdData | null>(null);
-  const [licenseModalVisible, setLicenseModalVisible] = useState(false);
-  const [citizenIdModalVisible, setCitizenIdModalVisible] = useState(false);
+  const [processingId, setProcessingId] = useState<number | null>(null);
   const [updateLicenseModalVisible, setUpdateLicenseModalVisible] = useState(false);
   const [updateCitizenIdModalVisible, setUpdateCitizenIdModalVisible] = useState(false);
-  const [processingId, setProcessingId] = useState<number | null>(null);
-  const [updateLicenseForm] = Form.useForm();
-  const [updateCitizenIdForm] = Form.useForm();
+  const [selectedLicense, setSelectedLicense] = useState<DriverLicenseData | null>(null);
+  const [selectedCitizenId, setSelectedCitizenId] = useState<CitizenIdData | null>(null);
   const [licenseImageFileList, setLicenseImageFileList] = useState<UploadFile[]>([]);
   const [licenseImage2FileList, setLicenseImage2FileList] = useState<UploadFile[]>([]);
   const [citizenIdImageFileList, setCitizenIdImageFileList] = useState<UploadFile[]>([]);
   const [citizenIdImage2FileList, setCitizenIdImage2FileList] = useState<UploadFile[]>([]);
+  const [updateLicenseForm] = Form.useForm();
+  const [updateCitizenIdForm] = Form.useForm();
+  const [deliveryModalVisible, setDeliveryModalVisible] = useState(false);
+  const [returnModalVisible, setReturnModalVisible] = useState(false);
+  const [selectedOrderForAction, setSelectedOrderForAction] = useState<OrderWithDetails | null>(null);
+  const [deliveryForm] = Form.useForm();
+  const [returnForm] = Form.useForm();
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [form] = Form.useForm();
-  const [deliveryForm] = Form.useForm();
-  const [returnForm] = Form.useForm();
 
   useEffect(() => {
     loadOrders();
@@ -353,15 +351,22 @@ export default function RentalOrderManagement() {
   };
 
   // Xác nhận tổng tiền (tạo payment record)
-  const handleConfirmTotal = async (orderId: number) => {
+  const handleConfirmTotal = async (orderId: number, currentStatus?: number) => {
     try {
       setLoading(true);
+      
+      // Gọi confirmTotal trực tiếp
+      // Backend sẽ tự động xử lý chuyển status từ Returned sang PaymentPending nếu cần
       const response = await rentalOrderApi.confirmTotal(orderId);
       
       if (response.success) {
         message.success('Xác nhận tổng tiền thành công!');
         await loadOrders();
       } else {
+        // Nếu lỗi do status, thử chuyển status trước (nếu backend hỗ trợ)
+        if (response.error?.includes('trạng thái') && currentStatus === RentalOrderStatus.Returned) {
+          message.warning('Vui lòng đợi backend cập nhật để hỗ trợ chuyển trạng thái tự động');
+        }
         message.error(response.error || 'Xác nhận tổng tiền thất bại');
       }
     } catch (error) {
@@ -372,32 +377,33 @@ export default function RentalOrderManagement() {
     }
   };
 
-  // Xác nhận giấy tờ ở quầy
-  const handleConfirmDocuments = async (orderId: number) => {
+  // Xác nhận thanh toán
+  const handleConfirmPayment = async (orderId: number) => {
     try {
       setLoading(true);
-      const response = await rentalOrderApi.confirmDocuments(orderId);
+      const response = await rentalOrderApi.confirmPayment(orderId);
       
       if (response.success) {
-        message.success('Xác nhận giấy tờ ở quầy thành công! Đơn hàng đã chuyển sang trạng thái chờ thanh toán đặt cọc.');
+        message.success('Xác nhận thanh toán thành công!');
         await loadOrders();
       } else {
-        message.error(response.error || response.message || 'Xác nhận giấy tờ thất bại');
+        message.error(response.error || 'Xác nhận thanh toán thất bại');
       }
     } catch (error) {
-      console.error('Confirm documents error:', error);
-      message.error('Có lỗi xảy ra khi xác nhận giấy tờ');
+      console.error('Confirm payment error:', error);
+      message.error('Có lỗi xảy ra khi xác nhận thanh toán');
     } finally {
       setLoading(false);
     }
   };
 
-  // Xác thực giấy tờ cho đơn hàng
-  const handleVerifyDocuments = (order: OrderWithDetails) => {
+  // Hiển thị modal xác thực giấy tờ
+  const showDocumentVerificationModal = (order: OrderWithDetails) => {
     setSelectedOrderForDocument(order);
     setDocumentModalVisible(true);
   };
 
+  // Xác thực GPLX
   const handleApproveLicense = async (licenseId: number) => {
     setProcessingId(licenseId);
     try {
@@ -413,7 +419,7 @@ export default function RentalOrderManagement() {
           }
         }
         await loadOrders();
-        setLicenseModalVisible(false);
+        setDocumentModalVisible(false);
       } else {
         message.error(response.error || 'Không thể xác thực GPLX');
       }
@@ -424,6 +430,7 @@ export default function RentalOrderManagement() {
     }
   };
 
+  // Từ chối GPLX
   const handleRejectLicense = async (licenseId: number) => {
     setProcessingId(licenseId);
     try {
@@ -431,7 +438,7 @@ export default function RentalOrderManagement() {
       if (response.success) {
         message.success('Đã từ chối GPLX');
         await loadOrders();
-        setLicenseModalVisible(false);
+        setDocumentModalVisible(false);
       } else {
         message.error(response.error || 'Không thể từ chối GPLX');
       }
@@ -442,6 +449,7 @@ export default function RentalOrderManagement() {
     }
   };
 
+  // Xác thực CCCD
   const handleApproveCitizenId = async (citizenIdId: number) => {
     setProcessingId(citizenIdId);
     try {
@@ -457,7 +465,7 @@ export default function RentalOrderManagement() {
           }
         }
         await loadOrders();
-        setCitizenIdModalVisible(false);
+        setDocumentModalVisible(false);
       } else {
         message.error(response.error || 'Không thể xác thực CCCD');
       }
@@ -468,6 +476,7 @@ export default function RentalOrderManagement() {
     }
   };
 
+  // Từ chối CCCD
   const handleRejectCitizenId = async (citizenIdId: number) => {
     setProcessingId(citizenIdId);
     try {
@@ -475,7 +484,7 @@ export default function RentalOrderManagement() {
       if (response.success) {
         message.success('Đã từ chối CCCD');
         await loadOrders();
-        setCitizenIdModalVisible(false);
+        setDocumentModalVisible(false);
       } else {
         message.error(response.error || 'Không thể từ chối CCCD');
       }
@@ -486,12 +495,7 @@ export default function RentalOrderManagement() {
     }
   };
 
-  // Xử lý cập nhật giấy tờ - mở modal xem giấy tờ để có thể chọn cập nhật từng loại
-  const handleUpdateDocuments = (order: OrderWithDetails) => {
-    setSelectedOrderForDocument(order);
-    setDocumentModalVisible(true);
-  };
-
+  // Cập nhật GPLX
   const handleUpdateLicense = async (values: any) => {
     if (!selectedLicense?.id) return;
     
@@ -549,6 +553,20 @@ export default function RentalOrderManagement() {
         setLicenseImageFileList([]);
         setLicenseImage2FileList([]);
         await loadOrders();
+        if (selectedOrderForDocument) {
+          // Reload selected order
+          const updatedOrders = await rentalOrderApi.getAll();
+          if (updatedOrders.success && updatedOrders.data) {
+            const ordersData = Array.isArray(updatedOrders.data)
+              ? updatedOrders.data
+              : (updatedOrders.data as any)?.$values || [];
+            const updatedOrder = ordersData.find((o: RentalOrderData) => o.id === selectedOrderForDocument.id);
+            if (updatedOrder) {
+              // Reload full order details
+              await loadOrders();
+            }
+          }
+        }
       } else {
         message.error(response.error || 'Cập nhật thất bại');
       }
@@ -560,6 +578,7 @@ export default function RentalOrderManagement() {
     }
   };
 
+  // Cập nhật CCCD
   const handleUpdateCitizenId = async (values: any) => {
     if (!selectedCitizenId?.id) return;
     
@@ -618,32 +637,16 @@ export default function RentalOrderManagement() {
         setCitizenIdImageFileList([]);
         setCitizenIdImage2FileList([]);
         await loadOrders();
+        if (selectedOrderForDocument) {
+          // Reload selected order
+          await loadOrders();
+        }
       } else {
         message.error(response.error || 'Cập nhật thất bại');
       }
     } catch (error) {
       console.error('Update citizen ID error:', error);
       message.error('Có lỗi xảy ra khi cập nhật');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Xác nhận thanh toán
-  const handleConfirmPayment = async (orderId: number) => {
-    try {
-      setLoading(true);
-      const response = await rentalOrderApi.confirmPayment(orderId);
-      
-      if (response.success) {
-        message.success('Xác nhận thanh toán thành công!');
-        await loadOrders();
-      } else {
-        message.error(response.error || 'Xác nhận thanh toán thất bại');
-      }
-    } catch (error) {
-      console.error('Confirm payment error:', error);
-      message.error('Có lỗi xảy ra khi xác nhận thanh toán');
     } finally {
       setLoading(false);
     }
@@ -751,12 +754,13 @@ export default function RentalOrderManagement() {
     {
       title: "Giấy tờ",
       key: "documents",
-      width: 250,
+      width: 200,
       render: (_: any, record: OrderWithDetails) => {
         // Ẩn trạng thái giấy tờ nếu thuê xe có tài xế
         if (record.withDriver) {
           return <Tag color="blue">Có tài xế</Tag>;
         }
+        
         const hasPendingDocs = 
           (record.driverLicense && (record.driverLicense.status === '0' || record.driverLicense.status === 'Pending')) ||
           (record.citizenIdDoc && (record.citizenIdDoc.status === '0' || record.citizenIdDoc.status === 'Pending'));
@@ -776,7 +780,7 @@ export default function RentalOrderManagement() {
                 type="primary" 
                 size="small" 
                 icon={<IdcardOutlined />}
-                onClick={() => handleVerifyDocuments(record)}
+                onClick={() => showDocumentVerificationModal(record)}
                 block
               >
                 Xác thực giấy tờ
@@ -806,119 +810,23 @@ export default function RentalOrderManagement() {
                 onChange={(value) => handleStatusChange(record.id, value)}
               />
             )}
-            {currentStatus === RentalOrderStatus.DocumentsSubmitted && (
+            {currentStatus === RentalOrderStatus.DepositPending && (
               <Popconfirm
-                title="Xác nhận giấy tờ ở quầy?"
-                description="Sau khi xác nhận, đơn hàng sẽ chuyển sang trạng thái 'Chờ thanh toán đặt cọc'"
-                onConfirm={() => handleConfirmDocuments(record.id)}
+                title="Xác nhận thanh toán đặt cọc?"
+                onConfirm={() => handleConfirmDeposit(record.id)}
                 okText="Xác nhận"
                 cancelText="Hủy"
               >
-                <Button size="small" type="primary" block icon={<IdcardOutlined />}>
-                  Xác nhận giấy tờ ở quầy
+                <Button size="small" type="primary" block>
+                  Xác nhận tiền cọc
                 </Button>
               </Popconfirm>
             )}
-            {currentStatus === RentalOrderStatus.DepositPending && (
-              (() => {
-                // Kiểm tra cả 2 giấy tờ đã được approve chưa
-                const isDriverLicenseApproved = record.driverLicense && 
-                  (record.driverLicense.status === '1' || record.driverLicense.status === 'Approved');
-                const isCitizenIdApproved = record.citizenIdDoc && 
-                  (record.citizenIdDoc.status === '1' || record.citizenIdDoc.status === 'Approved');
-                const bothDocumentsApproved = isDriverLicenseApproved && isCitizenIdApproved;
-                
-                // Nếu có tài xế thì không cần giấy tờ
-                if (record.withDriver) {
-                  return (
-                    <Popconfirm
-                      title="Xác nhận thanh toán đặt cọc?"
-                      onConfirm={() => handleConfirmDeposit(record.id)}
-                      okText="Xác nhận"
-                      cancelText="Hủy"
-                    >
-                      <Button size="small" type="primary" block>
-                        Xác nhận tiền cọc
-                      </Button>
-                    </Popconfirm>
-                  );
-                }
-                
-                // Nếu không có tài xế, cần kiểm tra giấy tờ
-                if (!record.driverLicense || !record.citizenIdDoc) {
-                  return (
-                    <Button size="small" type="default" block disabled>
-                      Chưa có đủ giấy tờ
-                    </Button>
-                  );
-                }
-                
-                if (!bothDocumentsApproved) {
-                  return (
-                    <Button size="small" type="default" block disabled>
-                      Chưa xác thực đủ giấy tờ
-                    </Button>
-                  );
-                }
-                
-                return (
-                  <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                    <Space size="small" style={{ width: '100%' }}>
-                      <Button 
-                        size="small" 
-                        icon={<EyeOutlined />}
-                        onClick={() => handleVerifyDocuments(record)}
-                        style={{ flex: 1 }}
-                      >
-                        Xem lại giấy tờ
-                      </Button>
-                      <Button 
-                        size="small" 
-                        icon={<EditOutlined />}
-                        onClick={() => handleUpdateDocuments(record)}
-                        style={{ flex: 1 }}
-                      >
-                        Cập nhật giấy tờ
-                      </Button>
-                    </Space>
-                    <Popconfirm
-                      title="Xác nhận thanh toán đặt cọc?"
-                      onConfirm={() => handleConfirmDeposit(record.id)}
-                      okText="Xác nhận"
-                      cancelText="Hủy"
-                    >
-                      <Button size="small" type="primary" block>
-                        Xác nhận tiền cọc
-                      </Button>
-                    </Popconfirm>
-                  </Space>
-                );
-              })()
-            )}
             {currentStatus === RentalOrderStatus.Returned && (
-              <Button 
-                size="small" 
-                type="primary" 
-                block
-                icon={<EditOutlined />}
-                onClick={() => {
-                  setSelectedOrder(record);
-                  form.setFieldsValue({
-                    extraFee: record.extraFee || 0,
-                    damageFee: record.damageFee || 0,
-                    damageNotes: record.damageNotes || '',
-                  });
-                  setUpdateTotalModalVisible(true);
-                }}
-              >
-                Cập nhật tiền
-              </Button>
-            )}
-            {currentStatus === RentalOrderStatus.PaymentPending && (
               <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                <Button
-                  size="small"
-                  type="default"
+                <Button 
+                  size="small" 
+                  type="primary" 
                   block
                   icon={<EditOutlined />}
                   onClick={() => {
@@ -931,11 +839,28 @@ export default function RentalOrderManagement() {
                     setUpdateTotalModalVisible(true);
                   }}
                 >
-                  Sửa tiền
+                  Cập nhật tiền
                 </Button>
+                {(record.extraFee || record.damageFee) && (
+                  <Popconfirm
+                    title="Xác nhận tổng tiền (tạo payment record)?"
+                    description="Sau khi xác nhận, đơn hàng sẽ chuyển sang trạng thái 'Chờ thanh toán'"
+                    onConfirm={() => handleConfirmTotal(record.id, currentStatus)}
+                    okText="Xác nhận"
+                    cancelText="Hủy"
+                  >
+                    <Button size="small" type="default" block>
+                      Xác nhận tổng tiền
+                    </Button>
+                  </Popconfirm>
+                )}
+              </Space>
+            )}
+            {currentStatus === RentalOrderStatus.PaymentPending && (
+              <Space direction="vertical" size="small" style={{ width: '100%' }}>
                 <Popconfirm
                   title="Xác nhận tổng tiền (tạo payment record)?"
-                  onConfirm={() => handleConfirmTotal(record.id)}
+                  onConfirm={() => handleConfirmTotal(record.id, currentStatus)}
                   okText="Xác nhận"
                   cancelText="Hủy"
                 >
@@ -1087,36 +1012,34 @@ export default function RentalOrderManagement() {
               )}
             </Card>
 
-            {!selectedOrder.withDriver && (
-              <Card title={<><IdcardOutlined /> Trạng thái giấy tờ</>} size="small">
-                <Descriptions column={2} size="small">
-                  <Descriptions.Item label="Giấy phép lái xe (GPLX)">
-                    {selectedOrder.driverLicense ? (
-                      <Space>
-                        {getDocumentStatusTag(selectedOrder.driverLicense.status)}
-                        <span className="text-sm text-gray-600">
-                          ({selectedOrder.driverLicense.name})
-                        </span>
-                      </Space>
-                    ) : (
-                      <Tag color="default">Chưa upload</Tag>
-                    )}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Căn cước công dân (CCCD)">
-                    {selectedOrder.citizenIdDoc ? (
-                      <Space>
-                        {getDocumentStatusTag(selectedOrder.citizenIdDoc.status)}
-                        <span className="text-sm text-gray-600">
-                          ({selectedOrder.citizenIdDoc.name})
-                        </span>
-                      </Space>
-                    ) : (
-                      <Tag color="default">Chưa upload</Tag>
-                    )}
-                  </Descriptions.Item>
-                </Descriptions>
-              </Card>
-            )}
+            <Card title={<><IdcardOutlined /> Trạng thái giấy tờ</>} size="small">
+              <Descriptions column={2} size="small">
+                <Descriptions.Item label="Giấy phép lái xe (GPLX)">
+                  {selectedOrder.driverLicense ? (
+                    <Space>
+                      {getDocumentStatusTag(selectedOrder.driverLicense.status)}
+                      <span className="text-sm text-gray-600">
+                        ({selectedOrder.driverLicense.name})
+                      </span>
+                    </Space>
+                  ) : (
+                    <Tag color="default">Chưa upload</Tag>
+                  )}
+                </Descriptions.Item>
+                <Descriptions.Item label="Căn cước công dân (CCCD)">
+                  {selectedOrder.citizenIdDoc ? (
+                    <Space>
+                      {getDocumentStatusTag(selectedOrder.citizenIdDoc.status)}
+                      <span className="text-sm text-gray-600">
+                        ({selectedOrder.citizenIdDoc.name})
+                      </span>
+                    </Space>
+                  ) : (
+                    <Tag color="default">Chưa upload</Tag>
+                  )}
+                </Descriptions.Item>
+              </Descriptions>
+            </Card>
 
             <Card title="Chi tiết đơn hàng" size="small">
               <Descriptions column={2} size="small">
@@ -1245,154 +1168,6 @@ export default function RentalOrderManagement() {
         </Form>
       </Modal>
 
-      {/* Delivery Modal - Giao xe (Bắt đầu thuê) */}
-      <Modal
-        title="Giao xe - Bắt đầu thuê"
-        open={deliveryModalVisible}
-        onCancel={() => {
-          setDeliveryModalVisible(false);
-          deliveryForm.resetFields();
-          setSelectedOrderForAction(null);
-        }}
-        footer={null}
-        width={600}
-      >
-        <Form
-          form={deliveryForm}
-          layout="vertical"
-          onFinish={handleDelivery}
-        >
-          <Form.Item label="Mã đơn hàng">
-            <Input value={selectedOrderForAction?.id} disabled />
-          </Form.Item>
-          <Form.Item label="Xe">
-            <Input value={selectedOrderForAction?.car?.name || '-'} disabled />
-          </Form.Item>
-          <Form.Item
-            label="Số km (Odometer)"
-            name="odometerStart"
-            rules={[{ required: true, message: 'Vui lòng nhập số km' }]}
-          >
-            <InputNumber
-              style={{ width: '100%' }}
-              min={0}
-              placeholder="Nhập số km hiện tại"
-            />
-          </Form.Item>
-          <Form.Item
-            label="% Pin (Battery Level)"
-            name="batteryLevelStart"
-            rules={[{ required: true, message: 'Vui lòng nhập % pin' }]}
-          >
-            <InputNumber
-              style={{ width: '100%' }}
-              min={0}
-              max={100}
-              addonAfter="%"
-              placeholder="Nhập % pin"
-            />
-          </Form.Item>
-          <Form.Item
-            label="Tình trạng xe"
-            name="vehicleConditionStart"
-            rules={[{ required: true, message: 'Vui lòng nhập tình trạng xe' }]}
-          >
-            <Input.TextArea
-              rows={4}
-              placeholder="Mô tả tình trạng xe: đèn, gương, lốp, nội thất..."
-            />
-          </Form.Item>
-          <Form.Item>
-            <Space>
-              <Button type="primary" htmlType="submit" loading={loading}>
-                Xác nhận giao xe
-              </Button>
-              <Button onClick={() => {
-                setDeliveryModalVisible(false);
-                deliveryForm.resetFields();
-                setSelectedOrderForAction(null);
-              }}>
-                Hủy
-              </Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* Return Modal - Trả xe */}
-      <Modal
-        title="Nhận lại xe"
-        open={returnModalVisible}
-        onCancel={() => {
-          setReturnModalVisible(false);
-          returnForm.resetFields();
-          setSelectedOrderForAction(null);
-        }}
-        footer={null}
-        width={600}
-      >
-        <Form
-          form={returnForm}
-          layout="vertical"
-          onFinish={handleReturn}
-        >
-          <Form.Item label="Mã đơn hàng">
-            <Input value={selectedOrderForAction?.id} disabled />
-          </Form.Item>
-          <Form.Item label="Xe">
-            <Input value={selectedOrderForAction?.car?.name || '-'} disabled />
-          </Form.Item>
-          <Form.Item
-            label="Số km (Odometer)"
-            name="odometerEnd"
-            rules={[{ required: true, message: 'Vui lòng nhập số km' }]}
-          >
-            <InputNumber
-              style={{ width: '100%' }}
-              min={0}
-              placeholder="Nhập số km khi trả xe"
-            />
-          </Form.Item>
-          <Form.Item
-            label="% Pin (Battery Level)"
-            name="batteryLevelEnd"
-            rules={[{ required: true, message: 'Vui lòng nhập % pin' }]}
-          >
-            <InputNumber
-              style={{ width: '100%' }}
-              min={0}
-              max={100}
-              addonAfter="%"
-              placeholder="Nhập % pin khi trả xe"
-            />
-          </Form.Item>
-          <Form.Item
-            label="Tình trạng xe"
-            name="vehicleConditionEnd"
-            rules={[{ required: true, message: 'Vui lòng nhập tình trạng xe' }]}
-          >
-            <Input.TextArea
-              rows={4}
-              placeholder="Mô tả tình trạng xe khi trả: hư hỏng, vết xước, phụ kiện..."
-            />
-          </Form.Item>
-          <Form.Item>
-            <Space>
-              <Button type="primary" htmlType="submit" loading={loading}>
-                Xác nhận nhận lại xe
-              </Button>
-              <Button onClick={() => {
-                setReturnModalVisible(false);
-                returnForm.resetFields();
-                setSelectedOrderForAction(null);
-              }}>
-                Hủy
-              </Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Modal>
-
       {/* Document Verification Modal */}
       <Modal
         title={`Xác thực giấy tờ - Đơn hàng #${selectedOrderForDocument?.id}`}
@@ -1457,15 +1232,6 @@ export default function RentalOrderManagement() {
                         </Button>
                       </>
                     )}
-                    <Button 
-                      icon={<EyeOutlined />}
-                      onClick={() => {
-                        setSelectedLicense(selectedOrderForDocument.driverLicense!);
-                        setLicenseModalVisible(true);
-                      }}
-                    >
-                      Xem chi tiết
-                    </Button>
                     <Button 
                       icon={<EditOutlined />}
                       onClick={() => {
@@ -1541,18 +1307,11 @@ export default function RentalOrderManagement() {
                       </>
                     )}
                     <Button 
-                      icon={<EyeOutlined />}
-                      onClick={() => {
-                        setSelectedCitizenId(selectedOrderForDocument.citizenIdDoc!);
-                        setCitizenIdModalVisible(true);
-                      }}
-                    >
-                      Xem chi tiết
-                    </Button>
-                    <Button 
                       icon={<EditOutlined />}
                       onClick={() => {
                         setSelectedCitizenId(selectedOrderForDocument.citizenIdDoc!);
+                        setCitizenIdImageFileList([]);
+                        setCitizenIdImage2FileList([]);
                         updateCitizenIdForm.setFieldsValue({
                           name: selectedOrderForDocument.citizenIdDoc!.name,
                           citizenIdNumber: selectedOrderForDocument.citizenIdDoc!.citizenIdNumber,
@@ -1576,168 +1335,6 @@ export default function RentalOrderManagement() {
               </div>
             )}
           </Space>
-        )}
-      </Modal>
-
-      {/* License Detail Modal */}
-      <Modal
-        title="Chi tiết Giấy phép lái xe"
-        open={licenseModalVisible}
-        onCancel={() => {
-          setLicenseModalVisible(false);
-          setSelectedLicense(null);
-        }}
-        footer={null}
-        width={800}
-      >
-        {selectedLicense && (
-          <div>
-            <Descriptions column={2} bordered>
-              <Descriptions.Item label="Họ tên">{selectedLicense.name}</Descriptions.Item>
-              <Descriptions.Item label="Số bằng lái">{selectedLicense.licenseNumber || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Mã đơn hàng">
-                {selectedLicense.rentalOrderId ? `#${selectedLicense.rentalOrderId}` : '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="Trạng thái">
-                {getDocumentStatusTag(selectedLicense.status)}
-              </Descriptions.Item>
-            </Descriptions>
-            {(selectedLicense.imageUrl || selectedLicense.imageUrl2) && (
-              <div className="mt-4">
-                <div className="font-medium mb-2">Ảnh giấy phép lái xe:</div>
-                <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                  {selectedLicense.imageUrl && (
-                    <div>
-                      <div className="text-sm text-gray-600 mb-1">Mặt trước:</div>
-                      <Image src={selectedLicense.imageUrl} alt="GPLX mặt trước" className="max-w-full" />
-                    </div>
-                  )}
-                  {selectedLicense.imageUrl2 && (
-                    <div>
-                      <div className="text-sm text-gray-600 mb-1">Mặt sau:</div>
-                      <Image src={selectedLicense.imageUrl2} alt="GPLX mặt sau" className="max-w-full" />
-                    </div>
-                  )}
-                </Space>
-              </div>
-            )}
-            <div className="mt-4 flex gap-2">
-              {(!selectedLicense.status || selectedLicense.status === '0' || selectedLicense.status === 'Pending') && (
-                <>
-                  <Button 
-                    type="primary"
-                    loading={processingId === selectedLicense.id}
-                    onClick={() => selectedLicense.id && handleApproveLicense(selectedLicense.id)}
-                  >
-                    Duyệt
-                  </Button>
-                  <Button 
-                    danger
-                    loading={processingId === selectedLicense.id}
-                    onClick={() => selectedLicense.id && handleRejectLicense(selectedLicense.id)}
-                  >
-                    Từ chối
-                  </Button>
-                </>
-              )}
-              <Button 
-                icon={<EditOutlined />}
-                onClick={() => {
-                  updateLicenseForm.setFieldsValue({
-                    name: selectedLicense.name,
-                    licenseNumber: selectedLicense.licenseNumber,
-                    imageUrl: selectedLicense.imageUrl,
-                    imageUrl2: selectedLicense.imageUrl2,
-                  });
-                  setUpdateLicenseModalVisible(true);
-                }}
-              >
-                Cập nhật
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* Citizen ID Detail Modal */}
-      <Modal
-        title="Chi tiết Căn cước công dân"
-        open={citizenIdModalVisible}
-        onCancel={() => {
-          setCitizenIdModalVisible(false);
-          setSelectedCitizenId(null);
-        }}
-        footer={null}
-        width={800}
-      >
-        {selectedCitizenId && (
-          <div>
-            <Descriptions column={2} bordered>
-              <Descriptions.Item label="Họ tên">{selectedCitizenId.name}</Descriptions.Item>
-              <Descriptions.Item label="Số CCCD">{selectedCitizenId.citizenIdNumber}</Descriptions.Item>
-              <Descriptions.Item label="Ngày sinh">{selectedCitizenId.birthDate || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Mã đơn hàng">
-                {selectedCitizenId.rentalOrderId ? `#${selectedCitizenId.rentalOrderId}` : '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="Trạng thái">
-                {getDocumentStatusTag(selectedCitizenId.status)}
-              </Descriptions.Item>
-            </Descriptions>
-            {(selectedCitizenId.imageUrl || selectedCitizenId.imageUrl2) && (
-              <div className="mt-4">
-                <div className="font-medium mb-2">Ảnh căn cước công dân:</div>
-                <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                  {selectedCitizenId.imageUrl && (
-                    <div>
-                      <div className="text-sm text-gray-600 mb-1">Mặt trước:</div>
-                      <Image src={selectedCitizenId.imageUrl} alt="CCCD mặt trước" className="max-w-full" />
-                    </div>
-                  )}
-                  {selectedCitizenId.imageUrl2 && (
-                    <div>
-                      <div className="text-sm text-gray-600 mb-1">Mặt sau:</div>
-                      <Image src={selectedCitizenId.imageUrl2} alt="CCCD mặt sau" className="max-w-full" />
-                    </div>
-                  )}
-                </Space>
-              </div>
-            )}
-            <div className="mt-4 flex gap-2">
-              {(!selectedCitizenId.status || selectedCitizenId.status === '0' || selectedCitizenId.status === 'Pending') && (
-                <>
-                  <Button 
-                    type="primary"
-                    loading={processingId === selectedCitizenId.id}
-                    onClick={() => selectedCitizenId.id && handleApproveCitizenId(selectedCitizenId.id)}
-                  >
-                    Duyệt
-                  </Button>
-                  <Button 
-                    danger
-                    loading={processingId === selectedCitizenId.id}
-                    onClick={() => selectedCitizenId.id && handleRejectCitizenId(selectedCitizenId.id)}
-                  >
-                    Từ chối
-                  </Button>
-                </>
-              )}
-              <Button 
-                icon={<EditOutlined />}
-                onClick={() => {
-                  updateCitizenIdForm.setFieldsValue({
-                    name: selectedCitizenId.name,
-                    citizenIdNumber: selectedCitizenId.citizenIdNumber,
-                    birthDate: selectedCitizenId.birthDate,
-                    imageUrl: selectedCitizenId.imageUrl,
-                    imageUrl2: selectedCitizenId.imageUrl2,
-                  });
-                  setUpdateCitizenIdModalVisible(true);
-                }}
-              >
-                Cập nhật
-              </Button>
-            </div>
-          </div>
         )}
       </Modal>
 
@@ -1942,6 +1539,154 @@ export default function RentalOrderManagement() {
             </Form.Item>
           </Form>
         )}
+      </Modal>
+
+      {/* Delivery Modal - Giao xe (Bắt đầu thuê) */}
+      <Modal
+        title="Giao xe - Bắt đầu thuê"
+        open={deliveryModalVisible}
+        onCancel={() => {
+          setDeliveryModalVisible(false);
+          deliveryForm.resetFields();
+          setSelectedOrderForAction(null);
+        }}
+        footer={null}
+        width={600}
+      >
+        <Form
+          form={deliveryForm}
+          layout="vertical"
+          onFinish={handleDelivery}
+        >
+          <Form.Item label="Mã đơn hàng">
+            <Input value={selectedOrderForAction?.id} disabled />
+          </Form.Item>
+          <Form.Item label="Xe">
+            <Input value={selectedOrderForAction?.car?.name || '-'} disabled />
+          </Form.Item>
+          <Form.Item
+            label="Số km (Odometer)"
+            name="odometerStart"
+            rules={[{ required: true, message: 'Vui lòng nhập số km' }]}
+          >
+            <InputNumber
+              style={{ width: '100%' }}
+              min={0}
+              placeholder="Nhập số km hiện tại"
+            />
+          </Form.Item>
+          <Form.Item
+            label="% Pin (Battery Level)"
+            name="batteryLevelStart"
+            rules={[{ required: true, message: 'Vui lòng nhập % pin' }]}
+          >
+            <InputNumber
+              style={{ width: '100%' }}
+              min={0}
+              max={100}
+              addonAfter="%"
+              placeholder="Nhập % pin"
+            />
+          </Form.Item>
+          <Form.Item
+            label="Tình trạng xe"
+            name="vehicleConditionStart"
+            rules={[{ required: true, message: 'Vui lòng nhập tình trạng xe' }]}
+          >
+            <Input.TextArea
+              rows={4}
+              placeholder="Mô tả tình trạng xe: đèn, gương, lốp, nội thất..."
+            />
+          </Form.Item>
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit" loading={loading}>
+                Xác nhận giao xe
+              </Button>
+              <Button onClick={() => {
+                setDeliveryModalVisible(false);
+                deliveryForm.resetFields();
+                setSelectedOrderForAction(null);
+              }}>
+                Hủy
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Return Modal - Trả xe */}
+      <Modal
+        title="Nhận lại xe"
+        open={returnModalVisible}
+        onCancel={() => {
+          setReturnModalVisible(false);
+          returnForm.resetFields();
+          setSelectedOrderForAction(null);
+        }}
+        footer={null}
+        width={600}
+      >
+        <Form
+          form={returnForm}
+          layout="vertical"
+          onFinish={handleReturn}
+        >
+          <Form.Item label="Mã đơn hàng">
+            <Input value={selectedOrderForAction?.id} disabled />
+          </Form.Item>
+          <Form.Item label="Xe">
+            <Input value={selectedOrderForAction?.car?.name || '-'} disabled />
+          </Form.Item>
+          <Form.Item
+            label="Số km (Odometer)"
+            name="odometerEnd"
+            rules={[{ required: true, message: 'Vui lòng nhập số km' }]}
+          >
+            <InputNumber
+              style={{ width: '100%' }}
+              min={0}
+              placeholder="Nhập số km khi trả xe"
+            />
+          </Form.Item>
+          <Form.Item
+            label="% Pin (Battery Level)"
+            name="batteryLevelEnd"
+            rules={[{ required: true, message: 'Vui lòng nhập % pin' }]}
+          >
+            <InputNumber
+              style={{ width: '100%' }}
+              min={0}
+              max={100}
+              addonAfter="%"
+              placeholder="Nhập % pin khi trả xe"
+            />
+          </Form.Item>
+          <Form.Item
+            label="Tình trạng xe"
+            name="vehicleConditionEnd"
+            rules={[{ required: true, message: 'Vui lòng nhập tình trạng xe' }]}
+          >
+            <Input.TextArea
+              rows={4}
+              placeholder="Mô tả tình trạng xe khi trả: hư hỏng, vết xước, phụ kiện..."
+            />
+          </Form.Item>
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit" loading={loading}>
+                Xác nhận nhận lại xe
+              </Button>
+              <Button onClick={() => {
+                setReturnModalVisible(false);
+                returnForm.resetFields();
+                setSelectedOrderForAction(null);
+              }}>
+                Hủy
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
       </Modal>
     </div>
   );

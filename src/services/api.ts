@@ -1101,6 +1101,7 @@ export const rentalOrderApi = {
   // Cập nhật trạng thái đơn hàng (Admin/Staff only)
   // Status enum: Pending=0, DocumentsSubmitted=1, DepositPending=2, Confirmed=3, 
   // Renting=4, Returned=5, PaymentPending=6, Cancelled=7, Completed=8
+  // Note: Backend endpoint này có thể không tồn tại, cần kiểm tra backend
   updateStatus: (orderId: number, status: number) => {
     return apiCall<RentalOrderData>('/RentalOrder/UpdateStatus', {
       method: 'PUT',
