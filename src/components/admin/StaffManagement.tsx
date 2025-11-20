@@ -115,7 +115,7 @@ export default function StaffManagement() {
     return list.map((u: any) => {
       const existing = u.rentalLocation || u.RentalLocation;
       if (existing && (existing.name || existing.Name)) return u;
-      const id = Number(u.rentalLocationId || u.locationId || u.RentalLocationId || u.LocationId || 0);
+      const id = Number(u.RentalLocationId || u.LocationId || u.rentalLocationId || u.locationId || 0);
       const loc = id ? locMap[id] : undefined;
       if (loc) {
         return { ...u, rentalLocation: loc };
@@ -142,8 +142,8 @@ export default function StaffManagement() {
           address: u.address,
           dateOfBirth: u.dateOfBirth ?? u.dob,
           avatar: u.avatar,
-          locationId: u.locationId ?? u.rentalLocationId ?? u.LocationId ?? u.RentalLocationId,
-          rentalLocationId: u.rentalLocationId ?? u.locationId ?? u.RentalLocationId ?? u.LocationId,
+          locationId: u.RentalLocationId ?? u.LocationId ?? u.rentalLocationId ?? u.locationId,
+          rentalLocationId: u.RentalLocationId ?? u.LocationId ?? u.rentalLocationId ?? u.locationId,
           rentalLocation: u.rentalLocation ?? u.RentalLocation ?? null,
           createdAt: u.createdAt,
           updatedAt: u.updatedAt,
@@ -205,8 +205,8 @@ export default function StaffManagement() {
           address: u.address,
           dateOfBirth: u.dateOfBirth ?? u.dob,
           avatar: u.avatar,
-          locationId: u.locationId ?? u.rentalLocationId ?? u.LocationId ?? u.RentalLocationId,
-          rentalLocationId: u.rentalLocationId ?? u.locationId ?? u.RentalLocationId ?? u.LocationId,
+          locationId: u.RentalLocationId ?? u.LocationId ?? u.rentalLocationId ?? u.locationId,
+          rentalLocationId: u.RentalLocationId ?? u.LocationId ?? u.rentalLocationId ?? u.locationId,
           rentalLocation: u.rentalLocation ?? u.RentalLocation ?? null,
           createdAt: u.createdAt,
         })) as User[];
@@ -301,8 +301,8 @@ export default function StaffManagement() {
       title: "Điểm thuê",
       key: "location",
       sorter: (a: any, b: any) => {
-        const aId = Number(a.locationId || a.rentalLocationId || 0);
-        const bId = Number(b.locationId || b.rentalLocationId || 0);
+        const aId = Number((a as any).RentalLocationId || (a as any).LocationId || a.rentalLocationId || a.locationId || 0);
+        const bId = Number((b as any).RentalLocationId || (b as any).LocationId || b.rentalLocationId || b.locationId || 0);
         const locA = locationMap[aId]?.name || "";
         const locB = locationMap[bId]?.name || "";
         return locA.localeCompare(locB);
@@ -310,7 +310,7 @@ export default function StaffManagement() {
       render: (_: any, record: any) => {
         // Ưu tiên sử dụng rentalLocation navigation property nếu có
         const location = (record as any).rentalLocation || (record as any).RentalLocation;
-        const locationId = record.rentalLocationId || record.locationId || (record as any).RentalLocationId || (record as any).LocationId;
+        const locationId = (record as any).RentalLocationId || (record as any).LocationId || record.rentalLocationId || record.locationId;
         
         if (location) {
           return (
@@ -338,9 +338,7 @@ export default function StaffManagement() {
                 {locationFromMap.address && (
                   <div style={{ fontSize: 12, color: "#8c8c8c" }}>{locationFromMap.address}</div>
                 )}
-                <Tag color="default" style={{ marginTop: 4 }}>
-                  ID: {idNum}
-                </Tag>
+               
               </div>
             </Space>
           );
