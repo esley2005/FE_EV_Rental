@@ -650,37 +650,43 @@ export interface FeedbackData {
   carId?: number;
 }
 
+export interface CreateFeedbackData {
+  title: string;
+  content: string;
+  userId: number;
+  rentalOrderId: number;
+}
+
+export interface UpdateFeedbackData {
+  id: number;
+  title: string;
+  content: string;
+}
+
 export const feedbackApi = {
   // Lấy tất cả feedback
   getAll: () =>
-    apiCall<{ $values: FeedbackData[] }>("/Feedback/GetAll", {
+    apiCall<FeedbackData[] | { $values: FeedbackData[] }>("/Feedback/GetAll", {
       method: "GET",
       skipAuth: true, // Nếu public, không cần token
     }),
 
   // Lấy feedback theo ID
-  getById: async (id: number) => {
-    const res = await feedbackApi.getAll();
-    if (res.success && res.data?.$values) {
-      const fb = res.data.$values.find((f) => f.id === id);
-      if (fb) {
-        return { success: true, data: fb };
-      } else {
-        return { success: false, error: "Feedback not found" };
-      }
-    }
-    return res;
-  },
+  getById: (id: number) =>
+    apiCall<FeedbackData>(`/Feedback/${id}`, {
+      method: "GET",
+      skipAuth: true,
+    }),
 
   // Tạo feedback mới
-  create: (feedback: Partial<FeedbackData>) =>
+  create: (feedback: CreateFeedbackData) =>
     apiCall<FeedbackData>("/Feedback/Create", {
       method: "POST",
       body: JSON.stringify(feedback),
     }),
 
   // Cập nhật feedback
-  update: (feedback: Partial<FeedbackData>) =>
+  update: (feedback: UpdateFeedbackData) =>
     apiCall<FeedbackData>("/Feedback/Update", {
       method: "PUT",
       body: JSON.stringify(feedback),

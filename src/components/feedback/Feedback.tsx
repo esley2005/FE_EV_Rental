@@ -1,7 +1,20 @@
 // components/Feedback.tsx
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState, useCallback } from "react";
 import { apiCall, feedbackApi } from "@/services/api";
 import { authUtils } from "@/utils/auth";
+import { 
+  Star, 
+  MessageSquare, 
+  Send, 
+  Edit2, 
+  Trash2, 
+  User, 
+  Clock, 
+  Sparkles,
+  CheckCircle2,
+  XCircle,
+  Loader2
+} from "lucide-react";
 
 export interface FeedbackItem {
   id: number;
@@ -22,6 +35,23 @@ interface FeedbackProps {
   createRentalOrderId?: number;
 }
 
+// Helper function to calculate time ago
+const getTimeAgo = (date: Date): string => {
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  
+  if (diffInSeconds < 60) return "Vừa xong";
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} phút trước`;
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} giờ trước`;
+  if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)} ngày trước`;
+  
+  return date.toLocaleDateString("vi-VN", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+};
+
 export default function Feedback({
   rentalOrderId,
   userId,
@@ -33,6 +63,7 @@ export default function Feedback({
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [currentRole, setCurrentRole] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [currentUserName, setCurrentUserName] = useState<string>("Bạn");
   const [editingFeedbackId, setEditingFeedbackId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<{ title: string; content: string }>({
@@ -47,11 +78,123 @@ export default function Feedback({
   });
 
   const canQueryByRentalOrder = useMemo(() => Boolean(rentalOrderId && userId), [rentalOrderId, userId]);
+  
+  // Admin và Staff có thể quản lý tất cả feedbacks
   const canManageFeedback = useMemo(() => {
     if (!currentRole) return false;
     const role = currentRole.toLowerCase();
     return role === "admin" || role === "staff";
   }, [currentRole]);
+
+  // Kiểm tra xem user có thể edit feedback này không (admin/staff hoặc chính chủ sở hữu)
+  const canEditFeedback = useCallback((feedback: FeedbackItem) => {
+    // Admin/Staff có thể edit tất cả
+    if (canManageFeedback) return true;
+    
+    // Nếu không có currentUserId thì không thể edit (trừ khi là admin/staff)
+    if (!currentUserId) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Feedback] canEditFeedback: No currentUserId');
+      }
+      return false;
+    }
+    
+    // Lấy userId từ feedback (thử nhiều field names)
+    const feedbackUserId = feedback.userId ?? (feedback as any).UserId ?? (feedback as any).user?.id ?? (feedback as any).user?.Id ?? null;
+    
+    // Nếu không có feedbackUserId, nhưng user đang đăng nhập và là Customer
+    // Cho phép hiển thị nút (backend sẽ kiểm tra quyền)
+    // Hoặc có thể dựa vào rentalOrderId nếu có
+    if (!feedbackUserId) {
+      // Fallback: Nếu có rentalOrderId và createRentalOrderId khớp, có thể là feedback của user
+      if (feedback.rentalOrderId && createRentalOrderId && feedback.rentalOrderId === createRentalOrderId) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[Feedback] canEditFeedback: Using rentalOrderId fallback', {
+            feedbackRentalOrderId: feedback.rentalOrderId,
+            createRentalOrderId
+          });
+        }
+        return true;
+      }
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Feedback] canEditFeedback: No feedbackUserId and no rentalOrderId match', feedback);
+      }
+      return false;
+    }
+    
+    // So sánh userId
+    const canEdit = Number(feedbackUserId) === Number(currentUserId);
+    
+    // Debug log
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Feedback] canEditFeedback check:', {
+        feedbackId: feedback.id,
+        feedbackUserId,
+        currentUserId,
+        canEdit,
+        canManageFeedback,
+        feedback: feedback
+      });
+    }
+    
+    return canEdit;
+  }, [canManageFeedback, currentUserId, createRentalOrderId]);
+
+  // Kiểm tra xem user có thể delete feedback này không (admin/staff hoặc chính chủ sở hữu)
+  const canDeleteFeedback = useCallback((feedback: FeedbackItem) => {
+    // Admin/Staff có thể delete tất cả
+    if (canManageFeedback) return true;
+    
+    // Nếu không có currentUserId thì không thể delete
+    if (!currentUserId) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Feedback] canDeleteFeedback: No currentUserId');
+      }
+      return false;
+    }
+    
+    // Lấy userId từ feedback (thử nhiều field names)
+    const feedbackUserId = feedback.userId ?? (feedback as any).UserId ?? (feedback as any).user?.id ?? (feedback as any).user?.Id ?? null;
+    
+    // Nếu không có feedbackUserId, nhưng user đang đăng nhập và là Customer
+    // Cho phép hiển thị nút (backend sẽ kiểm tra quyền)
+    // Hoặc có thể dựa vào rentalOrderId nếu có
+    if (!feedbackUserId) {
+      // Fallback: Nếu có rentalOrderId và createRentalOrderId khớp, có thể là feedback của user
+      if (feedback.rentalOrderId && createRentalOrderId && feedback.rentalOrderId === createRentalOrderId) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[Feedback] canDeleteFeedback: Using rentalOrderId fallback', {
+            feedbackRentalOrderId: feedback.rentalOrderId,
+            createRentalOrderId
+          });
+        }
+        return true;
+      }
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Feedback] canDeleteFeedback: No feedbackUserId and no rentalOrderId match', feedback);
+      }
+      return false;
+    }
+    
+    // So sánh userId
+    const canDelete = Number(feedbackUserId) === Number(currentUserId);
+    
+    // Debug log
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Feedback] canDeleteFeedback check:', {
+        feedbackId: feedback.id,
+        feedbackUserId,
+        currentUserId,
+        canDelete,
+        canManageFeedback,
+        feedback: feedback
+      });
+    }
+    
+    return canDelete;
+  }, [canManageFeedback, currentUserId, createRentalOrderId]);
   const canSubmitFeedback = useMemo(() => {
     return Boolean(
       allowCreate &&
@@ -66,8 +209,20 @@ export default function Feedback({
   useEffect(() => {
     const user = authUtils.getCurrentUser();
     setCurrentRole(user?.role ?? null);
+    // Try multiple possible field names for user ID
+    const userId = user?.id ?? user?.Id ?? user?.userId ?? user?.UserId ?? null;
+    setCurrentUserId(userId ? Number(userId) : null);
     const fullName = user?.fullName || user?.FullName || user?.email || "Bạn";
     setCurrentUserName(fullName);
+    
+    // Debug log
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Feedback] Current user:', { 
+        id: userId, 
+        role: user?.role, 
+        fullName 
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -78,30 +233,52 @@ export default function Feedback({
         let items: FeedbackItem[] = [];
 
         if (canQueryByRentalOrder && rentalOrderId && userId) {
-          const res = await apiCall<{ $values: FeedbackItem[] }>(
+          const res = await apiCall<FeedbackItem[] | { $values: FeedbackItem[] }>(
             `/Feedback/GetAll?rentalOrderId=${rentalOrderId}&userId=${userId}`,
             { skipAuth: false }
           );
 
-          if (res.success) {
-            items = ((res.data as any)?.$values ?? []) as FeedbackItem[];
+          if (res.success && res.data) {
+            const raw = res.data as any;
+            items = Array.isArray(raw) ? raw : (raw?.$values ?? []);
           } else {
             throw new Error(res.error || "Không thể tải phản hồi.");
           }
         } else {
           const res = await feedbackApi.getAll();
-          if (res.success) {
-            items = ((res.data as any)?.$values ?? []) as FeedbackItem[];
+          if (res.success && res.data) {
+            const raw = res.data as any;
+            items = Array.isArray(raw) ? raw : (raw?.$values ?? []);
           } else {
             throw new Error(res.error || "Không thể tải phản hồi.");
           }
         }
 
-        if (carId) {
-          items = items.filter(
-            (f: any) => f?.carId === carId || f?.CarId === carId || f?.rentalOrderId === carId
-          );
+        // Normalize feedback items - map userId từ nhiều nguồn có thể
+        items = items.map((item: any) => ({
+          ...item,
+          userId: item.userId ?? item.UserId ?? item.user?.id ?? item.user?.Id ?? null,
+        }));
+
+        // Debug log để kiểm tra
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[Feedback] Loaded feedbacks:', items.map(f => ({
+            id: f.id,
+            title: f.title,
+            userId: f.userId,
+            userFullName: f.userFullName,
+            rentalOrderId: f.rentalOrderId
+          })));
         }
+
+        // Note: FeedbackDTO doesn't have carId, so we can't filter by carId directly
+        // Feedbacks are linked to rentalOrderId, and rentalOrders are linked to carId
+        // If carId is provided, we would need to fetch rentalOrders for this car and filter feedbacks by those rentalOrderIds
+        // For now, we'll show all feedbacks. Backend may handle filtering if carId is passed as query param
+        // If you need to filter by carId, you'll need to:
+        // 1. Fetch all rentalOrders for this car
+        // 2. Extract rentalOrderIds
+        // 3. Filter feedbacks where rentalOrderId matches
 
         setFeedbacks(items);
       } catch (err: any) {
@@ -182,7 +359,7 @@ export default function Feedback({
 
   const handleCreate = async (event?: FormEvent) => {
     event?.preventDefault();
-    if (!canSubmitFeedback || !userId || !createRentalOrderId || !carId) return;
+    if (!canSubmitFeedback || !userId || !createRentalOrderId) return;
 
     setCreateLoading(true);
     setError(null);
@@ -192,7 +369,6 @@ export default function Feedback({
         content: newFeedback.content.trim(),
         rentalOrderId: createRentalOrderId,
         userId,
-        carId,
       };
       const res = await feedbackApi.create(payload);
 
@@ -204,7 +380,7 @@ export default function Feedback({
           title: payload.title,
           content: payload.content,
           rentalOrderId: payload.rentalOrderId,
-          carId: payload.carId,
+          carId: carId,
           userId: payload.userId,
           createdAt: new Date().toISOString(),
           userFullName: currentUserName,
@@ -219,65 +395,114 @@ export default function Feedback({
     }
   };
 
-  if (loading) return <p>Đang tải phản hồi...</p>;
-  if (error) return <p className="text-red-500">{error}</p>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+          <p className="text-gray-500 text-sm">Đang tải đánh giá...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+        <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+        <p className="text-red-700 text-sm">{error}</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {allowCreate && createRentalOrderId && userId && carId && (
         <form
           onSubmit={handleCreate}
-          className="border border-dashed border-blue-300 rounded-lg p-4 bg-blue-50/40 space-y-3"
+          className="relative overflow-hidden bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 border-2 border-blue-200 rounded-xl p-6 space-y-4 shadow-lg hover:shadow-xl transition-all duration-300"
         >
-          <h3 className="font-semibold text-gray-900">Để lại đánh giá của bạn</h3>
-          <p className="text-sm text-gray-500">
-            Chỉ khách hàng đã thuê xe mới có thể gửi đánh giá. Đánh giá của bạn giúp chúng tôi cải thiện dịch vụ.
-          </p>
-          <input
-            type="text"
-            className="w-full border rounded px-3 py-2 text-sm"
-            placeholder="Tiêu đề"
-            value={newFeedback.title}
-            onChange={(e) => setNewFeedback((prev) => ({ ...prev, title: e.target.value }))}
-          />
-          <textarea
-            className="w-full border rounded px-3 py-2 text-sm min-h-[120px]"
-            placeholder="Chia sẻ thêm về trải nghiệm của bạn..."
-            value={newFeedback.content}
-            onChange={(e) => setNewFeedback((prev) => ({ ...prev, content: e.target.value }))}
-          />
-          <div className="flex items-center justify-end gap-3">
-            <button
-              type="submit"
-              className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium disabled:opacity-60"
-              disabled={!canSubmitFeedback || createLoading}
-            >
-              {createLoading ? "Đang gửi..." : "Gửi đánh giá"}
-            </button>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-400/20 to-purple-400/20 rounded-full blur-2xl"></div>
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="w-5 h-5 text-blue-600" />
+              <h3 className="font-bold text-lg text-gray-900">Để lại đánh giá của bạn</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              Chỉ khách hàng đã thuê xe mới có thể gửi đánh giá. Đánh giá của bạn giúp chúng tôi cải thiện dịch vụ.
+            </p>
+            <input
+              type="text"
+              className="w-full border-2 border-blue-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white"
+              placeholder="Tiêu đề đánh giá..."
+              value={newFeedback.title}
+              onChange={(e) => setNewFeedback((prev) => ({ ...prev, title: e.target.value }))}
+            />
+            <textarea
+              className="w-full border-2 border-blue-200 rounded-lg px-4 py-3 text-sm min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none bg-white"
+              placeholder="Chia sẻ thêm về trải nghiệm của bạn..."
+              value={newFeedback.content}
+              onChange={(e) => setNewFeedback((prev) => ({ ...prev, content: e.target.value }))}
+            />
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="submit"
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg px-6 py-2.5 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105"
+                disabled={!canSubmitFeedback || createLoading}
+              >
+                {createLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Đang gửi...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    Gửi đánh giá
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       )}
 
-      {feedbacks.length === 0 && <p>Chưa có phản hồi nào.</p>}
+      {feedbacks.length === 0 && (
+        <div className="text-center py-12 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border-2 border-dashed border-gray-300">
+          <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+          <p className="text-gray-500 font-medium">Chưa có đánh giá nào</p>
+          <p className="text-gray-400 text-sm mt-1">Hãy là người đầu tiên đánh giá!</p>
+        </div>
+      )}
 
-      {feedbacks.map((f) => {
+      {feedbacks.map((f, index) => {
         const isEditing = editingFeedbackId === f.id;
+        const createdDate = new Date(f.createdAt);
+        const timeAgo = getTimeAgo(createdDate);
 
         return (
-          <div key={f.id} className="border p-4 rounded shadow-sm">
+          <div
+            key={f.id}
+            className="group relative bg-white border-2 border-gray-200 rounded-xl p-6 shadow-md hover:shadow-xl transition-all duration-300 hover:border-blue-300 overflow-hidden opacity-0 animate-[fadeInUp_0.5s_ease-out_forwards]"
+            style={{
+              animationDelay: `${index * 100}ms`
+            }}
+          >
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500"></div>
+            
             <div className="flex flex-col md:flex-row md:items-start gap-4">
               <div className="flex-1">
                 {isEditing ? (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     <input
                       type="text"
-                      className="w-full border rounded px-3 py-2 text-sm"
+                      className="w-full border-2 border-blue-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50"
                       value={editForm.title}
                       onChange={(e) => setEditForm((prev) => ({ ...prev, title: e.target.value }))}
                       placeholder="Tiêu đề phản hồi"
                     />
                     <textarea
-                      className="w-full border rounded px-3 py-2 text-sm min-h-[100px]"
+                      className="w-full border-2 border-blue-200 rounded-lg px-4 py-2.5 text-sm min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none bg-gray-50"
                       value={editForm.content}
                       onChange={(e) => setEditForm((prev) => ({ ...prev, content: e.target.value }))}
                       placeholder="Nội dung phản hồi"
@@ -285,50 +510,83 @@ export default function Feedback({
                   </div>
                 ) : (
                   <>
-                    <h3 className="font-semibold text-gray-900">{f.title}</h3>
-                    <p className="text-gray-700 whitespace-pre-line">{f.content}</p>
+                    <div className="flex items-start gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-md">
+                        <User className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-bold text-lg text-gray-900 mb-1">{f.title}</h3>
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <span className="font-medium text-gray-700">{f.userFullName}</span>
+                          <span>•</span>
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>{timeAgo}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="ml-13">
+                      <p className="text-gray-700 whitespace-pre-line leading-relaxed bg-gray-50 rounded-lg p-4 border-l-4 border-blue-500">
+                        {f.content}
+                      </p>
+                    </div>
                   </>
                 )}
-                <p className="text-sm text-gray-500 mt-2">
-                  Bởi {f.userFullName} • {new Date(f.createdAt).toLocaleString()}
-                </p>
               </div>
 
-              {canManageFeedback && (
-                <div className="flex md:flex-col gap-2 min-w-[140px] text-sm">
+              {/* Hiển thị nút edit/delete cho admin/staff hoặc chủ sở hữu feedback */}
+              {(canEditFeedback(f) || canDeleteFeedback(f)) && (
+                <div className="flex md:flex-col gap-2 min-w-[140px]">
                   {isEditing ? (
                     <>
                       <button
-                        className="bg-blue-600 text-white rounded px-3 py-1.5 disabled:opacity-60"
+                        className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105"
                         onClick={handleUpdate}
                         disabled={actionLoading}
                       >
-                        Lưu
+                        {actionLoading ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <>
+                            <CheckCircle2 className="w-4 h-4" />
+                            Lưu
+                          </>
+                        )}
                       </button>
                       <button
-                        className="border border-gray-300 rounded px-3 py-1.5"
+                        className="border-2 border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg px-4 py-2 text-sm font-semibold hover:bg-gray-50 transition-all duration-200 flex items-center justify-center gap-2"
                         onClick={cancelEditing}
                         disabled={actionLoading}
                       >
+                        <XCircle className="w-4 h-4" />
                         Hủy
                       </button>
                     </>
                   ) : (
                     <>
-                      <button
-                        className="border border-blue-600 text-blue-600 rounded px-3 py-1.5"
-                        onClick={() => startEditing(f)}
-                        disabled={actionLoading}
-                      >
-                        Chỉnh sửa
-                      </button>
-                      <button
-                        className="border border-red-500 text-red-500 rounded px-3 py-1.5"
-                        onClick={() => handleDelete(f.id)}
-                        disabled={actionLoading}
-                      >
-                        Xóa
-                      </button>
+                      {/* Nút Sửa - hiển thị cho admin/staff hoặc chủ sở hữu */}
+                      {canEditFeedback(f) && (
+                        <button
+                          className="border-2 border-blue-500 hover:bg-blue-50 text-blue-600 rounded-lg px-4 py-2 text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 hover:shadow-md transform hover:scale-105"
+                          onClick={() => startEditing(f)}
+                          disabled={actionLoading}
+                        >
+                          <Edit2 className="w-4 h-4" />
+                          Sửa
+                        </button>
+                      )}
+                      {/* Nút Xóa - hiển thị cho admin/staff hoặc chủ sở hữu */}
+                      {canDeleteFeedback(f) && (
+                        <button
+                          className="border-2 border-red-500 hover:bg-red-50 text-red-600 rounded-lg px-4 py-2 text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 hover:shadow-md transform hover:scale-105"
+                          onClick={() => handleDelete(f.id)}
+                          disabled={actionLoading}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Xóa
+                        </button>
+                      )}
                     </>
                   )}
                 </div>
