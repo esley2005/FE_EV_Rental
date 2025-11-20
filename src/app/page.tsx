@@ -3,13 +3,8 @@ import Header from "@/components/Header";
 import HeroSection from "@/components/HeroSection";
 import CarsSection from "@/components/home/CarsSection";
 import Footer from "@/components/Footer";
-<<<<<<< HEAD
 import ChatBox from "@/components/chat/ChatBox";
-import Feedback from "@/components/Feedback";
-=======
-import ChatBox from "@/components/chat/ChatBox"; // 👈 Thêm dòng này
 
->>>>>>> 9bd09968425a35777277d105be02eb6fa08bb599
 export default function Home() {
 
   return (

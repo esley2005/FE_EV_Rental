@@ -291,31 +291,7 @@ export default function CustomerManagement() {
         </Space>
       ),
     },
-    {
-      title: "Điểm thuê",
-      key: "rentalLocation",
-      render: (_: any, record: User) => {
-        const location = record.rentalLocation;
-        const locationId = record.rentalLocationId || record.locationId;
-        if (location) {
-          return (
-            <Space>
-              <EnvironmentOutlined style={{ color: "#52c41a" }} />
-              <div>
-                <div style={{ fontWeight: 500 }}>{location.name}</div>
-                {location.address && (
-                  <div style={{ fontSize: 12, color: "#8c8c8c" }}>{location.address}</div>
-                )}
-              </div>
-            </Space>
-          );
-        }
-        if (locationId) {
-          return <Tag color="default">ID: {locationId}</Tag>;
-        }
-        return <Tag color="default">Chưa có</Tag>;
-      },
-    },
+  
     {
       title: "Ngày tạo",
       dataIndex: "createdAt",
