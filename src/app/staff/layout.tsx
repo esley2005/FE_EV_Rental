@@ -31,6 +31,7 @@ import DeliveryForm from "@/components/DeliveryForm";
 import ReturnForm from "@/components/ReturnForm";
 import DocumentVerification from "@/components/DocumentVerification";
 import RentalOrderManagement from "@/components/staff/RentalOrderManagement";
+import CarManagement from "@/components/admin/CarManagement";
 import { authUtils } from "@/utils/auth";
 import { carsApi as carsApiWrapped, bookingsApi as bookingsApiWrapped, rentalOrderApi, type ApiResponse } from "@/services/api";
 import { useRouter } from "next/navigation"; 
@@ -328,7 +329,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           />
 
           {/* ElaAdmin-like top summary cards */}
-          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          {/* <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
             <Col xs={24} sm={12} md={6}>
               <Card variant="outlined" hoverable loading={metricsLoading}>
                 <Statistic title="Doanh thu" prefix={<span>₫</span>} value={metrics.revenue} precision={0} />
@@ -349,7 +350,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
                 <Statistic title="Khách hàng" value={metrics.clients} />
               </Card>
             </Col>
-          </Row>
+          </Row> */}
 
           {/* Đã bỏ các khối Lưu lượng và Chỉ số theo yêu cầu */}
 
@@ -389,10 +390,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               />
             ) : selectedModule === "vehicles" ? (
               selectedSubMenu === "1" ? (
-                <div>
-                  <p className="text-gray-600 mb-4">Danh sách xe tại điểm thuê</p>
-                  <p className="text-sm text-gray-500">Tính năng đang được phát triển...</p>
-                </div>
+                <CarManagement staffMode={true} />
               ) : selectedSubMenu === "2" ? (
                 <p>Trang theo dõi trạng thái pin & kỹ thuật</p>
               ) : (
