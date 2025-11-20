@@ -1374,7 +1374,7 @@ export default function RentalOrderManagement() {
         footer={null}
         width={800}
       >
-        {selectedLicense && (
+        {selectedLicense ? (
           <Form
             form={updateLicenseForm}
             layout="vertical"
@@ -1455,6 +1455,8 @@ export default function RentalOrderManagement() {
               </Space>
             </Form.Item>
           </Form>
+        ) : (
+          <div className="text-center py-4 text-gray-500">Đang tải thông tin...</div>
         )}
       </Modal>
 
@@ -1472,7 +1474,7 @@ export default function RentalOrderManagement() {
         footer={null}
         width={800}
       >
-        {selectedCitizenId && (
+        {selectedCitizenId ? (
           <Form
             form={updateCitizenIdForm}
             layout="vertical"
@@ -1560,6 +1562,8 @@ export default function RentalOrderManagement() {
               </Space>
             </Form.Item>
           </Form>
+        ) : (
+          <div className="text-center py-4 text-gray-500">Đang tải thông tin...</div>
         )}
       </Modal>
 

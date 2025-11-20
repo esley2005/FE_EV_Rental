@@ -14,11 +14,6 @@ export const formatDateTime = (dateStr?: string | null, format: string = "DD/MM/
   if (!dateStr) return "-";
   
   try {
-    // Debug: log date string để kiểm tra format
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[formatDateTime] Input:', dateStr);
-    }
-    
     let date: dayjs.Dayjs;
     
     // Kiểm tra xem date string có phải UTC không
@@ -27,51 +22,56 @@ export const formatDateTime = (dateStr?: string | null, format: string = "DD/MM/
     
     if (isUTC || isISOWithoutTZ) {
       // Backend trả về UTC, cần convert sang UTC+7
-      // Parse UTC string và lấy UTC timestamp trực tiếp
-      let utcTimestamp: number;
-      
+      // Parse UTC string và extract components
+      let cleanDateStr = dateStr;
       if (dateStr.includes("Z")) {
-        // Parse UTC string (ví dụ: "2025-01-15T10:30:00Z")
-        // new Date() với "Z" sẽ parse đúng UTC, getTime() trả về UTC timestamp
-        utcTimestamp = new Date(dateStr).getTime();
+        cleanDateStr = dateStr.replace("Z", "");
       } else if (dateStr.includes("+00:00")) {
-        // Parse UTC string với +00:00
-        utcTimestamp = new Date(dateStr).getTime();
-      } else {
-        // ISO format không có timezone, giả định là UTC
-        utcTimestamp = new Date(dateStr + "Z").getTime();
+        cleanDateStr = dateStr.replace("+00:00", "");
       }
       
-      // Thêm 7 giờ (7 * 60 * 60 * 1000 milliseconds) để convert sang UTC+7
-      const vietnamTimestamp = utcTimestamp + (VIETNAM_UTC_OFFSET * 60 * 60 * 1000);
-      
-      // Tạo dayjs object từ timestamp
-      // Timestamp là absolute value, không phụ thuộc timezone
-      // Khi format, dayjs sẽ format theo local timezone của browser
-      // Vì chúng ta đã thêm 7 giờ vào UTC timestamp, nên cần format như UTC+7
-      // Nhưng dayjs không có timezone plugin, nên sẽ format theo local timezone
-      // Giải pháp: tạo Date object từ timestamp và format
-      date = dayjs(new Date(vietnamTimestamp));
+      // Parse ISO string để lấy components
+      const match = cleanDateStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d+)?$/);
+      if (match) {
+        const [, year, month, day, hour, minute, second] = match;
+        // Parse UTC components
+        let utcHour = parseInt(hour, 10);
+        let utcMinute = parseInt(minute, 10);
+        let utcDay = parseInt(day, 10);
+        let utcMonth = parseInt(month, 10) - 1; // month is 0-indexed in Date
+        let utcYear = parseInt(year, 10);
+        
+        // Thêm 7 giờ để convert sang UTC+7
+        utcHour += VIETNAM_UTC_OFFSET;
+        
+        // Xử lý overflow (nếu giờ >= 24, chuyển sang ngày hôm sau)
+        if (utcHour >= 24) {
+          utcHour -= 24;
+          utcDay += 1;
+        }
+        
+        // Tạo date object với UTC+7 time
+        // Sử dụng Date constructor với local time (không phải UTC) để format đúng
+        date = dayjs(new Date(utcYear, utcMonth, utcDay, utcHour, utcMinute, parseInt(second || "0", 10)));
+      } else {
+        // Fallback: dùng cách cũ với timestamp
+        const utcTimestamp = new Date(dateStr.includes("Z") ? dateStr : dateStr + "Z").getTime();
+        const vietnamTimestamp = utcTimestamp + (VIETNAM_UTC_OFFSET * 60 * 60 * 1000);
+        date = dayjs(vietnamTimestamp);
+      }
     } 
     // Nếu đã có timezone khác (ví dụ: +07:00), dayjs sẽ tự động parse đúng
-    else if (dateStr.includes("+") || dateStr.includes("-", 10)) {
+    else if (dateStr.match(/[+-]\d{2}:\d{2}$/)) {
       // Có timezone indicator, dayjs sẽ parse đúng
       date = dayjs(dateStr);
     }
-    // Nếu không có timezone info, giả định đã là local time (hoặc UTC+7)
+    // Nếu không có timezone info, giả định đã là local time (UTC+7)
     else {
       // Parse như local time (có thể backend đã trả về local time rồi)
       date = dayjs(dateStr);
     }
     
-    const result = date.format(format);
-    
-    // Debug: log kết quả
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[formatDateTime] Output:', result, '| Original UTC:', dateStr.includes("Z") || dateStr.includes("+00:00") || isISOWithoutTZ);
-    }
-    
-    return result;
+    return date.format(format);
   } catch (error) {
     console.error("Error formatting date:", error, dateStr);
     // Fallback: sử dụng format đơn giản với local timezone

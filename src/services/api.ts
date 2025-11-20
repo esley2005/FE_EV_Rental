@@ -150,7 +150,8 @@ export async function apiCall<T>(
 
     // Xử lý 404 Not Found
     if (response.status === 404) {
-  logger.error(`[API] ❌ 404 Not Found: ${url}`);
+      // Chỉ log warning thay vì error để tránh spam console khi thử nhiều endpoint
+      logger.warn(`[API] ⚠️ 404 Not Found: ${endpoint} - endpoint may not exist`);
       return {
         success: false,
         error: `Endpoint not found: ${endpoint}`
@@ -737,6 +738,7 @@ export const authApi = {
   // Lấy tất cả user (khách hàng) từ hệ thống auth
   getAllUsers: async () => {
     const candidates = [
+
       '/User', 
       // '/users', 
       // '/user/all',
@@ -744,37 +746,72 @@ export const authApi = {
       // '/User', '/User/all', 
       // '/User/GetAll', 
       // '/User/List'
+
     ];
+    let lastError: any = null;
+    
     for (const ep of candidates) {
-      const res = await apiCall<any>(ep, { method: 'GET' });
-      const raw = (res as any)?.data ?? res;
-      // Unwrap common server response shapes
-      const data = raw?.data ?? raw; // supports { isSuccess, data } or direct array
-      const values = data?.$values ?? data?.data?.$values; // supports .data.$values
-      const arr = Array.isArray(data)
-        ? data
-        : Array.isArray(values)
-        ? values
-        : Array.isArray((data as any)?.items)
-        ? (data as any).items
-        : null;
-      if (arr) {
-        // Normalize field names to match User type
-        const normalized = (arr as any[]).map((u) => ({
-          id: u.userId ?? u.id,
-          email: u.email,
-          fullName: u.fullName ?? u.name,
-          role: u.role ?? 'Customer',
-          phone: u.phone ?? u.phoneNumber,
-          address: u.address,
-          dateOfBirth: u.dateOfBirth ?? u.dob,
-          avatar: u.avatar,
-          locationId: u.locationId ?? u.rentalLocationId ?? u.LocationId ?? u.RentalLocationId,
-          rentalLocationId: u.rentalLocationId ?? u.locationId ?? u.RentalLocationId ?? u.LocationId,
-        })) as User[];
-        return { success: true, data: normalized } as ApiResponse<User[]>;
+      try {
+        // Sử dụng skipAuth: false để không log lỗi cho mỗi endpoint thử
+        const res = await apiCall<any>(ep, { 
+          method: 'GET',
+          skipAuth: false,
+        });
+        
+        // Kiểm tra nếu response thành công
+        if (res.success || res.data) {
+          const raw = (res as any)?.data ?? res;
+          // Unwrap common server response shapes
+          const data = raw?.data ?? raw; // supports { isSuccess, data } or direct array
+          const values = data?.$values ?? data?.data?.$values; // supports .data.$values
+          const arr = Array.isArray(data)
+            ? data
+            : Array.isArray(values)
+            ? values
+            : Array.isArray((data as any)?.items)
+            ? (data as any).items
+            : null;
+          
+          if (arr && arr.length > 0) {
+            // Normalize field names to match User type
+            const normalized = (arr as any[]).map((u) => ({
+              id: u.userId ?? u.id,
+              email: u.email,
+              fullName: u.fullName ?? u.name,
+              role: u.role ?? 'Customer',
+              phone: u.phone ?? u.phoneNumber,
+              address: u.address,
+              dateOfBirth: u.dateOfBirth ?? u.dob,
+              avatar: u.avatar,
+              locationId: u.locationId ?? u.rentalLocationId ?? u.LocationId ?? u.RentalLocationId,
+              rentalLocationId: u.rentalLocationId ?? u.locationId ?? u.RentalLocationId ?? u.LocationId,
+              isActive: u.isActive ?? u.IsActive ?? false,
+              createdAt: u.createdAt ?? u.CreatedAt,
+              updatedAt: u.updateAt ?? u.UpdateAt ?? u.updatedAt ?? u.UpdatedAt,
+            })) as User[];
+            return { success: true, data: normalized } as ApiResponse<User[]>;
+          }
+        }
+      } catch (error: any) {
+        // Lưu lỗi cuối cùng nhưng không throw, tiếp tục thử endpoint tiếp theo
+        lastError = error;
+        // Chỉ log warning, không log error để tránh spam console
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(`[Auth API] Endpoint ${ep} không khả dụng, thử endpoint tiếp theo...`);
+        }
+        continue;
       }
     }
+    
+    // Nếu tất cả endpoint đều thất bại, trả về lỗi
+    if (lastError) {
+      return { 
+        success: false, 
+        error: 'Không thể tải danh sách người dùng từ bất kỳ endpoint nào.',
+        data: [] 
+      } as ApiResponse<User[]>;
+    }
+    
     return { success: true, data: [] } as ApiResponse<User[]>;
   },
 
@@ -815,6 +852,17 @@ export const authApi = {
     return await apiCall<User>('/User/UpdateCustomerName', {
       method: 'PUT',
       body: JSON.stringify(requestData),
+    });
+  },
+
+  // Cập nhật trạng thái active của user (Admin/Staff only)
+  updateUserActiveStatus: async (userId: number, isActive: boolean) => {
+    return await apiCall<User>('/User/UpdateUserActiveStatus', {
+      method: 'PUT',
+      body: JSON.stringify({
+        userId: userId,
+        isActive: isActive,
+      }),
     });
   },
 

@@ -50,31 +50,119 @@ export default function LoginPage() {
         // Backend có thể trả về PascalCase hoặc camelCase
         const data = response.data as any;
         const token = data.Token || data.token;
-        const userId = data.UserId || data.userId;
-        const role = data.Role || data.role;
-        const fullName = data.FullName || data.fullName;
+        const user = data.user || data.User || data;
+        const userId = user?.userId || user?.UserId || user?.id || user?.Id || data.UserId || data.userId;
+        const role = user?.role || user?.Role || data.Role || data.role;
+        const fullName = user?.fullName || user?.FullName || data.FullName || data.fullName;
         
-        console.log('[Login] Parsed data:', { token, userId, role, fullName });
-        
-        // Lưu token và user info vào localStorage
+        // Lưu token trước để có thể gọi API getProfile
         localStorage.setItem('token', token);
-        localStorage.setItem('user', JSON.stringify({
-          id: userId,
-          role: role,
-          fullName: fullName,
-          email: formData.email
-        }));
+        
+        // Gọi API getProfile để lấy thông tin isActive mới nhất từ backend
+        try {
+          const profileResponse = await authApi.getProfile();
+          if (profileResponse.success && profileResponse.data) {
+            const profileData = profileResponse.data as any;
+            const isActive = profileData.isActive ?? profileData.IsActive;
+            
+            console.log('[Login] Profile data:', { isActive, profileData });
+            
+            // Kiểm tra isActive: nếu false thì không cho đăng nhập
+            if (isActive === false || isActive === "false" || isActive === 0) {
+              // Xóa token vì không cho đăng nhập
+              localStorage.removeItem('token');
+              localStorage.removeItem('user');
+              
+              api.error({
+                message: 'Tài khoản bị khóa',
+                description: 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên để được hỗ trợ.',
+                placement: 'topRight',
+                icon: <XCircle color="#ff4d4f" />,
+                duration: 5,
+              });
+              return;
+            }
+            
+            // Lưu user info với isActive từ profile
+            localStorage.setItem('user', JSON.stringify({
+              ...profileData,
+              id: profileData.id || userId,
+              role: profileData.role || role,
+              fullName: profileData.fullName || fullName,
+              email: profileData.email || formData.email,
+              isActive: isActive !== false
+            }));
+          } else {
+            // Nếu không lấy được profile, sử dụng data từ login response
+            const isActive = user?.isActive ?? user?.IsActive ?? data.isActive ?? data.IsActive;
+            
+            // Kiểm tra isActive từ login response
+            if (isActive === false || isActive === "false" || isActive === 0) {
+              localStorage.removeItem('token');
+              localStorage.removeItem('user');
+              
+              api.error({
+                message: 'Tài khoản bị khóa',
+                description: 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên để được hỗ trợ.',
+                placement: 'topRight',
+                icon: <XCircle color="#ff4d4f" />,
+                duration: 5,
+              });
+              return;
+            }
+            
+            // Lưu user info từ login response
+            localStorage.setItem('user', JSON.stringify({
+              id: userId,
+              role: role,
+              fullName: fullName,
+              email: formData.email,
+              isActive: isActive !== false
+            }));
+          }
+        } catch (profileError) {
+          // Nếu getProfile thất bại, vẫn kiểm tra isActive từ login response
+          console.warn('[Login] Failed to get profile, using login response data:', profileError);
+          const isActive = user?.isActive ?? user?.IsActive ?? data.isActive ?? data.IsActive;
+          
+          if (isActive === false || isActive === "false" || isActive === 0) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            
+            api.error({
+              message: 'Tài khoản bị khóa',
+              description: 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên để được hỗ trợ.',
+              placement: 'topRight',
+              icon: <XCircle color="#ff4d4f" />,
+              duration: 5,
+            });
+            return;
+          }
+          
+          // Lưu user info từ login response
+          localStorage.setItem('user', JSON.stringify({
+            id: userId,
+            role: role,
+            fullName: fullName,
+            email: formData.email,
+            isActive: isActive !== false
+          }));
+        }
+        
+        // Lấy lại user từ localStorage để có thông tin đầy đủ
+        const savedUser = JSON.parse(localStorage.getItem('user') || '{}');
+        const displayName = savedUser.fullName || fullName;
         
         api.success({
           message: 'Đăng nhập thành công!',
-          description: `Xin chào ${fullName}. Chào mừng bạn quay trở lại!`,
+          description: `Xin chào ${displayName}. Chào mừng bạn quay trở lại!`,
           placement: 'topRight',
           icon: <CheckCircle color="#52c41a" />,
           duration: 3,
         });
         
         // Redirect dựa trên role
-        const roleLC = role?.toLowerCase();
+        const roleLC = (savedUser.role || role)?.toLowerCase();
         setTimeout(() => {
           if (roleLC === "admin") {
             router.push("/");
