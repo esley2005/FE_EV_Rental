@@ -415,6 +415,24 @@ export default function BookingPage() {
     try {
       const [pickupTime, expectedReturnTime] = values.dateRange;
       
+      // Lấy thời gian hiện tại khi ấn "Xác nhận" - đây là thời gian đặt đơn hàng
+      // Tạo date string theo format local time (không có Z) để backend lưu đúng local time
+      const now = new Date();
+      // Format: YYYY-MM-DDTHH:mm:ss (local time, không có Z)
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      const orderDateISO = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+      
+      console.log('[Booking] User clicked confirm at:', {
+        now: now.toString(),
+        iso: orderDateISO,
+        local: now.toLocaleString('vi-VN')
+      });
+      
       const orderData: CreateRentalOrderData = {
         phoneNumber: values.phoneNumber,
         pickupTime: pickupTime.toISOString(),
@@ -423,12 +441,30 @@ export default function BookingPage() {
         userId: user.id,
         carId: car.id,
         rentalLocationId: values.rentalLocationId,
+        orderDate: orderDateISO, // Thời gian khi ấn "Xác nhận"
       };
 
       const response = await rentalOrderApi.create(orderData);
 
       if (response.success && response.data) {
         const orderId = (response.data as any).id || (response.data as any).Id;
+        
+        // LUÔN LUÔN cập nhật OrderDate = thời gian khi ấn "Xác nhận"
+        if (orderId && orderId > 0) {
+          console.log('[Booking] Order created successfully. Updating OrderDate to confirm time:', orderDateISO);
+          try {
+            const updateResponse = await rentalOrderApi.updateOrderDate(orderId, orderDateISO);
+            if (updateResponse.success) {
+              console.log('[Booking] OrderDate updated successfully to confirm time:', updateResponse.data?.orderDate || (updateResponse.data as any)?.OrderDate);
+            } else {
+              console.warn('[Booking] Failed to update OrderDate:', updateResponse.error);
+              // Không block flow, nhưng log warning để biết có vấn đề
+            }
+          } catch (updateError) {
+            console.error('[Booking] Error updating OrderDate:', updateError);
+            // Không block flow nếu update OrderDate thất bại
+          }
+        }
         
         // Nếu không có tài xế, tự động chuyển đến trang upload giấy tờ
         if (!withDriverValue) {

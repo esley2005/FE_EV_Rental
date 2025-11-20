@@ -193,8 +193,32 @@ export default function MyBookingsPage() {
         const location = locations.find((l) => l.id === order.rentalLocationId);
         const license = licenses.find((l) => l.rentalOrderId === order.id);
         const citizenIdDoc = citizenIds.find((c) => c.rentalOrderId === order.id);
+        
+        // Tự động cập nhật orderDate = createdAt nếu orderDate là giá trị mặc định
+        const orderId = order.id;
+        const orderDate = order.orderDate || (order as any).OrderDate;
+        const createdAt = order.createdAt || (order as any).CreatedAt;
+        
+        // Kiểm tra nếu orderDate là giá trị mặc định (0001-01-01 hoặc 1901-01-01)
+        const isDefaultDate = !orderDate || 
+                             orderDate === '0001-01-01T00:00:00' || 
+                             orderDate === '1901-01-01T00:00:00' ||
+                             orderDate.includes('0001-01-01') ||
+                             orderDate.includes('1901-01-01');
+        
+        // Tự động cập nhật OrderDate = createdAt trong background (không block UI)
+        if (orderId && isDefaultDate && createdAt) {
+          console.log(`[MyBookings] Auto-updating OrderDate for order ${orderId} to createdAt:`, createdAt);
+          rentalOrderApi.updateOrderDate(orderId, createdAt).catch((error: unknown) => {
+            // Không hiển thị lỗi cho user, chỉ log
+            console.log(`[MyBookings] Failed to auto-update OrderDate for order ${orderId}:`, error);
+          });
+        }
+        
         return {
           ...order,
+          // Nếu orderDate là default, dùng createdAt để hiển thị (tạm thời cho đến khi update thành công)
+          orderDate: isDefaultDate ? createdAt : orderDate,
           car,
           location,
           user,
@@ -319,6 +343,15 @@ export default function MyBookingsPage() {
       return <Tag color="error">Đã từ chối</Tag>;
     }
     return <Tag color="warning">Chờ xác thực</Tag>;
+  };
+
+  // Kiểm tra xem đơn hàng có phải là "mới đặt" không (đơn hàng gần đây nhất)
+  const isNewOrder = (booking: BookingWithDetails): boolean => {
+    // Chỉ hiển thị tag "Mới đặt" cho đơn hàng mới nhất (đơn hàng đầu tiên trong danh sách đã sort)
+    if (filteredBookings.length === 0) return false;
+    
+    const newestBooking = filteredBookings[0];
+    return booking.id === newestBooking.id;
   };
 
   const handleRefreshBooking = async () => {
@@ -537,8 +570,13 @@ export default function MyBookingsPage() {
                             <p className="text-gray-600 text-sm">{carModel}</p>
                             <p className="text-xs text-gray-500 mt-1">Mã đơn: #{booking.id}</p>
                           </div>
-                          <div className="text-right">
+                          <div className="text-right flex flex-col gap-2 items-end">
                             {getStatusTag(booking.status)}
+                            {isNewOrder(booking) && (
+                              <Tag color="green" icon={<CheckCircleOutlined />}>
+                                Mới đặt
+                              </Tag>
+                            )}
                           </div>
                         </div>
 

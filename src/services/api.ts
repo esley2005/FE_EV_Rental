@@ -1147,6 +1147,7 @@ export interface CreateRentalOrderData {
   userId: number;
   carId: number;
   rentalLocationId: number;
+  orderDate?: string; // Thời gian khi ấn "Xác nhận"
 }
 
 export interface RentalOrderData {
@@ -1184,19 +1185,29 @@ export const rentalOrderApi = {
     }),
 
   // Tạo đơn hàng mới
-  create: (orderData: CreateRentalOrderData) =>
-    apiCall<RentalOrderData>('/RentalOrder/Create', {
+  create: (orderData: CreateRentalOrderData) => {
+    // Luôn thêm OrderDate với ngày giờ hiện tại nếu không có
+    const orderDate = orderData.orderDate || new Date().toISOString();
+    
+    const requestBody = {
+      PhoneNumber: orderData.phoneNumber,
+      PickupTime: orderData.pickupTime,
+      ExpectedReturnTime: orderData.expectedReturnTime,
+      WithDriver: orderData.withDriver,
+      UserId: orderData.userId,
+      CarId: orderData.carId,
+      RentalLocationId: orderData.rentalLocationId,
+      OrderDate: orderDate, // Luôn gửi OrderDate
+    };
+    
+    console.log('[RentalOrder API] Creating order with OrderDate:', orderDate);
+    console.log('[RentalOrder API] Full request body:', requestBody);
+    
+    return apiCall<RentalOrderData>('/RentalOrder/Create', {
       method: 'POST',
-      body: JSON.stringify({
-        PhoneNumber: orderData.phoneNumber,
-        PickupTime: orderData.pickupTime,
-        ExpectedReturnTime: orderData.expectedReturnTime,
-        WithDriver: orderData.withDriver,
-        UserId: orderData.userId,
-        CarId: orderData.carId,
-        RentalLocationId: orderData.rentalLocationId,
-      }),
-    }),
+      body: JSON.stringify(requestBody),
+    });
+  },
 
   // Lấy đơn hàng theo ID
   getById: (id: number) =>
@@ -1249,6 +1260,91 @@ export const rentalOrderApi = {
     return apiCall<{ success: boolean; message?: string }>(`/RentalOrder/ConfirmPayment?orderId=${orderId}`, {
       method: 'PUT',
     });
+  },
+
+  // Cập nhật ngày đặt đơn hàng (orderDate = createdAt)
+  // Thử nhiều endpoint và method có thể có
+  updateOrderDate: async (orderId: number, orderDate: string) => {
+    console.log('[RentalOrder API] Attempting to update OrderDate:', { orderId, orderDate });
+    
+    // Thử các endpoint và method khác nhau
+    const attempts = [
+      // 1. PUT /RentalOrder/UpdateOrderDate (endpoint chuyên dụng nếu có)
+      {
+        endpoint: '/RentalOrder/UpdateOrderDate',
+        method: 'PUT',
+        body: { OrderId: orderId, OrderDate: orderDate }
+      },
+      // 2. POST /RentalOrder/UpdateOrderDate
+      {
+        endpoint: '/RentalOrder/UpdateOrderDate',
+        method: 'POST',
+        body: { OrderId: orderId, OrderDate: orderDate }
+      },
+      // 3. PUT /RentalOrder/Update (endpoint update chung)
+      {
+        endpoint: '/RentalOrder/Update',
+        method: 'PUT',
+        body: { OrderId: orderId, OrderDate: orderDate }
+      },
+      // 4. PUT /RentalOrder/Update với Id
+      {
+        endpoint: '/RentalOrder/Update',
+        method: 'PUT',
+        body: { Id: orderId, OrderDate: orderDate }
+      },
+      // 5. PUT /RentalOrder/Update/{orderId}
+      {
+        endpoint: `/RentalOrder/Update/${orderId}`,
+        method: 'PUT',
+        body: { OrderId: orderId, OrderDate: orderDate }
+      },
+      // 6. PUT /RentalOrder/Update/{orderId} với Id thay vì OrderId
+      {
+        endpoint: `/RentalOrder/Update/${orderId}`,
+        method: 'PUT',
+        body: { Id: orderId, OrderDate: orderDate }
+      },
+      // 7. POST /RentalOrder/Update
+      {
+        endpoint: '/RentalOrder/Update',
+        method: 'POST',
+        body: { OrderId: orderId, OrderDate: orderDate }
+      },
+      // 8. POST /RentalOrder/Update/{orderId}
+      {
+        endpoint: `/RentalOrder/Update/${orderId}`,
+        method: 'POST',
+        body: { OrderId: orderId, OrderDate: orderDate }
+      },
+    ];
+    
+    for (const attempt of attempts) {
+      try {
+        console.log(`[RentalOrder API] Trying ${attempt.method} ${attempt.endpoint}...`);
+        const response = await apiCall<RentalOrderData>(attempt.endpoint, {
+          method: attempt.method as 'PUT' | 'POST',
+          body: JSON.stringify(attempt.body),
+        });
+        
+        if (response.success) {
+          console.log(`[RentalOrder API] Successfully updated OrderDate via ${attempt.method} ${attempt.endpoint}`);
+          return response;
+        } else {
+          console.log(`[RentalOrder API] ${attempt.method} ${attempt.endpoint} returned success=false:`, response.error);
+        }
+      } catch (error) {
+        console.log(`[RentalOrder API] ${attempt.method} ${attempt.endpoint} failed:`, error);
+        // Tiếp tục thử endpoint tiếp theo
+      }
+    }
+    
+    // Nếu không có endpoint nào hoạt động, trả về lỗi
+    console.error('[RentalOrder API] All update OrderDate attempts failed');
+    return {
+      success: false,
+      error: 'Không tìm thấy endpoint để cập nhật OrderDate. Vui lòng kiểm tra backend có endpoint UpdateOrderDate hoặc Update/{orderId} không.'
+    };
   },
 
   // Hủy đơn hàng

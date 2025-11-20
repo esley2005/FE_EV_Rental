@@ -7,10 +7,10 @@ const VIETNAM_UTC_OFFSET = 7; // UTC+7 (giờ)
  * Format ngày giờ với timezone Việt Nam (UTC+7)
  * Backend thường trả về UTC, cần convert sang UTC+7
  * @param dateStr - ISO date string từ backend (thường là UTC)
- * @param format - Format string (mặc định: 'DD/MM/YYYY HH:mm')
+ * @param format - Format string (mặc định: 'DD/MM/YYYY')
  * @returns Formatted date string
  */
-export const formatDateTime = (dateStr?: string | null, format: string = "DD/MM/YYYY HH:mm"): string => {
+export const formatDateTime = (dateStr?: string | null, format: string = "DD/MM/YYYY"): string => {
   if (!dateStr) return "-";
   
   try {
@@ -36,10 +36,10 @@ export const formatDateTime = (dateStr?: string | null, format: string = "DD/MM/
         const [, year, month, day, hour, minute, second] = match;
         // Parse UTC components
         let utcHour = parseInt(hour, 10);
-        let utcMinute = parseInt(minute, 10);
+        const utcMinute = parseInt(minute, 10);
         let utcDay = parseInt(day, 10);
-        let utcMonth = parseInt(month, 10) - 1; // month is 0-indexed in Date
-        let utcYear = parseInt(year, 10);
+        const utcMonth = parseInt(month, 10) - 1; // month is 0-indexed in Date
+        const utcYear = parseInt(year, 10);
         
         // Thêm 7 giờ để convert sang UTC+7
         utcHour += VIETNAM_UTC_OFFSET;
@@ -65,10 +65,19 @@ export const formatDateTime = (dateStr?: string | null, format: string = "DD/MM/
       // Có timezone indicator, dayjs sẽ parse đúng
       date = dayjs(dateStr);
     }
-    // Nếu không có timezone info, giả định đã là local time (UTC+7)
+    // Nếu không có timezone info
     else {
-      // Parse như local time (có thể backend đã trả về local time rồi)
-      date = dayjs(dateStr);
+      // Backend có thể trả về UTC nhưng không có Z, hoặc đã là local time
+      // Thử parse như UTC (thêm Z) trước - dayjs sẽ tự động convert sang local timezone
+      const looksLikeISO = dateStr.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+      
+      if (looksLikeISO) {
+        // Parse như UTC (thêm Z) - dayjs sẽ tự động convert sang local timezone của browser
+        date = dayjs(dateStr + 'Z');
+      } else {
+        // Không phải ISO format, parse như local time
+        date = dayjs(dateStr);
+      }
     }
     
     return date.format(format);
