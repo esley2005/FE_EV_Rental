@@ -3,6 +3,17 @@
 import { useState, useEffect, useRef } from "react";
 import { BellOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
+import { 
+  Gift, 
+  Tag, 
+  Sparkles, 
+  TrendingDown, 
+  Calendar,
+  Info,
+  CheckCircle,
+  AlertCircle,
+  XCircle
+} from "lucide-react";
 
 export interface Notification {
   id: string;
@@ -18,14 +29,58 @@ export interface Notification {
 const mockNotifications: Notification[] = [
   {
     id: "1",
+    title: "🎉 Giảm giá đặc biệt hôm nay!",
+    message: "Giảm 30% cho tất cả các dòng xe điện trong ngày hôm nay. Đặt ngay để nhận ưu đãi!",
+    type: "success",
+    read: false,
+    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 giờ trước
+    link: "/cars/all",
+  },
+  {
+    id: "2",
+    title: "🚗 Khuyến mãi cuối tuần",
+    message: "Thuê xe cuối tuần giảm 20% + tặng kèm bảo hiểm miễn phí. Áp dụng từ thứ 6 đến chủ nhật.",
+    type: "success",
+    read: false,
+    createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), // 5 giờ trước
+    link: "/cars/all",
+  },
+  {
+    id: "3",
+    title: "✨ Chương trình khách hàng thân thiết",
+    message: "Tích điểm mỗi lần thuê xe và đổi lấy voucher giảm giá. Tham gia ngay!",
+    type: "info",
+    read: false,
+    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 1 ngày trước
+    link: "/profile",
+  },
+  {
+    id: "4",
     title: "Welcome to EV Rental",
-    message: "Chào mừng bạn đến với EV Rental, bấm vào đây để xem những kinh nghiệm thuê xe hữu ích.",
+    message: "Chào mừng bạn đến với EV Rental! Khám phá bộ sưu tập hơn 1000 xe điện đời mới.",
     type: "info",
     read: false,
     createdAt: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(), // 1 năm trước
     link: "/about",
   },
-  
+  {
+    id: "5",
+    title: "⚡ Xe mới về kho",
+    message: "Nhiều mẫu xe điện mới đã có mặt tại các điểm thuê. Đặt ngay để trải nghiệm!",
+    type: "info",
+    read: true,
+    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 ngày trước
+    link: "/cars/all",
+  },
+  {
+    id: "6",
+    title: "🎁 Ưu đãi sinh nhật",
+    message: "Nhân dịp sinh nhật, bạn được giảm 50% cho đơn thuê đầu tiên trong tháng này!",
+    type: "success",
+    read: true,
+    createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 ngày trước
+    link: "/cars/all",
+  },
 ];
 
 interface NotificationDropdownProps {
@@ -95,30 +150,30 @@ export default function NotificationDropdown({ userId }: NotificationDropdownPro
 
   // Lấy icon theo type
   const getNotificationIcon = (type?: string) => {
-    const baseClasses = "w-10 h-10 rounded-full flex items-center justify-center";
+    const baseClasses = "w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0";
     switch (type) {
       case "success":
         return (
-          <div className={`${baseClasses} bg-green-100`}>
-            <BellOutlined className="text-green-600 text-lg" />
+          <div className={`${baseClasses} bg-gradient-to-br from-green-100 to-emerald-100`}>
+            <Gift className="w-5 h-5 text-green-600" />
           </div>
         );
       case "warning":
         return (
-          <div className={`${baseClasses} bg-yellow-100`}>
-            <BellOutlined className="text-yellow-600 text-lg" />
+          <div className={`${baseClasses} bg-gradient-to-br from-yellow-100 to-amber-100`}>
+            <AlertCircle className="w-5 h-5 text-yellow-600" />
           </div>
         );
       case "error":
         return (
-          <div className={`${baseClasses} bg-red-100`}>
-            <BellOutlined className="text-red-600 text-lg" />
+          <div className={`${baseClasses} bg-gradient-to-br from-red-100 to-rose-100`}>
+            <XCircle className="w-5 h-5 text-red-600" />
           </div>
         );
       default:
         return (
-          <div className={`${baseClasses} bg-green-100`}>
-            <BellOutlined className="text-green-600 text-lg" />
+          <div className={`${baseClasses} bg-gradient-to-br from-blue-100 to-indigo-100`}>
+            <Info className="w-5 h-5 text-blue-600" />
           </div>
         );
     }
@@ -148,10 +203,25 @@ export default function NotificationDropdown({ userId }: NotificationDropdownPro
       {isOpen && (
         <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50">
           {/* Header */}
-          <div className="px-4 py-3 border-b border-gray-200 bg-white">
+          <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-gray-900">Thông báo</h3>
-            
+              <div className="flex items-center gap-2">
+                <BellOutlined className="text-blue-600" />
+                <h3 className="font-bold text-gray-900">Thông báo</h3>
+                {unreadCount > 0 && (
+                  <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                    {unreadCount}
+                  </span>
+                )}
+              </div>
+              {unreadCount > 0 && (
+                <button
+                  onClick={markAllAsRead}
+                  className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  Đánh dấu tất cả đã đọc
+                </button>
+              )}
             </div>
           </div>
 
@@ -160,7 +230,10 @@ export default function NotificationDropdown({ userId }: NotificationDropdownPro
             {/* Mới */}
             {newNotifications.length > 0 && (
               <div className="px-4 pt-3 pb-2">
-                <p className="text-sm font-medium text-gray-700 mb-2">Mới</p>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-1 h-4 bg-gradient-to-b from-blue-500 to-indigo-500 rounded-full"></div>
+                  <p className="text-sm font-bold text-gray-900">Mới</p>
+                </div>
                 <div className="space-y-2">
                   {newNotifications.map((notif) => (
                     <NotificationItem
@@ -180,9 +253,10 @@ export default function NotificationDropdown({ userId }: NotificationDropdownPro
 
             {/* Empty State */}
             {notifications.length === 0 && (
-              <div className="px-4 py-8 text-center">
-                <BellOutlined className="text-4xl text-gray-300 mx-auto mb-2" />
-                <p className="text-gray-500 text-sm">Không có thông báo</p>
+              <div className="px-4 py-12 text-center">
+                <BellOutlined className="text-5xl text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500 text-sm font-medium">Không có thông báo</p>
+                <p className="text-gray-400 text-xs mt-1">Chúng tôi sẽ thông báo khi có cập nhật mới</p>
               </div>
             )}
           </div>
@@ -211,21 +285,34 @@ function NotificationItem({ notification, onRead, formatTime, getIcon }: Notific
   return (
     <div
       onClick={handleClick}
-      className={`p-3 rounded-lg cursor-pointer transition-colors ${
-        !notification.read ? "bg-gray-50 hover:bg-gray-100" : "hover:bg-gray-50"
+      className={`p-4 rounded-xl cursor-pointer transition-all duration-200 ${
+        !notification.read 
+          ? "bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border-l-4 border-blue-500 shadow-sm" 
+          : "bg-gray-50 hover:bg-gray-100 border-l-4 border-transparent"
       }`}
     >
       <div className="flex items-start gap-3">
         {getIcon(notification.type)}
         <div className="flex-1 min-w-0">
-          <h4 className="font-semibold text-gray-900 text-sm mb-1">{notification.title}</h4>
-          <p className="text-xs text-gray-600 leading-relaxed mb-2 line-clamp-2">
+          <h4 className={`font-bold text-sm mb-1 ${
+            !notification.read ? "text-gray-900" : "text-gray-700"
+          }`}>
+            {notification.title}
+          </h4>
+          <p className={`text-xs leading-relaxed mb-2 line-clamp-2 ${
+            !notification.read ? "text-gray-700" : "text-gray-600"
+          }`}>
             {notification.message}
           </p>
-          <p className="text-xs text-gray-400">{formatTime(notification.createdAt)}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-gray-400">{formatTime(notification.createdAt)}</p>
+            {notification.link && (
+              <span className="text-xs text-blue-600 font-medium">Xem thêm →</span>
+            )}
+          </div>
         </div>
         {!notification.read && (
-          <div className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0 mt-2" />
+          <div className="w-2.5 h-2.5 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex-shrink-0 mt-2 animate-pulse" />
         )}
       </div>
     </div>

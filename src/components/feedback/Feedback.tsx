@@ -12,8 +12,7 @@ import {
   Sparkles,
   CheckCircle2,
   XCircle,
-  Loader2,
-  Star
+  Loader2
 } from "lucide-react";
 
 // Helper function to calculate time ago
@@ -81,6 +80,13 @@ export default function Feedback({
     if (!currentRole) return false;
     const role = currentRole.toLowerCase();
     return role === "admin" || role === "staff";
+  }, [currentRole]);
+
+  // Chỉ Customer mới có quyền gửi đánh giá
+  const canCreateFeedback = useMemo(() => {
+    if (!currentRole) return false;
+    const role = currentRole.toLowerCase();
+    return role === "customer";
   }, [currentRole]);
   const canSubmitFeedback = useMemo(() => {
     return Boolean(
@@ -227,7 +233,7 @@ export default function Feedback({
       const res = await feedbackApi.create(payload);
 
       if (res.success && res.data) {
-        setFeedbacks((prev) => [res.data, ...prev]);
+        setFeedbacks((prev) => [res.data as FeedbackItem, ...prev]);
       } else {
         const fallbackItem: FeedbackItem = {
           id: Date.now(),
@@ -271,7 +277,7 @@ export default function Feedback({
 
   return (
     <div className="space-y-6">
-      {allowCreate && createRentalOrderId && userId && carId && (
+      {canCreateFeedback && allowCreate && createRentalOrderId && userId && carId && (
         <form
           onSubmit={handleCreate}
           className="relative overflow-hidden bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 border-2 border-blue-200 rounded-xl p-6 space-y-4 shadow-lg hover:shadow-xl transition-all duration-300"
