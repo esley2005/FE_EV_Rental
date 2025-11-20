@@ -33,6 +33,18 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Kiểm tra độ dài mật khẩu
+    if (formData.password.length <= 6) {
+      api.error({
+        message: "Mật khẩu không hợp lệ",
+        description: "Mật khẩu phải có trên 6 ký tự!",
+        placement: "topRight",
+        icon: <XCircle color="#ff4d4f" />,
+      });
+      return;
+    }
+    
     if (formData.password !== formData.confirmPassword) {
       api.error({
         message: "Mật khẩu không khớp",
@@ -148,10 +160,11 @@ export default function RegisterPage() {
                 name="password"
                 size="large"
                 prefix={<Lock />}
-                placeholder="Mật khẩu"
+                placeholder="Mật khẩu (trên 6 ký tự)"
                 value={formData.password}
                 onChange={handleChange}
                 required
+                minLength={7}
                 style={{ height: 40 }}
               />
 

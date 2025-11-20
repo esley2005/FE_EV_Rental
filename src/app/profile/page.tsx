@@ -643,14 +643,17 @@ if (response.data.driverLicenseStatus !== undefined) {
                           name="newPassword" 
                           rules={[
                             { required: true, message: "Vui lòng nhập mật khẩu mới!" },
-                            { min: 6, message: "Mật khẩu phải có ít nhất 6 ký tự!" }
+                            { 
+                              min: 7, 
+                              message: "Mật khẩu phải có trên 6 ký tự (tối thiểu 7 ký tự)!" 
+                            }
                           ]}
-                          help="Mật khẩu phải có ít nhất 6 ký tự"
+                          help="Mật khẩu phải có trên 6 ký tự (tối thiểu 7 ký tự)"
                         >
                           <Input.Password 
                             size="large" 
                             prefix={<LockOutlined />} 
-                            placeholder="Nhập mật khẩu mới (tối thiểu 6 ký tự)"
+                            placeholder="Nhập mật khẩu mới (trên 6 ký tự)"
                           />
                         </Form.Item>
                         <Form.Item
@@ -754,14 +757,17 @@ if (response.data.driverLicenseStatus !== undefined) {
                                   name="newPassword" 
                                   rules={[
                                     { required: true, message: "Vui lòng nhập mật khẩu mới!" },
-                                    { min: 6, message: "Mật khẩu phải có ít nhất 6 ký tự!" }
+                                    { 
+                                      min: 7, 
+                                      message: "Mật khẩu phải có trên 6 ký tự (tối thiểu 7 ký tự)!" 
+                                    }
                                   ]}
-                                  help="Mật khẩu phải có ít nhất 6 ký tự"
+                                  help="Mật khẩu phải có trên 6 ký tự (tối thiểu 7 ký tự)"
                                 >
                                   <Input.Password 
                                     size="large" 
                                     prefix={<LockOutlined />} 
-                                    placeholder="Nhập mật khẩu mới (tối thiểu 6 ký tự)"
+                                    placeholder="Nhập mật khẩu mới (trên 6 ký tự)"
                                   />
                                 </Form.Item>
                                 
