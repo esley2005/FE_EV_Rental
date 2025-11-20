@@ -472,13 +472,7 @@ export default function CustomerManagement() {
         const isActive = activeValue === true || activeValue === "true" || activeValue === 1;
         return (
           <Space direction="vertical" size="small">
-            {record.isEmailConfirmed ? (
-              <Tag color="success" icon={<CheckCircleOutlined />}>
-                Email đã xác thực
-              </Tag>
-            ) : (
-              <Tag color="warning">Email chưa xác thực</Tag>
-            )}
+            
             <div className="flex items-center gap-2">
               <Switch
                 checked={isActive}

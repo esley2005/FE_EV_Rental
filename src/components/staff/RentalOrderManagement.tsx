@@ -229,18 +229,39 @@ export default function RentalOrderManagement() {
     }
   };
 
-  const getStatusNumber = (status: string | undefined): number => {
+  const getStatusNumber = (status: string | number | undefined): number => {
+    // Nếu status là số, trả về trực tiếp (nếu hợp lệ)
+    if (typeof status === 'number') {
+      // Kiểm tra xem số có nằm trong phạm vi hợp lệ (0-8)
+      if (status >= 0 && status <= 8) {
+        return status;
+      }
+      return RentalOrderStatus.Pending;
+    }
+    
+    // Nếu status là undefined hoặc null, trả về Pending
     if (!status) return RentalOrderStatus.Pending;
-    const statusLower = status.toLowerCase();
+    
+    // Xử lý status là string
+    const statusStr = String(status);
+    const statusLower = statusStr.toLowerCase();
+    
+    // Kiểm tra nếu là số dạng string ("0", "1", "2", ...)
+    const statusNum = parseInt(statusStr, 10);
+    if (!isNaN(statusNum) && statusNum >= 0 && statusNum <= 8) {
+      return statusNum;
+    }
+    
+    // Xử lý các trường hợp string
     if (statusLower.includes('pending') && !statusLower.includes('deposit') && !statusLower.includes('payment')) return RentalOrderStatus.Pending;
     if (statusLower.includes('documentssubmitted') || statusLower.includes('đã nộp giấy tờ')) return RentalOrderStatus.DocumentsSubmitted;
-    if (statusLower.includes('depositpending') || statusLower.includes('chờ tiền cọc')) return RentalOrderStatus.DepositPending;
-    if (statusLower.includes('confirmed') || statusLower.includes('đã xác nhận')) return RentalOrderStatus.Confirmed;
-    if (statusLower.includes('renting') || statusLower.includes('đang thuê')) return RentalOrderStatus.Renting;
-    if (statusLower.includes('returned') || statusLower.includes('đã trả xe')) return RentalOrderStatus.Returned;
-    if (statusLower.includes('paymentpending') || statusLower.includes('chờ thanh toán')) return RentalOrderStatus.PaymentPending;
-    if (statusLower.includes('cancelled') || statusLower.includes('hủy')) return RentalOrderStatus.Cancelled;
-    if (statusLower.includes('completed') || statusLower.includes('hoàn thành')) return RentalOrderStatus.Completed;
+    if (statusLower.includes('depositpending') || statusLower.includes('chờ tiền cọc') || statusLower === '2') return RentalOrderStatus.DepositPending;
+    if (statusLower.includes('confirmed') || statusLower.includes('đã xác nhận') || statusLower === '3') return RentalOrderStatus.Confirmed;
+    if (statusLower.includes('renting') || statusLower.includes('đang thuê') || statusLower === '4') return RentalOrderStatus.Renting;
+    if (statusLower.includes('returned') || statusLower.includes('đã trả xe') || statusLower === '5') return RentalOrderStatus.Returned;
+    if (statusLower.includes('paymentpending') || statusLower.includes('chờ thanh toán') || statusLower === '6') return RentalOrderStatus.PaymentPending;
+    if (statusLower.includes('cancelled') || statusLower.includes('hủy') || statusLower === '7') return RentalOrderStatus.Cancelled;
+    if (statusLower.includes('completed') || statusLower.includes('hoàn thành') || statusLower === '8') return RentalOrderStatus.Completed;
     return RentalOrderStatus.Pending;
   };
 
@@ -747,10 +768,16 @@ export default function RentalOrderManagement() {
         available.push({ value: RentalOrderStatus.Cancelled, label: 'Hủy đơn' });
         break;
       case RentalOrderStatus.DocumentsSubmitted:
-        available.push({ value: RentalOrderStatus.Cancelled, label: 'Hủy đơn' });
+        available.push(
+          { value: RentalOrderStatus.Confirmed, label: 'Đã xác nhận' },
+          { value: RentalOrderStatus.Cancelled, label: 'Hủy đơn' }
+        );
         break;
       case RentalOrderStatus.DepositPending:
-        available.push({ value: RentalOrderStatus.Cancelled, label: 'Hủy đơn' });
+        available.push(
+          { value: RentalOrderStatus.Confirmed, label: 'Đã xác nhận' },
+          { value: RentalOrderStatus.Cancelled, label: 'Hủy đơn' }
+        );
         break;
       case RentalOrderStatus.Confirmed:
         available.push(
@@ -912,6 +939,11 @@ export default function RentalOrderManagement() {
         const currentStatus = getStatusNumber(record.status);
         const availableStatuses = getAvailableStatuses(currentStatus);
         
+        // Debug log để kiểm tra status
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[RentalOrderManagement] Order ID:', record.id, 'Status:', record.status, 'Parsed Status:', currentStatus, 'Is DepositPending?', currentStatus === RentalOrderStatus.DepositPending);
+        }
+        
         return (
           <Space direction="vertical" size="small" style={{ width: '100%' }}>
             {getOrderStatusTag(record)}
@@ -927,12 +959,13 @@ export default function RentalOrderManagement() {
             {currentStatus === RentalOrderStatus.DepositPending && (
               <Popconfirm
                 title="Xác nhận thanh toán đặt cọc?"
+                description="Sau khi xác nhận, đơn hàng sẽ chuyển sang trạng thái 'Đã xác nhận'"
                 onConfirm={() => handleConfirmDeposit(record.id)}
                 okText="Xác nhận"
                 cancelText="Hủy"
               >
-                <Button size="small" type="primary" block>
-                  Xác nhận tiền cọc
+                <Button size="small" type="primary" block icon={<DollarOutlined />}>
+                  Xác nhận đặt cọc
                 </Button>
               </Popconfirm>
             )}

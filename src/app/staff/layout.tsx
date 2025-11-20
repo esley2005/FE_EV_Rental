@@ -32,6 +32,7 @@ import ReturnForm from "@/components/ReturnForm";
 import DocumentVerification from "@/components/DocumentVerification";
 import RentalOrderManagement from "@/components/staff/RentalOrderManagement";
 import CarManagement from "@/components/admin/CarManagement";
+import CarMaintenanceManagement from "@/components/staff/CarMaintenanceManagement";
 import { authUtils } from "@/utils/auth";
 import { carsApi as carsApiWrapped, bookingsApi as bookingsApiWrapped, rentalOrderApi, type ApiResponse } from "@/services/api";
 import { useRouter } from "next/navigation"; 
@@ -47,7 +48,7 @@ const mainMenu = [
   // { key: "customers", label: "Xác thực giấy tờ", icon: <UserOutlined /> },
   // { key: "payments", label: "Thanh toán tại điểm", icon: <DesktopOutlined /> },
   { key: "vehicles", label: "Xe tại điểm", icon: <TeamOutlined /> },
-
+  { key: "maintenance", label: "Bảo trì & Sự cố", icon: <DesktopOutlined /> },
 ];
 
 /* =========================================================
@@ -82,6 +83,11 @@ const subMenus: Record<string, { key: string; label: string; icon: React.ReactNo
 
   documents: [
     { key: "1", label: "Hướng dẫn sử dụng hệ thống", icon: <FileOutlined /> },
+  ],
+
+  maintenance: [
+  
+    { key: "2", label: "Báo cáo sự cố / hỏng hóc", icon: <FileOutlined /> }
   ],
 };
 
@@ -396,6 +402,8 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               ) : (
                 <p>Trang báo cáo sự cố / hỏng hóc</p>
               )
+            ) : selectedModule === "maintenance" ? (
+              <CarMaintenanceManagement selectedSubMenu={selectedSubMenu} />
             ) : (
               children
             )}

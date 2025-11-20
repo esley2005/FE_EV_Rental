@@ -859,6 +859,60 @@ export const authApi = {
     });
   },
 
+  // Cập nhật điểm thuê của nhân viên (Admin only)
+  updateStaffRentalLocation: async (userId: number, rentalLocationId: number) => {
+    // Thử nhiều endpoint có thể có
+    const attempts = [
+      {
+        endpoint: '/User/UpdateStaffRentalLocation',
+        method: 'PUT',
+        body: { userId, rentalLocationId }
+      },
+      {
+        endpoint: '/User/UpdateStaffLocation',
+        method: 'PUT',
+        body: { userId, rentalLocationId }
+      },
+      {
+        endpoint: '/User/UpdateRentalLocation',
+        method: 'PUT',
+        body: { userId, rentalLocationId }
+      },
+      {
+        endpoint: `/User/UpdateStaffRentalLocation/${userId}`,
+        method: 'PUT',
+        body: { rentalLocationId }
+      },
+      {
+        endpoint: '/User/Update',
+        method: 'PUT',
+        body: { userId, rentalLocationId }
+      },
+    ];
+
+    for (const attempt of attempts) {
+      try {
+        const response = await apiCall<User>(attempt.endpoint, {
+          method: attempt.method as 'PUT',
+          body: JSON.stringify(attempt.body),
+        });
+        
+        if (response.success) {
+          return response;
+        }
+      } catch (error) {
+        // Tiếp tục thử endpoint tiếp theo
+        continue;
+      }
+    }
+    
+    // Nếu không có endpoint nào hoạt động, trả về lỗi
+    return {
+      success: false,
+      error: 'Không tìm thấy endpoint để cập nhật điểm thuê của nhân viên. Vui lòng kiểm tra backend có endpoint UpdateStaffRentalLocation không.'
+    };
+  },
+
   // Đổi mật khẩu
   changePassword: async (data: ChangePasswordData) => {
     // Backend yêu cầu endpoint /User/UpdateCustomerPassword với userId, oldPassword, newPassword
