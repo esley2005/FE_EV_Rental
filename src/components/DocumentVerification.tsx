@@ -153,7 +153,24 @@ export default function DocumentVerification({ mode = 'check-documents' }: Docum
     try {
       const response = await driverLicenseApi.updateStatus(licenseId, 1);
       if (response.success) {
-        message.success('Xác thực giấy phép lái xe thành công');
+        // Kiểm tra xem cả 2 giấy tờ đã được approve chưa để thông báo chính xác
+        const license = driverLicenses.find(l => l.id === licenseId);
+        if (license?.rentalOrderId) {
+          const order = orders[license.rentalOrderId];
+          if (order) {
+            // Tìm citizen ID của order này
+            const citizenId = citizenIds.find(c => c.rentalOrderId === license.rentalOrderId);
+            if (citizenId && (citizenId.status === '1' || citizenId.status === 'Approved')) {
+              message.success('Xác thực giấy phép lái xe thành công. Email thông báo đã được gửi đến khách hàng (cả 2 giấy tờ đã được xác nhận).');
+            } else {
+              message.success('Xác thực giấy phép lái xe thành công. Vui lòng xác nhận thêm căn cước công dân để gửi email thông báo đến khách hàng.');
+            }
+          } else {
+            message.success('Xác thực giấy phép lái xe thành công.');
+          }
+        } else {
+          message.success('Xác thực giấy phép lái xe thành công.');
+        }
         loadDocuments();
         setLicenseModalVisible(false);
       } else {
@@ -189,7 +206,24 @@ export default function DocumentVerification({ mode = 'check-documents' }: Docum
     try {
       const response = await citizenIdApi.updateStatus(citizenIdId, 1);
       if (response.success) {
-        message.success('Xác thực căn cước công dân thành công');
+        // Kiểm tra xem cả 2 giấy tờ đã được approve chưa để thông báo chính xác
+        const citizenId = citizenIds.find(c => c.id === citizenIdId);
+        if (citizenId?.rentalOrderId) {
+          const order = orders[citizenId.rentalOrderId];
+          if (order) {
+            // Tìm driver license của order này
+            const license = driverLicenses.find(l => l.rentalOrderId === citizenId.rentalOrderId);
+            if (license && (license.status === '1' || license.status === 'Approved')) {
+              message.success('Xác thực căn cước công dân thành công. Email thông báo đã được gửi đến khách hàng (cả 2 giấy tờ đã được xác nhận).');
+            } else {
+              message.success('Xác thực căn cước công dân thành công. Vui lòng xác nhận thêm giấy phép lái xe để gửi email thông báo đến khách hàng.');
+            }
+          } else {
+            message.success('Xác thực căn cước công dân thành công.');
+          }
+        } else {
+          message.success('Xác thực căn cước công dân thành công.');
+        }
         loadDocuments();
         setCitizenIdModalVisible(false);
       } else {
@@ -386,6 +420,7 @@ export default function DocumentVerification({ mode = 'check-documents' }: Docum
     <div>
       <Card>
         <Title level={4}>Xác thực giấy tờ khách hàng</Title>
+        <h2 className="text-lg text-gray-500">(Xác thực chỉ dành cho khách hàng thuê xe tự lái)</h2>
         <Tabs 
           defaultActiveKey="license"
           items={[

@@ -15,8 +15,10 @@ import {
   Modal, 
   Popconfirm,
   InputNumber,
-  Form
+  Form,
+  Upload
 } from "antd";
+import type { UploadFile } from "antd/es/upload/interface";
 import { 
   CarOutlined, 
   UserOutlined, 
@@ -30,7 +32,7 @@ import {
   DollarOutlined,
   EditOutlined
 } from "@ant-design/icons";
-import { rentalOrderApi, carsApi, authApi, driverLicenseApi, citizenIdApi, paymentApi } from "@/services/api";
+import { rentalOrderApi, carsApi, authApi, driverLicenseApi, citizenIdApi, paymentApi, carDeliveryHistoryApi, carReturnHistoryApi } from "@/services/api";
 import type { RentalOrderData, User, DriverLicenseData, CitizenIdData } from "@/services/api";
 import type { Car } from "@/types/car";
 import dayjs from "dayjs";
@@ -58,8 +60,8 @@ const RentalOrderStatus = {
 
 const statusLabels: Record<number, { text: string; color: string; icon: any }> = {
   0: { text: 'Chờ xác nhận', color: 'gold', icon: <ClockCircleOutlined /> },
-  1: { text: 'Đã nộp giấy tờ', color: 'blue', icon: <IdcardOutlined /> },
-  2: { text: 'Chờ tiền cọc', color: 'orange', icon: <DollarOutlined /> },
+  1: { text: 'Đang xác nhận giấy tờ', color: 'orange', icon: <IdcardOutlined /> },
+  2: { text: 'Chờ tiền cọc', color: 'purple', icon: <DollarOutlined /> },
   3: { text: 'Đã xác nhận', color: 'cyan', icon: <CheckCircleOutlined /> },
   4: { text: 'Đang thuê', color: 'green', icon: <CarOutlined /> },
   5: { text: 'Đã trả xe', color: 'purple', icon: <CarOutlined /> },
@@ -74,9 +76,29 @@ export default function RentalOrderManagement() {
   const [selectedOrder, setSelectedOrder] = useState<OrderWithDetails | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [updateTotalModalVisible, setUpdateTotalModalVisible] = useState(false);
+  const [deliveryModalVisible, setDeliveryModalVisible] = useState(false);
+  const [returnModalVisible, setReturnModalVisible] = useState(false);
+  const [selectedOrderForAction, setSelectedOrderForAction] = useState<OrderWithDetails | null>(null);
+  const [documentModalVisible, setDocumentModalVisible] = useState(false);
+  const [selectedOrderForDocument, setSelectedOrderForDocument] = useState<OrderWithDetails | null>(null);
+  const [selectedLicense, setSelectedLicense] = useState<DriverLicenseData | null>(null);
+  const [selectedCitizenId, setSelectedCitizenId] = useState<CitizenIdData | null>(null);
+  const [licenseModalVisible, setLicenseModalVisible] = useState(false);
+  const [citizenIdModalVisible, setCitizenIdModalVisible] = useState(false);
+  const [updateLicenseModalVisible, setUpdateLicenseModalVisible] = useState(false);
+  const [updateCitizenIdModalVisible, setUpdateCitizenIdModalVisible] = useState(false);
+  const [processingId, setProcessingId] = useState<number | null>(null);
+  const [updateLicenseForm] = Form.useForm();
+  const [updateCitizenIdForm] = Form.useForm();
+  const [licenseImageFileList, setLicenseImageFileList] = useState<UploadFile[]>([]);
+  const [licenseImage2FileList, setLicenseImage2FileList] = useState<UploadFile[]>([]);
+  const [citizenIdImageFileList, setCitizenIdImageFileList] = useState<UploadFile[]>([]);
+  const [citizenIdImage2FileList, setCitizenIdImage2FileList] = useState<UploadFile[]>([]);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [form] = Form.useForm();
+  const [deliveryForm] = Form.useForm();
+  const [returnForm] = Form.useForm();
 
   useEffect(() => {
     loadOrders();
@@ -183,6 +205,24 @@ export default function RentalOrderManagement() {
 
   // Xử lý cập nhật status
   const handleStatusChange = async (orderId: number, newStatus: number) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    // Nếu chọn "Bắt đầu thuê" (Renting), mở modal nhập thông tin giao xe
+    if (newStatus === RentalOrderStatus.Renting) {
+      setSelectedOrderForAction(order);
+      setDeliveryModalVisible(true);
+      return;
+    }
+
+    // Nếu chọn "Trả xe" (Returned), mở modal nhập thông tin trả xe
+    if (newStatus === RentalOrderStatus.Returned) {
+      setSelectedOrderForAction(order);
+      setReturnModalVisible(true);
+      return;
+    }
+
+    // Các status khác thì cập nhật trực tiếp
     try {
       setLoading(true);
       const response = await rentalOrderApi.updateStatus(orderId, newStatus);
@@ -196,6 +236,68 @@ export default function RentalOrderManagement() {
     } catch (error) {
       console.error('Update status error:', error);
       message.error('Có lỗi xảy ra khi cập nhật trạng thái');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Xử lý giao xe (Bắt đầu thuê)
+  const handleDelivery = async (values: any) => {
+    if (!selectedOrderForAction) return;
+
+    try {
+      setLoading(true);
+      const response = await carDeliveryHistoryApi.create({
+        deliveryDate: new Date().toISOString(),
+        odometerStart: values.odometerStart,
+        batteryLevelStart: values.batteryLevelStart,
+        vehicleConditionStart: values.vehicleConditionStart || '',
+        orderId: selectedOrderForAction.id,
+      });
+
+      if (response.success) {
+        message.success('Giao xe thành công! Đơn hàng đã chuyển sang trạng thái đang thuê.');
+        setDeliveryModalVisible(false);
+        deliveryForm.resetFields();
+        setSelectedOrderForAction(null);
+        await loadOrders();
+      } else {
+        message.error(response.error || 'Giao xe thất bại');
+      }
+    } catch (error) {
+      console.error('Delivery error:', error);
+      message.error('Có lỗi xảy ra khi giao xe');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Xử lý trả xe
+  const handleReturn = async (values: any) => {
+    if (!selectedOrderForAction) return;
+
+    try {
+      setLoading(true);
+      const response = await carReturnHistoryApi.create({
+        returnDate: new Date().toISOString(),
+        odometerEnd: values.odometerEnd,
+        batteryLevelEnd: values.batteryLevelEnd,
+        vehicleConditionEnd: values.vehicleConditionEnd || '',
+        orderId: selectedOrderForAction.id,
+      });
+
+      if (response.success) {
+        message.success('Nhận lại xe thành công! Đơn hàng đã chuyển sang trạng thái đã trả xe.');
+        setReturnModalVisible(false);
+        returnForm.resetFields();
+        setSelectedOrderForAction(null);
+        await loadOrders();
+      } else {
+        message.error(response.error || 'Trả xe thất bại');
+      }
+    } catch (error) {
+      console.error('Return error:', error);
+      message.error('Có lỗi xảy ra khi trả xe');
     } finally {
       setLoading(false);
     }
@@ -265,6 +367,263 @@ export default function RentalOrderManagement() {
     } catch (error) {
       console.error('Confirm total error:', error);
       message.error('Có lỗi xảy ra khi xác nhận tổng tiền');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Xác nhận giấy tờ ở quầy
+  const handleConfirmDocuments = async (orderId: number) => {
+    try {
+      setLoading(true);
+      const response = await rentalOrderApi.confirmDocuments(orderId);
+      
+      if (response.success) {
+        message.success('Xác nhận giấy tờ ở quầy thành công! Đơn hàng đã chuyển sang trạng thái chờ thanh toán đặt cọc.');
+        await loadOrders();
+      } else {
+        message.error(response.error || response.message || 'Xác nhận giấy tờ thất bại');
+      }
+    } catch (error) {
+      console.error('Confirm documents error:', error);
+      message.error('Có lỗi xảy ra khi xác nhận giấy tờ');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Xác thực giấy tờ cho đơn hàng
+  const handleVerifyDocuments = (order: OrderWithDetails) => {
+    setSelectedOrderForDocument(order);
+    setDocumentModalVisible(true);
+  };
+
+  const handleApproveLicense = async (licenseId: number) => {
+    setProcessingId(licenseId);
+    try {
+      const response = await driverLicenseApi.updateStatus(licenseId, 1);
+      if (response.success) {
+        const order = selectedOrderForDocument;
+        if (order) {
+          const citizenId = order.citizenIdDoc;
+          if (citizenId && (citizenId.status === '1' || citizenId.status === 'Approved')) {
+            message.success('Xác thực GPLX thành công. Email đã được gửi (cả 2 giấy tờ đã được xác nhận).');
+          } else {
+            message.success('Xác thực GPLX thành công. Vui lòng xác nhận thêm CCCD.');
+          }
+        }
+        await loadOrders();
+        setLicenseModalVisible(false);
+      } else {
+        message.error(response.error || 'Không thể xác thực GPLX');
+      }
+    } catch (error) {
+      message.error('Có lỗi xảy ra khi xác thực');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleRejectLicense = async (licenseId: number) => {
+    setProcessingId(licenseId);
+    try {
+      const response = await driverLicenseApi.updateStatus(licenseId, 2);
+      if (response.success) {
+        message.success('Đã từ chối GPLX');
+        await loadOrders();
+        setLicenseModalVisible(false);
+      } else {
+        message.error(response.error || 'Không thể từ chối GPLX');
+      }
+    } catch (error) {
+      message.error('Có lỗi xảy ra khi từ chối');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleApproveCitizenId = async (citizenIdId: number) => {
+    setProcessingId(citizenIdId);
+    try {
+      const response = await citizenIdApi.updateStatus(citizenIdId, 1);
+      if (response.success) {
+        const order = selectedOrderForDocument;
+        if (order) {
+          const license = order.driverLicense;
+          if (license && (license.status === '1' || license.status === 'Approved')) {
+            message.success('Xác thực CCCD thành công. Email đã được gửi (cả 2 giấy tờ đã được xác nhận).');
+          } else {
+            message.success('Xác thực CCCD thành công. Vui lòng xác nhận thêm GPLX.');
+          }
+        }
+        await loadOrders();
+        setCitizenIdModalVisible(false);
+      } else {
+        message.error(response.error || 'Không thể xác thực CCCD');
+      }
+    } catch (error) {
+      message.error('Có lỗi xảy ra khi xác thực');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleRejectCitizenId = async (citizenIdId: number) => {
+    setProcessingId(citizenIdId);
+    try {
+      const response = await citizenIdApi.updateStatus(citizenIdId, 2);
+      if (response.success) {
+        message.success('Đã từ chối CCCD');
+        await loadOrders();
+        setCitizenIdModalVisible(false);
+      } else {
+        message.error(response.error || 'Không thể từ chối CCCD');
+      }
+    } catch (error) {
+      message.error('Có lỗi xảy ra khi từ chối');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  // Xử lý cập nhật giấy tờ - mở modal xem giấy tờ để có thể chọn cập nhật từng loại
+  const handleUpdateDocuments = (order: OrderWithDetails) => {
+    setSelectedOrderForDocument(order);
+    setDocumentModalVisible(true);
+  };
+
+  const handleUpdateLicense = async (values: any) => {
+    if (!selectedLicense?.id) return;
+    
+    try {
+      setLoading(true);
+      // Upload ảnh lên Cloudinary nếu có file mới
+      let imageUrl = selectedLicense.imageUrl;
+      let imageUrl2 = selectedLicense.imageUrl2;
+      
+      // Xử lý upload ảnh mặt trước
+      if (licenseImageFileList.length > 0 && licenseImageFileList[0].originFileObj) {
+        const formData = new FormData();
+        formData.append('file', licenseImageFileList[0].originFileObj);
+        formData.append('upload_preset', process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'ev_rental_cars');
+        const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'your-cloud-name';
+        const uploadResponse = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+          method: 'POST',
+          body: formData,
+        });
+        const uploadData = await uploadResponse.json();
+        if (uploadData.secure_url) {
+          imageUrl = uploadData.secure_url;
+        }
+      }
+      
+      // Xử lý upload ảnh mặt sau
+      if (licenseImage2FileList.length > 0 && licenseImage2FileList[0].originFileObj) {
+        const formData = new FormData();
+        formData.append('file', licenseImage2FileList[0].originFileObj);
+        formData.append('upload_preset', process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'ev_rental_cars');
+        const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'your-cloud-name';
+        const uploadResponse = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+          method: 'POST',
+          body: formData,
+        });
+        const uploadData = await uploadResponse.json();
+        if (uploadData.secure_url) {
+          imageUrl2 = uploadData.secure_url;
+        }
+      }
+      
+      const response = await driverLicenseApi.update({
+        id: selectedLicense.id,
+        name: values.name,
+        licenseNumber: values.licenseNumber,
+        imageUrl: imageUrl || '',
+        imageUrl2: imageUrl2 || '',
+        rentalOrderId: selectedLicense.rentalOrderId,
+      });
+      
+      if (response.success) {
+        message.success('Cập nhật giấy phép lái xe thành công!');
+        setUpdateLicenseModalVisible(false);
+        updateLicenseForm.resetFields();
+        setLicenseImageFileList([]);
+        setLicenseImage2FileList([]);
+        await loadOrders();
+      } else {
+        message.error(response.error || 'Cập nhật thất bại');
+      }
+    } catch (error) {
+      console.error('Update license error:', error);
+      message.error('Có lỗi xảy ra khi cập nhật');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateCitizenId = async (values: any) => {
+    if (!selectedCitizenId?.id) return;
+    
+    try {
+      setLoading(true);
+      // Upload ảnh lên Cloudinary nếu có file mới
+      let imageUrl = selectedCitizenId.imageUrl;
+      let imageUrl2 = selectedCitizenId.imageUrl2;
+      
+      // Xử lý upload ảnh mặt trước
+      if (citizenIdImageFileList.length > 0 && citizenIdImageFileList[0].originFileObj) {
+        const formData = new FormData();
+        formData.append('file', citizenIdImageFileList[0].originFileObj);
+        formData.append('upload_preset', process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'ev_rental_cars');
+        const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'your-cloud-name';
+        const uploadResponse = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+          method: 'POST',
+          body: formData,
+        });
+        const uploadData = await uploadResponse.json();
+        if (uploadData.secure_url) {
+          imageUrl = uploadData.secure_url;
+        }
+      }
+      
+      // Xử lý upload ảnh mặt sau
+      if (citizenIdImage2FileList.length > 0 && citizenIdImage2FileList[0].originFileObj) {
+        const formData = new FormData();
+        formData.append('file', citizenIdImage2FileList[0].originFileObj);
+        formData.append('upload_preset', process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'ev_rental_cars');
+        const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'your-cloud-name';
+        const uploadResponse = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+          method: 'POST',
+          body: formData,
+        });
+        const uploadData = await uploadResponse.json();
+        if (uploadData.secure_url) {
+          imageUrl2 = uploadData.secure_url;
+        }
+      }
+      
+      const response = await citizenIdApi.update({
+        id: selectedCitizenId.id,
+        name: values.name,
+        citizenIdNumber: values.citizenIdNumber,
+        birthDate: values.birthDate,
+        imageUrl: imageUrl || '',
+        imageUrl2: imageUrl2 || '',
+        rentalOrderId: selectedCitizenId.rentalOrderId,
+      });
+      
+      if (response.success) {
+        message.success('Cập nhật căn cước công dân thành công!');
+        setUpdateCitizenIdModalVisible(false);
+        updateCitizenIdForm.resetFields();
+        setCitizenIdImageFileList([]);
+        setCitizenIdImage2FileList([]);
+        await loadOrders();
+      } else {
+        message.error(response.error || 'Cập nhật thất bại');
+      }
+    } catch (error) {
+      console.error('Update citizen ID error:', error);
+      message.error('Có lỗi xảy ra khi cập nhật');
     } finally {
       setLoading(false);
     }
@@ -392,10 +751,18 @@ export default function RentalOrderManagement() {
     {
       title: "Giấy tờ",
       key: "documents",
-      width: 200,
+      width: 250,
       render: (_: any, record: OrderWithDetails) => {
+        // Ẩn trạng thái giấy tờ nếu thuê xe có tài xế
+        if (record.withDriver) {
+          return <Tag color="blue">Có tài xế</Tag>;
+        }
+        const hasPendingDocs = 
+          (record.driverLicense && (record.driverLicense.status === '0' || record.driverLicense.status === 'Pending')) ||
+          (record.citizenIdDoc && (record.citizenIdDoc.status === '0' || record.citizenIdDoc.status === 'Pending'));
+        
         return (
-          <Space direction="vertical" size="small">
+          <Space direction="vertical" size="small" style={{ width: '100%' }}>
             <div>
               <IdcardOutlined className="mr-1" />
               <span className="text-xs">GPLX:</span> {getDocumentStatusTag(record.driverLicense?.status)}
@@ -404,6 +771,17 @@ export default function RentalOrderManagement() {
               <IdcardOutlined className="mr-1" />
               <span className="text-xs">CCCD:</span> {getDocumentStatusTag(record.citizenIdDoc?.status)}
             </div>
+            {hasPendingDocs && (
+              <Button 
+                type="primary" 
+                size="small" 
+                icon={<IdcardOutlined />}
+                onClick={() => handleVerifyDocuments(record)}
+                block
+              >
+                Xác thực giấy tờ
+              </Button>
+            )}
           </Space>
         );
       },
@@ -428,17 +806,94 @@ export default function RentalOrderManagement() {
                 onChange={(value) => handleStatusChange(record.id, value)}
               />
             )}
-            {currentStatus === RentalOrderStatus.DepositPending && (
+            {currentStatus === RentalOrderStatus.DocumentsSubmitted && (
               <Popconfirm
-                title="Xác nhận thanh toán đặt cọc?"
-                onConfirm={() => handleConfirmDeposit(record.id)}
+                title="Xác nhận giấy tờ ở quầy?"
+                description="Sau khi xác nhận, đơn hàng sẽ chuyển sang trạng thái 'Chờ thanh toán đặt cọc'"
+                onConfirm={() => handleConfirmDocuments(record.id)}
                 okText="Xác nhận"
                 cancelText="Hủy"
               >
-                <Button size="small" type="primary" block>
-                  Xác nhận tiền cọc
+                <Button size="small" type="primary" block icon={<IdcardOutlined />}>
+                  Xác nhận giấy tờ ở quầy
                 </Button>
               </Popconfirm>
+            )}
+            {currentStatus === RentalOrderStatus.DepositPending && (
+              (() => {
+                // Kiểm tra cả 2 giấy tờ đã được approve chưa
+                const isDriverLicenseApproved = record.driverLicense && 
+                  (record.driverLicense.status === '1' || record.driverLicense.status === 'Approved');
+                const isCitizenIdApproved = record.citizenIdDoc && 
+                  (record.citizenIdDoc.status === '1' || record.citizenIdDoc.status === 'Approved');
+                const bothDocumentsApproved = isDriverLicenseApproved && isCitizenIdApproved;
+                
+                // Nếu có tài xế thì không cần giấy tờ
+                if (record.withDriver) {
+                  return (
+                    <Popconfirm
+                      title="Xác nhận thanh toán đặt cọc?"
+                      onConfirm={() => handleConfirmDeposit(record.id)}
+                      okText="Xác nhận"
+                      cancelText="Hủy"
+                    >
+                      <Button size="small" type="primary" block>
+                        Xác nhận tiền cọc
+                      </Button>
+                    </Popconfirm>
+                  );
+                }
+                
+                // Nếu không có tài xế, cần kiểm tra giấy tờ
+                if (!record.driverLicense || !record.citizenIdDoc) {
+                  return (
+                    <Button size="small" type="default" block disabled>
+                      Chưa có đủ giấy tờ
+                    </Button>
+                  );
+                }
+                
+                if (!bothDocumentsApproved) {
+                  return (
+                    <Button size="small" type="default" block disabled>
+                      Chưa xác thực đủ giấy tờ
+                    </Button>
+                  );
+                }
+                
+                return (
+                  <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                    <Space size="small" style={{ width: '100%' }}>
+                      <Button 
+                        size="small" 
+                        icon={<EyeOutlined />}
+                        onClick={() => handleVerifyDocuments(record)}
+                        style={{ flex: 1 }}
+                      >
+                        Xem lại giấy tờ
+                      </Button>
+                      <Button 
+                        size="small" 
+                        icon={<EditOutlined />}
+                        onClick={() => handleUpdateDocuments(record)}
+                        style={{ flex: 1 }}
+                      >
+                        Cập nhật giấy tờ
+                      </Button>
+                    </Space>
+                    <Popconfirm
+                      title="Xác nhận thanh toán đặt cọc?"
+                      onConfirm={() => handleConfirmDeposit(record.id)}
+                      okText="Xác nhận"
+                      cancelText="Hủy"
+                    >
+                      <Button size="small" type="primary" block>
+                        Xác nhận tiền cọc
+                      </Button>
+                    </Popconfirm>
+                  </Space>
+                );
+              })()
             )}
             {currentStatus === RentalOrderStatus.Returned && (
               <Button 
@@ -461,6 +916,23 @@ export default function RentalOrderManagement() {
             )}
             {currentStatus === RentalOrderStatus.PaymentPending && (
               <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                <Button
+                  size="small"
+                  type="default"
+                  block
+                  icon={<EditOutlined />}
+                  onClick={() => {
+                    setSelectedOrder(record);
+                    form.setFieldsValue({
+                      extraFee: record.extraFee || 0,
+                      damageFee: record.damageFee || 0,
+                      damageNotes: record.damageNotes || '',
+                    });
+                    setUpdateTotalModalVisible(true);
+                  }}
+                >
+                  Sửa tiền
+                </Button>
                 <Popconfirm
                   title="Xác nhận tổng tiền (tạo payment record)?"
                   onConfirm={() => handleConfirmTotal(record.id)}
@@ -615,34 +1087,36 @@ export default function RentalOrderManagement() {
               )}
             </Card>
 
-            <Card title={<><IdcardOutlined /> Trạng thái giấy tờ</>} size="small">
-              <Descriptions column={2} size="small">
-                <Descriptions.Item label="Giấy phép lái xe (GPLX)">
-                  {selectedOrder.driverLicense ? (
-                    <Space>
-                      {getDocumentStatusTag(selectedOrder.driverLicense.status)}
-                      <span className="text-sm text-gray-600">
-                        ({selectedOrder.driverLicense.name})
-                      </span>
-                    </Space>
-                  ) : (
-                    <Tag color="default">Chưa upload</Tag>
-                  )}
-                </Descriptions.Item>
-                <Descriptions.Item label="Căn cước công dân (CCCD)">
-                  {selectedOrder.citizenIdDoc ? (
-                    <Space>
-                      {getDocumentStatusTag(selectedOrder.citizenIdDoc.status)}
-                      <span className="text-sm text-gray-600">
-                        ({selectedOrder.citizenIdDoc.name})
-                      </span>
-                    </Space>
-                  ) : (
-                    <Tag color="default">Chưa upload</Tag>
-                  )}
-                </Descriptions.Item>
-              </Descriptions>
-            </Card>
+            {!selectedOrder.withDriver && (
+              <Card title={<><IdcardOutlined /> Trạng thái giấy tờ</>} size="small">
+                <Descriptions column={2} size="small">
+                  <Descriptions.Item label="Giấy phép lái xe (GPLX)">
+                    {selectedOrder.driverLicense ? (
+                      <Space>
+                        {getDocumentStatusTag(selectedOrder.driverLicense.status)}
+                        <span className="text-sm text-gray-600">
+                          ({selectedOrder.driverLicense.name})
+                        </span>
+                      </Space>
+                    ) : (
+                      <Tag color="default">Chưa upload</Tag>
+                    )}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Căn cước công dân (CCCD)">
+                    {selectedOrder.citizenIdDoc ? (
+                      <Space>
+                        {getDocumentStatusTag(selectedOrder.citizenIdDoc.status)}
+                        <span className="text-sm text-gray-600">
+                          ({selectedOrder.citizenIdDoc.name})
+                        </span>
+                      </Space>
+                    ) : (
+                      <Tag color="default">Chưa upload</Tag>
+                    )}
+                  </Descriptions.Item>
+                </Descriptions>
+              </Card>
+            )}
 
             <Card title="Chi tiết đơn hàng" size="small">
               <Descriptions column={2} size="small">
@@ -769,6 +1243,705 @@ export default function RentalOrderManagement() {
             </Space>
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* Delivery Modal - Giao xe (Bắt đầu thuê) */}
+      <Modal
+        title="Giao xe - Bắt đầu thuê"
+        open={deliveryModalVisible}
+        onCancel={() => {
+          setDeliveryModalVisible(false);
+          deliveryForm.resetFields();
+          setSelectedOrderForAction(null);
+        }}
+        footer={null}
+        width={600}
+      >
+        <Form
+          form={deliveryForm}
+          layout="vertical"
+          onFinish={handleDelivery}
+        >
+          <Form.Item label="Mã đơn hàng">
+            <Input value={selectedOrderForAction?.id} disabled />
+          </Form.Item>
+          <Form.Item label="Xe">
+            <Input value={selectedOrderForAction?.car?.name || '-'} disabled />
+          </Form.Item>
+          <Form.Item
+            label="Số km (Odometer)"
+            name="odometerStart"
+            rules={[{ required: true, message: 'Vui lòng nhập số km' }]}
+          >
+            <InputNumber
+              style={{ width: '100%' }}
+              min={0}
+              placeholder="Nhập số km hiện tại"
+            />
+          </Form.Item>
+          <Form.Item
+            label="% Pin (Battery Level)"
+            name="batteryLevelStart"
+            rules={[{ required: true, message: 'Vui lòng nhập % pin' }]}
+          >
+            <InputNumber
+              style={{ width: '100%' }}
+              min={0}
+              max={100}
+              addonAfter="%"
+              placeholder="Nhập % pin"
+            />
+          </Form.Item>
+          <Form.Item
+            label="Tình trạng xe"
+            name="vehicleConditionStart"
+            rules={[{ required: true, message: 'Vui lòng nhập tình trạng xe' }]}
+          >
+            <Input.TextArea
+              rows={4}
+              placeholder="Mô tả tình trạng xe: đèn, gương, lốp, nội thất..."
+            />
+          </Form.Item>
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit" loading={loading}>
+                Xác nhận giao xe
+              </Button>
+              <Button onClick={() => {
+                setDeliveryModalVisible(false);
+                deliveryForm.resetFields();
+                setSelectedOrderForAction(null);
+              }}>
+                Hủy
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Return Modal - Trả xe */}
+      <Modal
+        title="Nhận lại xe"
+        open={returnModalVisible}
+        onCancel={() => {
+          setReturnModalVisible(false);
+          returnForm.resetFields();
+          setSelectedOrderForAction(null);
+        }}
+        footer={null}
+        width={600}
+      >
+        <Form
+          form={returnForm}
+          layout="vertical"
+          onFinish={handleReturn}
+        >
+          <Form.Item label="Mã đơn hàng">
+            <Input value={selectedOrderForAction?.id} disabled />
+          </Form.Item>
+          <Form.Item label="Xe">
+            <Input value={selectedOrderForAction?.car?.name || '-'} disabled />
+          </Form.Item>
+          <Form.Item
+            label="Số km (Odometer)"
+            name="odometerEnd"
+            rules={[{ required: true, message: 'Vui lòng nhập số km' }]}
+          >
+            <InputNumber
+              style={{ width: '100%' }}
+              min={0}
+              placeholder="Nhập số km khi trả xe"
+            />
+          </Form.Item>
+          <Form.Item
+            label="% Pin (Battery Level)"
+            name="batteryLevelEnd"
+            rules={[{ required: true, message: 'Vui lòng nhập % pin' }]}
+          >
+            <InputNumber
+              style={{ width: '100%' }}
+              min={0}
+              max={100}
+              addonAfter="%"
+              placeholder="Nhập % pin khi trả xe"
+            />
+          </Form.Item>
+          <Form.Item
+            label="Tình trạng xe"
+            name="vehicleConditionEnd"
+            rules={[{ required: true, message: 'Vui lòng nhập tình trạng xe' }]}
+          >
+            <Input.TextArea
+              rows={4}
+              placeholder="Mô tả tình trạng xe khi trả: hư hỏng, vết xước, phụ kiện..."
+            />
+          </Form.Item>
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit" loading={loading}>
+                Xác nhận nhận lại xe
+              </Button>
+              <Button onClick={() => {
+                setReturnModalVisible(false);
+                returnForm.resetFields();
+                setSelectedOrderForAction(null);
+              }}>
+                Hủy
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Document Verification Modal */}
+      <Modal
+        title={`Xác thực giấy tờ - Đơn hàng #${selectedOrderForDocument?.id}`}
+        open={documentModalVisible}
+        onCancel={() => {
+          setDocumentModalVisible(false);
+          setSelectedOrderForDocument(null);
+        }}
+        footer={null}
+        width={900}
+      >
+        {selectedOrderForDocument && (
+          <Space direction="vertical" size="large" style={{ width: '100%' }}>
+            {/* Driver License Section */}
+            {selectedOrderForDocument.driverLicense && (
+              <Card title="Giấy phép lái xe" size="small">
+                <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                  <Descriptions column={2} size="small" bordered>
+                    <Descriptions.Item label="Họ tên">{selectedOrderForDocument.driverLicense.name}</Descriptions.Item>
+                    <Descriptions.Item label="Số bằng lái">{selectedOrderForDocument.driverLicense.licenseNumber || '-'}</Descriptions.Item>
+                    <Descriptions.Item label="Trạng thái">
+                      {getDocumentStatusTag(selectedOrderForDocument.driverLicense.status)}
+                    </Descriptions.Item>
+                  </Descriptions>
+                  {(selectedOrderForDocument.driverLicense.imageUrl || selectedOrderForDocument.driverLicense.imageUrl2) && (
+                    <div>
+                      <div className="font-medium mb-2">Ảnh giấy phép lái xe:</div>
+                      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                        {selectedOrderForDocument.driverLicense.imageUrl && (
+                          <div>
+                            <div className="text-sm text-gray-600 mb-1">Mặt trước:</div>
+                            <Image src={selectedOrderForDocument.driverLicense.imageUrl} alt="GPLX mặt trước" className="max-w-full" />
+                          </div>
+                        )}
+                        {selectedOrderForDocument.driverLicense.imageUrl2 && (
+                          <div>
+                            <div className="text-sm text-gray-600 mb-1">Mặt sau:</div>
+                            <Image src={selectedOrderForDocument.driverLicense.imageUrl2} alt="GPLX mặt sau" className="max-w-full" />
+                          </div>
+                        )}
+                      </Space>
+                    </div>
+                  )}
+                  <Space>
+                    {(!selectedOrderForDocument.driverLicense.status || 
+                      selectedOrderForDocument.driverLicense.status === '0' || 
+                      selectedOrderForDocument.driverLicense.status === 'Pending') && (
+                      <>
+                        <Button 
+                          type="primary"
+                          loading={processingId === selectedOrderForDocument.driverLicense.id}
+                          onClick={() => selectedOrderForDocument.driverLicense?.id && handleApproveLicense(selectedOrderForDocument.driverLicense.id)}
+                        >
+                          Duyệt
+                        </Button>
+                        <Button 
+                          danger
+                          loading={processingId === selectedOrderForDocument.driverLicense.id}
+                          onClick={() => selectedOrderForDocument.driverLicense?.id && handleRejectLicense(selectedOrderForDocument.driverLicense.id)}
+                        >
+                          Từ chối
+                        </Button>
+                      </>
+                    )}
+                    <Button 
+                      icon={<EyeOutlined />}
+                      onClick={() => {
+                        setSelectedLicense(selectedOrderForDocument.driverLicense!);
+                        setLicenseModalVisible(true);
+                      }}
+                    >
+                      Xem chi tiết
+                    </Button>
+                    <Button 
+                      icon={<EditOutlined />}
+                      onClick={() => {
+                        setSelectedLicense(selectedOrderForDocument.driverLicense!);
+                        setLicenseImageFileList([]);
+                        setLicenseImage2FileList([]);
+                        updateLicenseForm.setFieldsValue({
+                          name: selectedOrderForDocument.driverLicense!.name,
+                          licenseNumber: selectedOrderForDocument.driverLicense!.licenseNumber,
+                          imageUrl: selectedOrderForDocument.driverLicense!.imageUrl,
+                          imageUrl2: selectedOrderForDocument.driverLicense!.imageUrl2,
+                        });
+                        setUpdateLicenseModalVisible(true);
+                      }}
+                    >
+                      Cập nhật
+                    </Button>
+                  </Space>
+                </Space>
+              </Card>
+            )}
+
+            {/* Citizen ID Section */}
+            {selectedOrderForDocument.citizenIdDoc && (
+              <Card title="Căn cước công dân" size="small">
+                <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                  <Descriptions column={2} size="small" bordered>
+                    <Descriptions.Item label="Họ tên">{selectedOrderForDocument.citizenIdDoc.name}</Descriptions.Item>
+                    <Descriptions.Item label="Số CCCD">{selectedOrderForDocument.citizenIdDoc.citizenIdNumber}</Descriptions.Item>
+                    <Descriptions.Item label="Ngày sinh">{selectedOrderForDocument.citizenIdDoc.birthDate || '-'}</Descriptions.Item>
+                    <Descriptions.Item label="Trạng thái">
+                      {getDocumentStatusTag(selectedOrderForDocument.citizenIdDoc.status)}
+                    </Descriptions.Item>
+                  </Descriptions>
+                  {(selectedOrderForDocument.citizenIdDoc.imageUrl || selectedOrderForDocument.citizenIdDoc.imageUrl2) && (
+                    <div>
+                      <div className="font-medium mb-2">Ảnh căn cước công dân:</div>
+                      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                        {selectedOrderForDocument.citizenIdDoc.imageUrl && (
+                          <div>
+                            <div className="text-sm text-gray-600 mb-1">Mặt trước:</div>
+                            <Image src={selectedOrderForDocument.citizenIdDoc.imageUrl} alt="CCCD mặt trước" className="max-w-full" />
+                          </div>
+                        )}
+                        {selectedOrderForDocument.citizenIdDoc.imageUrl2 && (
+                          <div>
+                            <div className="text-sm text-gray-600 mb-1">Mặt sau:</div>
+                            <Image src={selectedOrderForDocument.citizenIdDoc.imageUrl2} alt="CCCD mặt sau" className="max-w-full" />
+                          </div>
+                        )}
+                      </Space>
+                    </div>
+                  )}
+                  <Space>
+                    {(!selectedOrderForDocument.citizenIdDoc.status || 
+                      selectedOrderForDocument.citizenIdDoc.status === '0' || 
+                      selectedOrderForDocument.citizenIdDoc.status === 'Pending') && (
+                      <>
+                        <Button 
+                          type="primary"
+                          loading={processingId === selectedOrderForDocument.citizenIdDoc.id}
+                          onClick={() => selectedOrderForDocument.citizenIdDoc?.id && handleApproveCitizenId(selectedOrderForDocument.citizenIdDoc.id)}
+                        >
+                          Duyệt
+                        </Button>
+                        <Button 
+                          danger
+                          loading={processingId === selectedOrderForDocument.citizenIdDoc.id}
+                          onClick={() => selectedOrderForDocument.citizenIdDoc?.id && handleRejectCitizenId(selectedOrderForDocument.citizenIdDoc.id)}
+                        >
+                          Từ chối
+                        </Button>
+                      </>
+                    )}
+                    <Button 
+                      icon={<EyeOutlined />}
+                      onClick={() => {
+                        setSelectedCitizenId(selectedOrderForDocument.citizenIdDoc!);
+                        setCitizenIdModalVisible(true);
+                      }}
+                    >
+                      Xem chi tiết
+                    </Button>
+                    <Button 
+                      icon={<EditOutlined />}
+                      onClick={() => {
+                        setSelectedCitizenId(selectedOrderForDocument.citizenIdDoc!);
+                        updateCitizenIdForm.setFieldsValue({
+                          name: selectedOrderForDocument.citizenIdDoc!.name,
+                          citizenIdNumber: selectedOrderForDocument.citizenIdDoc!.citizenIdNumber,
+                          birthDate: selectedOrderForDocument.citizenIdDoc!.birthDate,
+                          imageUrl: selectedOrderForDocument.citizenIdDoc!.imageUrl,
+                          imageUrl2: selectedOrderForDocument.citizenIdDoc!.imageUrl2,
+                        });
+                        setUpdateCitizenIdModalVisible(true);
+                      }}
+                    >
+                      Cập nhật
+                    </Button>
+                  </Space>
+                </Space>
+              </Card>
+            )}
+
+            {!selectedOrderForDocument.driverLicense && !selectedOrderForDocument.citizenIdDoc && (
+              <div className="text-center text-gray-500 py-8">
+                Chưa có giấy tờ nào được upload cho đơn hàng này
+              </div>
+            )}
+          </Space>
+        )}
+      </Modal>
+
+      {/* License Detail Modal */}
+      <Modal
+        title="Chi tiết Giấy phép lái xe"
+        open={licenseModalVisible}
+        onCancel={() => {
+          setLicenseModalVisible(false);
+          setSelectedLicense(null);
+        }}
+        footer={null}
+        width={800}
+      >
+        {selectedLicense && (
+          <div>
+            <Descriptions column={2} bordered>
+              <Descriptions.Item label="Họ tên">{selectedLicense.name}</Descriptions.Item>
+              <Descriptions.Item label="Số bằng lái">{selectedLicense.licenseNumber || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Mã đơn hàng">
+                {selectedLicense.rentalOrderId ? `#${selectedLicense.rentalOrderId}` : '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Trạng thái">
+                {getDocumentStatusTag(selectedLicense.status)}
+              </Descriptions.Item>
+            </Descriptions>
+            {(selectedLicense.imageUrl || selectedLicense.imageUrl2) && (
+              <div className="mt-4">
+                <div className="font-medium mb-2">Ảnh giấy phép lái xe:</div>
+                <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                  {selectedLicense.imageUrl && (
+                    <div>
+                      <div className="text-sm text-gray-600 mb-1">Mặt trước:</div>
+                      <Image src={selectedLicense.imageUrl} alt="GPLX mặt trước" className="max-w-full" />
+                    </div>
+                  )}
+                  {selectedLicense.imageUrl2 && (
+                    <div>
+                      <div className="text-sm text-gray-600 mb-1">Mặt sau:</div>
+                      <Image src={selectedLicense.imageUrl2} alt="GPLX mặt sau" className="max-w-full" />
+                    </div>
+                  )}
+                </Space>
+              </div>
+            )}
+            <div className="mt-4 flex gap-2">
+              {(!selectedLicense.status || selectedLicense.status === '0' || selectedLicense.status === 'Pending') && (
+                <>
+                  <Button 
+                    type="primary"
+                    loading={processingId === selectedLicense.id}
+                    onClick={() => selectedLicense.id && handleApproveLicense(selectedLicense.id)}
+                  >
+                    Duyệt
+                  </Button>
+                  <Button 
+                    danger
+                    loading={processingId === selectedLicense.id}
+                    onClick={() => selectedLicense.id && handleRejectLicense(selectedLicense.id)}
+                  >
+                    Từ chối
+                  </Button>
+                </>
+              )}
+              <Button 
+                icon={<EditOutlined />}
+                onClick={() => {
+                  updateLicenseForm.setFieldsValue({
+                    name: selectedLicense.name,
+                    licenseNumber: selectedLicense.licenseNumber,
+                    imageUrl: selectedLicense.imageUrl,
+                    imageUrl2: selectedLicense.imageUrl2,
+                  });
+                  setUpdateLicenseModalVisible(true);
+                }}
+              >
+                Cập nhật
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Citizen ID Detail Modal */}
+      <Modal
+        title="Chi tiết Căn cước công dân"
+        open={citizenIdModalVisible}
+        onCancel={() => {
+          setCitizenIdModalVisible(false);
+          setSelectedCitizenId(null);
+        }}
+        footer={null}
+        width={800}
+      >
+        {selectedCitizenId && (
+          <div>
+            <Descriptions column={2} bordered>
+              <Descriptions.Item label="Họ tên">{selectedCitizenId.name}</Descriptions.Item>
+              <Descriptions.Item label="Số CCCD">{selectedCitizenId.citizenIdNumber}</Descriptions.Item>
+              <Descriptions.Item label="Ngày sinh">{selectedCitizenId.birthDate || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Mã đơn hàng">
+                {selectedCitizenId.rentalOrderId ? `#${selectedCitizenId.rentalOrderId}` : '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Trạng thái">
+                {getDocumentStatusTag(selectedCitizenId.status)}
+              </Descriptions.Item>
+            </Descriptions>
+            {(selectedCitizenId.imageUrl || selectedCitizenId.imageUrl2) && (
+              <div className="mt-4">
+                <div className="font-medium mb-2">Ảnh căn cước công dân:</div>
+                <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                  {selectedCitizenId.imageUrl && (
+                    <div>
+                      <div className="text-sm text-gray-600 mb-1">Mặt trước:</div>
+                      <Image src={selectedCitizenId.imageUrl} alt="CCCD mặt trước" className="max-w-full" />
+                    </div>
+                  )}
+                  {selectedCitizenId.imageUrl2 && (
+                    <div>
+                      <div className="text-sm text-gray-600 mb-1">Mặt sau:</div>
+                      <Image src={selectedCitizenId.imageUrl2} alt="CCCD mặt sau" className="max-w-full" />
+                    </div>
+                  )}
+                </Space>
+              </div>
+            )}
+            <div className="mt-4 flex gap-2">
+              {(!selectedCitizenId.status || selectedCitizenId.status === '0' || selectedCitizenId.status === 'Pending') && (
+                <>
+                  <Button 
+                    type="primary"
+                    loading={processingId === selectedCitizenId.id}
+                    onClick={() => selectedCitizenId.id && handleApproveCitizenId(selectedCitizenId.id)}
+                  >
+                    Duyệt
+                  </Button>
+                  <Button 
+                    danger
+                    loading={processingId === selectedCitizenId.id}
+                    onClick={() => selectedCitizenId.id && handleRejectCitizenId(selectedCitizenId.id)}
+                  >
+                    Từ chối
+                  </Button>
+                </>
+              )}
+              <Button 
+                icon={<EditOutlined />}
+                onClick={() => {
+                  updateCitizenIdForm.setFieldsValue({
+                    name: selectedCitizenId.name,
+                    citizenIdNumber: selectedCitizenId.citizenIdNumber,
+                    birthDate: selectedCitizenId.birthDate,
+                    imageUrl: selectedCitizenId.imageUrl,
+                    imageUrl2: selectedCitizenId.imageUrl2,
+                  });
+                  setUpdateCitizenIdModalVisible(true);
+                }}
+              >
+                Cập nhật
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Update License Modal */}
+      <Modal
+        title="Cập nhật Giấy phép lái xe"
+        open={updateLicenseModalVisible}
+        onCancel={() => {
+          setUpdateLicenseModalVisible(false);
+          updateLicenseForm.resetFields();
+          setLicenseImageFileList([]);
+          setLicenseImage2FileList([]);
+          setSelectedLicense(null);
+        }}
+        footer={null}
+        width={800}
+      >
+        {selectedLicense && (
+          <Form
+            form={updateLicenseForm}
+            layout="vertical"
+            onFinish={handleUpdateLicense}
+          >
+            <Form.Item
+              label="Họ tên"
+              name="name"
+              rules={[{ required: true, message: 'Vui lòng nhập họ tên' }]}
+            >
+              <Input />
+            </Form.Item>
+            <Form.Item
+              label="Số bằng lái"
+              name="licenseNumber"
+            >
+              <Input />
+            </Form.Item>
+            <Form.Item
+              label="Ảnh mặt trước"
+            >
+              <Upload
+                beforeUpload={() => false}
+                maxCount={1}
+                listType="picture-card"
+                fileList={licenseImageFileList}
+                onChange={({ fileList }) => setLicenseImageFileList(fileList)}
+                onRemove={() => setLicenseImageFileList([])}
+              >
+                {licenseImageFileList.length < 1 && (
+                  <div>
+                    <div>+ Upload</div>
+                  </div>
+                )}
+              </Upload>
+              {selectedLicense.imageUrl && licenseImageFileList.length === 0 && (
+                <div className="mt-2">
+                  <div className="text-sm text-gray-600 mb-1">Ảnh hiện tại:</div>
+                  <Image src={selectedLicense.imageUrl} alt="GPLX mặt trước" width={200} />
+                </div>
+              )}
+            </Form.Item>
+            <Form.Item
+              label="Ảnh mặt sau"
+            >
+              <Upload
+                beforeUpload={() => false}
+                maxCount={1}
+                listType="picture-card"
+                fileList={licenseImage2FileList}
+                onChange={({ fileList }) => setLicenseImage2FileList(fileList)}
+                onRemove={() => setLicenseImage2FileList([])}
+              >
+                {licenseImage2FileList.length < 1 && (
+                  <div>
+                    <div>+ Upload</div>
+                  </div>
+                )}
+              </Upload>
+              {selectedLicense.imageUrl2 && licenseImage2FileList.length === 0 && (
+                <div className="mt-2">
+                  <div className="text-sm text-gray-600 mb-1">Ảnh hiện tại:</div>
+                  <Image src={selectedLicense.imageUrl2} alt="GPLX mặt sau" width={200} />
+                </div>
+              )}
+            </Form.Item>
+            <Form.Item>
+              <Space>
+                <Button onClick={() => {
+                  setUpdateLicenseModalVisible(false);
+                  updateLicenseForm.resetFields();
+                }}>
+                  Hủy
+                </Button>
+                <Button type="primary" htmlType="submit" loading={loading}>
+                  Cập nhật
+                </Button>
+              </Space>
+            </Form.Item>
+          </Form>
+        )}
+      </Modal>
+
+      {/* Update Citizen ID Modal */}
+      <Modal
+        title="Cập nhật Căn cước công dân"
+        open={updateCitizenIdModalVisible}
+        onCancel={() => {
+          setUpdateCitizenIdModalVisible(false);
+          updateCitizenIdForm.resetFields();
+          setCitizenIdImageFileList([]);
+          setCitizenIdImage2FileList([]);
+          setSelectedCitizenId(null);
+        }}
+        footer={null}
+        width={800}
+      >
+        {selectedCitizenId && (
+          <Form
+            form={updateCitizenIdForm}
+            layout="vertical"
+            onFinish={handleUpdateCitizenId}
+          >
+            <Form.Item
+              label="Họ tên"
+              name="name"
+              rules={[{ required: true, message: 'Vui lòng nhập họ tên' }]}
+            >
+              <Input />
+            </Form.Item>
+            <Form.Item
+              label="Số CCCD"
+              name="citizenIdNumber"
+              rules={[{ required: true, message: 'Vui lòng nhập số CCCD' }]}
+            >
+              <Input />
+            </Form.Item>
+            <Form.Item
+              label="Ngày sinh"
+              name="birthDate"
+            >
+              <Input type="date" />
+            </Form.Item>
+            <Form.Item
+              label="Ảnh mặt trước"
+            >
+              <Upload
+                beforeUpload={() => false}
+                maxCount={1}
+                listType="picture-card"
+                fileList={citizenIdImageFileList}
+                onChange={({ fileList }) => setCitizenIdImageFileList(fileList)}
+                onRemove={() => setCitizenIdImageFileList([])}
+              >
+                {citizenIdImageFileList.length < 1 && (
+                  <div>
+                    <div>+ Upload</div>
+                  </div>
+                )}
+              </Upload>
+              {selectedCitizenId.imageUrl && citizenIdImageFileList.length === 0 && (
+                <div className="mt-2">
+                  <div className="text-sm text-gray-600 mb-1">Ảnh hiện tại:</div>
+                  <Image src={selectedCitizenId.imageUrl} alt="CCCD mặt trước" width={200} />
+                </div>
+              )}
+            </Form.Item>
+            <Form.Item
+              label="Ảnh mặt sau"
+            >
+              <Upload
+                beforeUpload={() => false}
+                maxCount={1}
+                listType="picture-card"
+                fileList={citizenIdImage2FileList}
+                onChange={({ fileList }) => setCitizenIdImage2FileList(fileList)}
+                onRemove={() => setCitizenIdImage2FileList([])}
+              >
+                {citizenIdImage2FileList.length < 1 && (
+                  <div>
+                    <div>+ Upload</div>
+                  </div>
+                )}
+              </Upload>
+              {selectedCitizenId.imageUrl2 && citizenIdImage2FileList.length === 0 && (
+                <div className="mt-2">
+                  <div className="text-sm text-gray-600 mb-1">Ảnh hiện tại:</div>
+                  <Image src={selectedCitizenId.imageUrl2} alt="CCCD mặt sau" width={200} />
+                </div>
+              )}
+            </Form.Item>
+            <Form.Item>
+              <Space>
+                <Button onClick={() => {
+                  setUpdateCitizenIdModalVisible(false);
+                  updateCitizenIdForm.resetFields();
+                }}>
+                  Hủy
+                </Button>
+                <Button type="primary" htmlType="submit" loading={loading}>
+                  Cập nhật
+                </Button>
+              </Space>
+            </Form.Item>
+          </Form>
+        )}
       </Modal>
     </div>
   );

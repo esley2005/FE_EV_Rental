@@ -1154,7 +1154,59 @@ export const rentalOrderApi = {
       },
     });
   },
+
+  // Xác nhận giấy tờ ở quầy (Staff only) - chuyển từ DocumentsSubmitted sang DepositPending
+  confirmDocuments: (orderId: number) => {
+    return apiCall<{ success: boolean; message?: string }>(`/RentalOrder/ConfirmDocuments?orderId=${orderId}`, {
+      method: 'PUT',
+    });
+  },
 };
+
+export const carDeliveryHistoryApi = {
+  // Tạo lịch sử giao xe (Bắt đầu thuê)
+  create: (data: {
+    deliveryDate: string;
+    odometerStart: number;
+    batteryLevelStart: number;
+    vehicleConditionStart: string;
+    orderId: number;
+  }) => {
+    return apiCall<{ message: string }>('/CarDeliveryHistory', {
+      method: 'POST',
+      body: JSON.stringify({
+        DeliveryDate: data.deliveryDate,
+        OdometerStart: data.odometerStart,
+        BatteryLevelStart: data.batteryLevelStart,
+        VehicleConditionStart: data.vehicleConditionStart,
+        OrderId: data.orderId,
+      }),
+    });
+  },
+};
+
+export const carReturnHistoryApi = {
+  // Tạo lịch sử trả xe
+  create: (data: {
+    returnDate: string;
+    odometerEnd: number;
+    batteryLevelEnd: number;
+    vehicleConditionEnd: string;
+    orderId: number;
+  }) => {
+    return apiCall<{ message: string }>('/CarReturnHistory', {
+      method: 'POST',
+      body: JSON.stringify({
+        ReturnDate: data.returnDate,
+        OdometerEnd: data.odometerEnd,
+        BatteryLevelEnd: data.batteryLevelEnd,
+        VehicleConditionEnd: data.vehicleConditionEnd,
+        OrderId: data.orderId,
+      }),
+    });
+  },
+};
+
 export const paymentApi = {
   // Lấy doanh thu theo từng điểm thuê (Admin/Staff)
   getRevenueByLocation: () =>

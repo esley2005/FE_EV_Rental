@@ -231,10 +231,6 @@ placement: "topRight",
                       <div className="font-medium">{dayjs(user.createdAt).format("DD/MM/YYYY")}</div>
                     </div>
 
-                    <div>
-                      <div className="text-sm text-gray-500">Điểm</div>
-                      <div className="font-medium">0 điểm</div>
-                    </div>
 <div className="ml-auto flex flex-col items-end gap-2">
                       <div className="flex gap-2">
                         {/* small status tag - license verification state */}

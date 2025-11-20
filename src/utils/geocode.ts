@@ -50,24 +50,49 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult | n
     let result: GeocodeResult | null = null;
 
     for (const url of urls) {
-      const res = await fetch(url, {
-      headers: {
-        // Optional headers for better compatibility with Nominatim
-        "Accept": "application/json",
-      },
-      });
-      const data = await res.json();
+      try {
+        // Add timeout to prevent hanging
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
-      if (Array.isArray(data) && data.length > 0) {
-        result = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-        break;
+        const res = await fetch(url, {
+          headers: {
+            "Accept": "application/json",
+            "User-Agent": "EV_Rental_App/1.0", // Nominatim requires User-Agent
+          },
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+          console.warn(`Geocode API returned ${res.status} for ${url}`);
+          continue; // Try next URL
+        }
+
+        const data = await res.json();
+
+        if (Array.isArray(data) && data.length > 0) {
+          result = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+          break;
+        }
+      } catch (fetchError: any) {
+        // Handle abort (timeout) or network errors gracefully
+        if (fetchError.name === 'AbortError') {
+          console.warn(`Geocode timeout for ${url}`);
+        } else {
+          console.warn(`Geocode fetch error for ${url}:`, fetchError);
+        }
+        // Continue to next URL or return null if last attempt
+        continue;
       }
     }
 
-    // Cache and return
+    // Cache and return (even if null, to avoid repeated failed attempts)
     geocodeCache.set(query, result);
     return result;
   } catch (error) {
+    // Catch any unexpected errors and return null gracefully
     console.error("Geocode failed:", error);
     return null;
   }
