@@ -17,6 +17,7 @@ import {
   Descriptions,
   Tabs,
   Typography,
+  Switch,
 } from "antd";
 import {
   UserOutlined,
@@ -96,10 +97,44 @@ export default function CustomerManagement() {
         return;
       }
 
-      // Filter only customers (role = "Customer")
-      const customerList = usersResponse.data.filter(
+      // Filter only customers (role = "Customer") và normalize dữ liệu
+      const rawCustomers = usersResponse.data.filter(
         (user: User) => user.role?.toLowerCase() === "customer"
       );
+      
+      // Normalize dữ liệu để map PascalCase từ backend sang camelCase theo DTO mới
+      const customerList = rawCustomers.map((u: any) => {
+        // Xử lý updateAt - nếu là giá trị mặc định "0001-01-01T00:00:00" thì coi như null
+        const updateAtRaw = u.updateAt ?? u.UpdateAt ?? u.updatedAt ?? u.UpdatedAt;
+        const updateAt = updateAtRaw && updateAtRaw !== "0001-01-01T00:00:00" && !updateAtRaw.startsWith("0001-01-01") 
+          ? updateAtRaw 
+          : null;
+        
+        return {
+          id: u.userId ?? u.id ?? u.UserId,
+          email: u.email ?? u.Email,
+          fullName: u.fullName ?? u.FullName ?? u.name,
+          role: u.role ?? u.Role ?? 'Customer',
+          phone: u.phone ?? u.phoneNumber,
+          address: u.address,
+          dateOfBirth: u.dateOfBirth ?? u.dob,
+          avatar: u.avatar,
+          locationId: u.locationId ?? u.rentalLocationId ?? u.LocationId ?? u.RentalLocationId,
+          rentalLocationId: u.rentalLocationId ?? u.locationId ?? u.RentalLocationId ?? u.LocationId,
+          driverLicenseStatus: u.driverLicenseStatus,
+          citizenIdStatus: u.citizenIdStatus,
+          isEmailConfirmed: u.isEmailConfirmed ?? u.IsEmailConfirmed,
+          // Normalize isActive: hỗ trợ cả boolean và string từ backend
+          isActive: (() => {
+            const activeValue = u.isActive ?? u.IsActive;
+            if (activeValue === true || activeValue === "true" || activeValue === 1) return true;
+            if (activeValue === false || activeValue === "false" || activeValue === 0) return false;
+            return false; // Mặc định là false nếu không có
+          })(),
+          createdAt: u.createdAt ?? u.CreatedAt,
+          updatedAt: updateAt, // Map từ updateAt (backend) sang updatedAt (frontend)
+        };
+      }) as User[];
 
       // Tạo map userId -> orderIds
       const userIdToOrderIdsMap = new Map<number, number[]>();
@@ -290,6 +325,75 @@ export default function CustomerManagement() {
     loadCustomerDocuments(customer);
   };
 
+  const handleToggleActive = async (customer: User, isActive: boolean) => {
+    if (!customer.id) return;
+    
+    // Cập nhật state ngay lập tức để UI phản hồi nhanh
+    setCustomers(prev => prev.map(c => 
+      c.id === customer.id ? { ...c, isActive } : c
+    ));
+    setFilteredCustomers(prev => prev.map(c => 
+      c.id === customer.id ? { ...c, isActive } : c
+    ));
+    
+    setLoading(true);
+    try {
+      const response = await authApi.updateUserActiveStatus(customer.id, isActive);
+      if (response.success) {
+        if (isActive) {
+          // Mở khóa - màu xanh (success)
+          api.success({
+            message: "Mở khóa tài khoản thành công",
+            description: `Tài khoản ${customer.fullName} đã được mở khóa.`,
+            placement: "topRight",
+            icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
+          });
+        } else {
+          // Khóa - màu đỏ (error)
+          api.error({
+            message: "Khóa tài khoản thành công",
+            description: `Tài khoản ${customer.fullName} đã được khóa.`,
+            placement: "topRight",
+            icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+          });
+        }
+        // Reload customers để đồng bộ với database
+        await loadCustomers();
+      } else {
+        // Nếu API thất bại, revert lại state
+        setCustomers(prev => prev.map(c => 
+          c.id === customer.id ? { ...c, isActive: !isActive } : c
+        ));
+        setFilteredCustomers(prev => prev.map(c => 
+          c.id === customer.id ? { ...c, isActive: !isActive } : c
+        ));
+        api.error({
+          message: "Lỗi cập nhật trạng thái",
+          description: response.error || "Không thể cập nhật trạng thái tài khoản!",
+          placement: "topRight",
+          icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+        });
+      }
+    } catch (error) {
+      // Nếu có lỗi, revert lại state
+      setCustomers(prev => prev.map(c => 
+        c.id === customer.id ? { ...c, isActive: !isActive } : c
+      ));
+      setFilteredCustomers(prev => prev.map(c => 
+        c.id === customer.id ? { ...c, isActive: !isActive } : c
+      ));
+      console.error("Toggle active status error:", error);
+      api.error({
+        message: "Có lỗi xảy ra",
+        description: "Không thể cập nhật trạng thái tài khoản. Vui lòng thử lại!",
+        placement: "topRight",
+        icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getStatusTag = (status?: string) => {
     const statusLower = status?.toLowerCase() || '';
     if (statusLower === 'approved' || statusLower === '1') {
@@ -361,23 +465,44 @@ export default function CustomerManagement() {
     {
       title: "Trạng thái",
       key: "status",
-      render: (_: any, record: User) => (
-        <Space direction="vertical" size="small">
-          {record.isEmailConfirmed ? (
-            <Tag color="success" icon={<CheckCircleOutlined />}>
-              Email đã xác thực
-            </Tag>
-          ) : (
-            
-            <Tag color="warning">Email chưa xác thực</Tag>
-          )}
-          {record.isActive !== false ? (
-            <Tag color="success">Đang hoạt động</Tag>
-          ) : (
-            <Tag color="error">Đã khóa</Tag>
-          )}
-        </Space>
-      ),
+      render: (_: any, record: User) => {
+        // isActive: true = Đang hoạt động, false = Đã khóa
+        // Kiểm tra cả boolean true và string "true" từ backend
+        const activeValue = record.isActive ?? (record as any).IsActive;
+        const isActive = activeValue === true || activeValue === "true" || activeValue === 1;
+        return (
+          <Space direction="vertical" size="small">
+            {record.isEmailConfirmed ? (
+              <Tag color="success" icon={<CheckCircleOutlined />}>
+                Email đã xác thực
+              </Tag>
+            ) : (
+              <Tag color="warning">Email chưa xác thực</Tag>
+            )}
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={isActive}
+                checkedChildren="Mở"
+                unCheckedChildren="Khóa"
+                onChange={(checked) => handleToggleActive(record, checked)}
+                loading={loading}
+                style={{
+                  minWidth: '60px',
+                  ...(isActive 
+                    ? { backgroundColor: '#52c41a' } 
+                    : { backgroundColor: '#ff4d4f' }
+                  ),
+                }}
+              />
+              {isActive ? (
+                <Tag color="success" className="m-0 font-semibold">Đang hoạt động</Tag>
+              ) : (
+                <Tag color="error" className="m-0 font-semibold">Đã khóa</Tag>
+              )}
+            </div>
+          </Space>
+        );
+      },
     },
     {
       title: "Trạng thái xác thực",
@@ -428,31 +553,44 @@ export default function CustomerManagement() {
       dataIndex: "createdAt",
       key: "createdAt",
       sorter: (a: User, b: User) => {
-        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        const dateA = (a.createdAt ?? (a as any).CreatedAt) ? new Date(a.createdAt ?? (a as any).CreatedAt).getTime() : 0;
+        const dateB = (b.createdAt ?? (b as any).CreatedAt) ? new Date(b.createdAt ?? (b as any).CreatedAt).getTime() : 0;
         return dateA - dateB;
       },
-      render: (text: string) =>
-        text ? dayjs(text).format("DD/MM/YYYY HH:mm") : "N/A",
+      render: (_: any, record: User) => {
+        const createdAt = record.createdAt ?? (record as any).CreatedAt;
+        return createdAt ? dayjs(createdAt).format("DD/MM/YYYY HH:mm") : "N/A";
+      },
     },
     {
       title: "Ngày cập nhật",
       dataIndex: "updatedAt",
       key: "updatedAt",
       sorter: (a: User, b: User) => {
-        const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-        const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        const dateA = a.updatedAt && !a.updatedAt.toString().startsWith("0001-01-01") 
+          ? new Date(a.updatedAt).getTime() 
+          : 0;
+        const dateB = b.updatedAt && !b.updatedAt.toString().startsWith("0001-01-01") 
+          ? new Date(b.updatedAt).getTime() 
+          : 0;
         return dateA - dateB;
       },
-      render: (text: string) =>
-        text ? (
+      render: (_: any, record: User) => {
+        const updatedAt = record.updatedAt;
+        // Kiểm tra nếu updatedAt là null, undefined, hoặc giá trị mặc định
+        const isValidDate = updatedAt && 
+          updatedAt !== "0001-01-01T00:00:00" && 
+          !updatedAt.toString().startsWith("0001-01-01");
+        
+        return isValidDate ? (
           <Space>
             <ClockCircleOutlined />
-            <span>{dayjs(text).format("DD/MM/YYYY HH:mm")}</span>
+            <span>{dayjs(updatedAt).format("DD/MM/YYYY HH:mm")}</span>
           </Space>
         ) : (
-          "Chưa cập nhật"
-        ),
+          <span className="text-gray-400">Chưa cập nhật</span>
+        );
+      },
     },
   ];
 
