@@ -431,7 +431,7 @@ export default function CarStatusList({ onDeliver, onReturn }: CarStatusListProp
             </Card>
 
             {/* Document Status */}
-            <Card title={<><IdcardOutlined /> Trạng thái giấy tờ</>} size="small">
+            {/* <Card title={<><IdcardOutlined /> Trạng thái giấy tờ</>} size="small">
               <Descriptions column={2} size="small">
                 <Descriptions.Item label="Giấy phép lái xe (GPLX)">
                   {selectedOrder.driverLicense ? (
@@ -458,7 +458,7 @@ export default function CarStatusList({ onDeliver, onReturn }: CarStatusListProp
                   )}
                 </Descriptions.Item>
               </Descriptions>
-            </Card>
+            </Card> */}
 
             {/* Order Details */}
             <Card title="Chi tiết đơn hàng" size="small">

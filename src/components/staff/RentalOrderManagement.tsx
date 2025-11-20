@@ -16,7 +16,8 @@ import {
   Popconfirm,
   InputNumber,
   Form,
-  Upload
+  Upload,
+  Alert
 } from "antd";
 import type { UploadFile } from "antd/es/upload/interface";
 import { 
@@ -36,6 +37,30 @@ import { rentalOrderApi, carsApi, authApi, driverLicenseApi, citizenIdApi, payme
 import type { RentalOrderData, User, DriverLicenseData, CitizenIdData } from "@/services/api";
 import type { Car } from "@/types/car";
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+
+// Cấu hình dayjs với timezone
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
+// Helper function để format thời gian theo múi giờ Việt Nam (UTC+7)
+const formatVietnamTime = (date: string | Date | undefined | null): string => {
+  if (!date) return '-';
+  try {
+    // Parse date và convert sang múi giờ Việt Nam (UTC+7)
+    const parsedDate = dayjs(date);
+    // Nếu date có timezone info (UTC), convert sang VN time
+    if (parsedDate.isUTC() || typeof date === 'string' && (date.includes('Z') || date.includes('+') || date.includes('-', 10))) {
+      return parsedDate.tz("Asia/Ho_Chi_Minh").format('DD/MM/YYYY HH:mm');
+    }
+    // Nếu không có timezone info, giả sử là local time và format
+    return parsedDate.format('DD/MM/YYYY HH:mm');
+  } catch (error) {
+    console.error('Error formatting date:', error, date);
+    return '-';
+  }
+};
 
 interface OrderWithDetails extends Omit<RentalOrderData, 'citizenId'> {
   car?: Car;
@@ -128,8 +153,16 @@ export default function RentalOrderManagement() {
         : [];
 
       const users: User[] = usersResponse.success && usersResponse.data
-        ? (Array.isArray(usersResponse.data) ? usersResponse.data : [])
+        ? (Array.isArray(usersResponse.data) 
+            ? usersResponse.data 
+            : (usersResponse.data as any)?.$values || [])
         : [];
+      
+      // Debug: Log để kiểm tra dữ liệu users
+      console.log('[DEBUG] Loaded users:', {
+        count: users.length,
+        sample: users.slice(0, 3).map(u => ({ id: u.id, email: u.email, fullName: u.fullName }))
+      });
 
       const licenses: DriverLicenseData[] = licensesResponse.success && licensesResponse.data
         ? (Array.isArray(licensesResponse.data) ? licensesResponse.data : (licensesResponse.data as any)?.$values || [])
@@ -142,15 +175,42 @@ export default function RentalOrderManagement() {
       const ordersWithDetails: OrderWithDetails[] = ordersData.map((order: RentalOrderData) => {
         const car = cars.find((c) => c.id === order.carId);
         const user = users.find((u) => u.id === order.userId);
-        const license = licenses.find((l) => l.rentalOrderId === order.id);
-        const citizenIdDoc = citizenIds.find((c) => c.rentalOrderId === order.id);
+        // Tìm giấy tờ với logic rõ ràng hơn, xử lý cả null và undefined
+        const license = licenses.find((l) => l.rentalOrderId != null && l.rentalOrderId === order.id);
+        const citizenIdDoc = citizenIds.find((c) => c.rentalOrderId != null && c.rentalOrderId === order.id);
+
+        // Debug: Log để kiểm tra user không tìm thấy
+        if (!user && order.userId) {
+          console.warn(`[DEBUG] Order ${order.id}: User not found for userId ${order.userId}`, {
+            availableUserIds: users.map(u => u.id),
+            orderUserId: order.userId
+          });
+        }
+
+        // Debug: Log để kiểm tra dữ liệu giấy tờ cho đơn hàng có giấy tờ
+        if (license || citizenIdDoc) {
+          console.log(`[DEBUG] Order ${order.id} documents:`, {
+            license: license ? {
+              id: license.id,
+              status: license.status,
+              imageUrl: license.imageUrl ? 'exists' : 'missing',
+              rentalOrderId: license.rentalOrderId
+            } : null,
+            citizenId: citizenIdDoc ? {
+              id: citizenIdDoc.id,
+              status: citizenIdDoc.status,
+              imageUrl: citizenIdDoc.imageUrl ? 'exists' : 'missing',
+              rentalOrderId: citizenIdDoc.rentalOrderId
+            } : null
+          });
+        }
 
         return {
           ...order,
           car,
-          user,
-          driverLicense: license,
-          citizenIdDoc,
+          user: user || undefined,
+          driverLicense: license || undefined,
+          citizenIdDoc: citizenIdDoc || undefined,
         };
       });
 
@@ -190,14 +250,20 @@ export default function RentalOrderManagement() {
     return <Tag color={config.color} icon={config.icon}>{config.text}</Tag>;
   };
 
-  const getDocumentStatusTag = (status?: string) => {
-    const statusLower = status?.toLowerCase() || '';
-    if (statusLower === 'approved' || statusLower === '1') {
+  const getDocumentStatusTag = (status?: string | number) => {
+    // Xử lý cả string và number
+    const statusStr = status?.toString() || '';
+    const statusLower = statusStr.toLowerCase();
+    
+    // Kiểm tra approved: 'approved', '1', hoặc 1
+    if (statusLower === 'approved' || statusLower === '1' || status === 1) {
       return <Tag color="success">Đã xác thực</Tag>;
     }
-    if (statusLower === 'rejected' || statusLower === '2') {
+    // Kiểm tra rejected: 'rejected', '2', hoặc 2
+    if (statusLower === 'rejected' || statusLower === '2' || status === 2) {
       return <Tag color="error">Đã từ chối</Tag>;
     }
+    // Mặc định: pending, '0', 0, hoặc null/undefined -> Chờ xác thực
     return <Tag color="warning">Chờ xác thực</Tag>;
   };
 
@@ -781,22 +847,44 @@ export default function RentalOrderManagement() {
           return <Tag color="blue">Có tài xế</Tag>;
         }
         
-        // Kiểm tra có giấy tờ được upload chưa
-        const hasDocuments = record.driverLicense || record.citizenIdDoc;
-        const hasPendingDocs = 
-          (record.driverLicense && (record.driverLicense.status === '0' || record.driverLicense.status === 'Pending')) ||
-          (record.citizenIdDoc && (record.citizenIdDoc.status === '0' || record.citizenIdDoc.status === 'Pending'));
+        // Kiểm tra có giấy tờ được upload chưa (có id hoặc imageUrl)
+        const hasDriverLicense = record.driverLicense && (record.driverLicense.id || record.driverLicense.imageUrl);
+        const hasCitizenId = record.citizenIdDoc && (record.citizenIdDoc.id || record.citizenIdDoc.imageUrl);
+        const hasDocuments = hasDriverLicense || hasCitizenId;
+        
+        // Kiểm tra có giấy tờ đang chờ xác thực (status là 0, '0', 'Pending', null, undefined, hoặc không phải approved/rejected)
+        const isLicensePending = hasDriverLicense && (() => {
+          const status = record.driverLicense!.status;
+          if (!status) return true; // null/undefined -> pending
+          const statusStr = status.toString().toLowerCase();
+          return statusStr === '0' || statusStr === 'pending' || 
+                 (statusStr !== '1' && statusStr !== 'approved' && statusStr !== '2' && statusStr !== 'rejected');
+        })();
+        
+        const isCitizenIdPending = hasCitizenId && (() => {
+          const status = record.citizenIdDoc!.status;
+          if (!status) return true; // null/undefined -> pending
+          const statusStr = status.toString().toLowerCase();
+          return statusStr === '0' || statusStr === 'pending' || 
+                 (statusStr !== '1' && statusStr !== 'approved' && statusStr !== '2' && statusStr !== 'rejected');
+        })();
+        
+        const hasPendingDocs = isLicensePending || isCitizenIdPending;
         
         return (
           <Space direction="vertical" size="small" style={{ width: '100%' }}>
-            <div>
-              <IdcardOutlined className="mr-1" />
-              <span className="text-xs">GPLX:</span> {getDocumentStatusTag(record.driverLicense?.status)}
-            </div>
-            <div>
-              <IdcardOutlined className="mr-1" />
-              <span className="text-xs">CCCD:</span> {getDocumentStatusTag(record.citizenIdDoc?.status)}
-            </div>
+            {hasDriverLicense && (
+              <div>
+                <IdcardOutlined className="mr-1" />
+                <span className="text-xs">GPLX:</span> {getDocumentStatusTag(record.driverLicense?.status)}
+              </div>
+            )}
+            {hasCitizenId && (
+              <div>
+                <IdcardOutlined className="mr-1" />
+                <span className="text-xs">CCCD:</span> {getDocumentStatusTag(record.citizenIdDoc?.status)}
+              </div>
+            )}
             {hasDocuments && (
               <Button 
                 type={hasPendingDocs ? "primary" : "default"}
@@ -915,7 +1003,7 @@ export default function RentalOrderManagement() {
       key: "pickupTime",
       width: 150,
       render: (_: any, record: OrderWithDetails) =>
-        record.pickupTime ? dayjs(record.pickupTime).format('DD/MM/YYYY HH:mm') : '-',
+        formatVietnamTime(record.pickupTime),
     },
     {
       title: "Thao tác",
@@ -1026,19 +1114,31 @@ export default function RentalOrderManagement() {
               )}
             </Card>
 
-            <Card title={<><UserOutlined /> Thông tin người dùng</>} size="small">
+            <Card title={<><UserOutlined /> Thông tin khách hàng</>} size="small">
               {selectedOrder.user ? (
                 <Descriptions column={2} size="small">
                   <Descriptions.Item label="Họ tên">{selectedOrder.user.fullName || '-'}</Descriptions.Item>
                   <Descriptions.Item label={<><MailOutlined /> Email</>}>{selectedOrder.user.email || '-'}</Descriptions.Item>
                   <Descriptions.Item label={<><PhoneOutlined /> Số điện thoại</>}>{selectedOrder.user.phone || '-'}</Descriptions.Item>
+                  {selectedOrder.user.address && (
+                    <Descriptions.Item label="Địa chỉ">{selectedOrder.user.address}</Descriptions.Item>
+                  )}
                 </Descriptions>
+              ) : selectedOrder.userId ? (
+                <div className="text-yellow-600">
+                  <Alert
+                    message="Đang tải thông tin người dùng..."
+                    description={`User ID: ${selectedOrder.userId}`}
+                    type="warning"
+                    showIcon
+                  />
+                </div>
               ) : (
                 <div className="text-gray-500">Không có thông tin người dùng</div>
               )}
             </Card>
 
-            <Card title={<><IdcardOutlined /> Trạng thái giấy tờ</>} size="small">
+            {/* <Card title={<><IdcardOutlined /> Trạng thái giấy tờ</>} size="small">
               <Descriptions column={2} size="small">
                 <Descriptions.Item label="Giấy phép lái xe (GPLX)">
                   {selectedOrder.driverLicense ? (
@@ -1065,20 +1165,20 @@ export default function RentalOrderManagement() {
                   )}
                 </Descriptions.Item>
               </Descriptions>
-            </Card>
+            </Card> */}
 
             <Card title="Chi tiết đơn hàng" size="small">
               <Descriptions column={2} size="small">
                 <Descriptions.Item label="Mã đơn hàng">#{selectedOrder.id}</Descriptions.Item>
                 <Descriptions.Item label="Số điện thoại">{selectedOrder.phoneNumber || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Ngày đặt">{dayjs(selectedOrder.orderDate || selectedOrder.createdAt).format('DD/MM/YYYY HH:mm')}</Descriptions.Item>
+                <Descriptions.Item label="Ngày đặt">{formatVietnamTime(selectedOrder.orderDate || selectedOrder.createdAt)}</Descriptions.Item>
                 <Descriptions.Item label="Có tài xế">
                   {selectedOrder.withDriver ? <Tag color="blue">Có</Tag> : <Tag color="default">Không</Tag>}
                 </Descriptions.Item>
-                <Descriptions.Item label="Ngày nhận xe">{dayjs(selectedOrder.pickupTime).format('DD/MM/YYYY HH:mm')}</Descriptions.Item>
-                <Descriptions.Item label="Ngày trả xe (dự kiến)">{dayjs(selectedOrder.expectedReturnTime).format('DD/MM/YYYY HH:mm')}</Descriptions.Item>
+                <Descriptions.Item label="Ngày nhận xe">{formatVietnamTime(selectedOrder.pickupTime)}</Descriptions.Item>
+                <Descriptions.Item label="Ngày trả xe (dự kiến)">{formatVietnamTime(selectedOrder.expectedReturnTime)}</Descriptions.Item>
                 {selectedOrder.actualReturnTime && (
-                  <Descriptions.Item label="Ngày trả xe (thực tế)">{dayjs(selectedOrder.actualReturnTime).format('DD/MM/YYYY HH:mm')}</Descriptions.Item>
+                  <Descriptions.Item label="Ngày trả xe (thực tế)">{formatVietnamTime(selectedOrder.actualReturnTime)}</Descriptions.Item>
                 )}
                 {selectedOrder.subTotal && (
                   <Descriptions.Item label="Tổng phụ">

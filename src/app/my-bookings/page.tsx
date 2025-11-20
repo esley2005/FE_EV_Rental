@@ -771,7 +771,7 @@ export default function MyBookingsPage() {
             </Card>
 
             {/* Document Status */}
-            <Card title={<><IdcardOutlined /> Trạng thái giấy tờ</>} size="small">
+            {/* <Card title={<><IdcardOutlined /> Trạng thái giấy tờ</>} size="small">
               <Descriptions column={2} size="small">
                 <Descriptions.Item label="Giấy phép lái xe (GPLX)">
                   {selectedBooking.driverLicense ? (
@@ -798,7 +798,7 @@ export default function MyBookingsPage() {
                   )}
                 </Descriptions.Item>
               </Descriptions>
-            </Card>
+            </Card> */}
 
             {/* Time and Location Info */}
             <Card title="Thông tin thời gian và địa điểm" size="small">
