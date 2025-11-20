@@ -5,9 +5,6 @@ import { useRouter } from "next/navigation";
 import {
   UserOutlined,
   MailOutlined,
-  PhoneOutlined,
-  HomeOutlined,
-  CalendarOutlined,
   LockOutlined,
   EditOutlined,
   SaveOutlined,
@@ -15,7 +12,6 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   WarningOutlined,
-  HeartOutlined,
   IdcardOutlined,
 } from "@ant-design/icons";
 import {
@@ -28,7 +24,6 @@ import {
   Avatar,
   Descriptions,
   Form,
-  DatePicker,
   Space,
   Tag,
 } from "antd";
@@ -76,9 +71,6 @@ export default function ProfilePage() {
           profileForm.setFieldsValue({
             fullName: userData.fullName,
             email: userData.email,
-            phone: userData.phone || "",
-            address: userData.address || "",
-            dateOfBirth: userData.dateOfBirth ? dayjs(userData.dateOfBirth) : null,
           });
         }
 
@@ -88,9 +80,6 @@ export default function ProfilePage() {
           profileForm.setFieldsValue({
             fullName: response.data.fullName,
             email: response.data.email,
-            phone: response.data.phone || "",
-            address: response.data.address || "",
-            dateOfBirth: response.data.dateOfBirth ? dayjs(response.data.dateOfBirth) : null,
           });
           localStorage.setItem("user", JSON.stringify(response.data));
 
@@ -117,9 +106,6 @@ if (response.data.driverLicenseStatus !== undefined) {
     try {
       const updateData: UpdateProfileData = {
         fullName: values.fullName,
-        phone: values.phone,
-        address: values.address,
-        dateOfBirth: values.dateOfBirth ? values.dateOfBirth.format("YYYY-MM-DD") : undefined,
       };
 
       const response = await authApi.updateProfile(updateData);
@@ -217,14 +203,6 @@ placement: "topRight",
               <UserOutlined />
               <span>Tài khoản của tôi</span>
             </button>
-            <button className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100">
-              <HomeOutlined />
-              <span>Quản lý cho thuê</span>
-            </button>
-            <button className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100">
-              <HeartOutlined />
-              <span>Xe yêu thích</span>
-            </button>
           </nav>
         </aside>
 
@@ -305,15 +283,6 @@ placement: "topRight",
                             <Descriptions column={1} bordered>
                               <Descriptions.Item label="Họ và tên">{user.fullName}</Descriptions.Item>
                               <Descriptions.Item label="Email">{user.email}</Descriptions.Item>
-                              <Descriptions.Item label="Số điện thoại">
-                                {user.phone || "Chưa cập nhật"}
-                              </Descriptions.Item>
-                              <Descriptions.Item label="Địa chỉ">
-                                {user.address || "Chưa cập nhật"}
-                              </Descriptions.Item>
-                              <Descriptions.Item label="Ngày sinh">
-                                {user.dateOfBirth ? dayjs(user.dateOfBirth).format("DD/MM/YYYY") : "Chưa cập nhật"}
-                              </Descriptions.Item>
                             </Descriptions>
 <Button
                               type="primary"
@@ -331,15 +300,6 @@ placement: "topRight",
                             </Form.Item>
                             <Form.Item label="Email" name="email">
                               <Input size="large" prefix={<MailOutlined />} disabled />
-                            </Form.Item>
-                            <Form.Item label="Số điện thoại" name="phone">
-                              <Input size="large" prefix={<PhoneOutlined />} />
-                            </Form.Item>
-                            <Form.Item label="Địa chỉ" name="address">
-                              <Input.TextArea rows={2} />
-                            </Form.Item>
-                            <Form.Item label="Ngày sinh" name="dateOfBirth">
-                              <DatePicker size="large" className="w-full" format="DD/MM/YYYY" />
                             </Form.Item>
                             <Space>
                               <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading} className="bg-blue-600">
