@@ -862,8 +862,8 @@ export default function CarManagement() {
               rules={[{ required: true }]}
             >
               <Select>
-                <Select.Option value={0}>Sẵn sàng</Select.Option>
-                <Select.Option value={1}>Hết xe</Select.Option>
+                <Select.Option value={1}>Sẵn sàng</Select.Option>
+                <Select.Option value={0}>Hết xe</Select.Option>
               </Select>
             </Form.Item>
 
