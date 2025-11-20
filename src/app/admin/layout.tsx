@@ -20,7 +20,7 @@ import { Layout, Menu, Dropdown, Space, Avatar, Breadcrumb, message, Result, But
 import { authUtils } from "@/utils/auth";
 
 // Các component nội dung mẫu
-import HistoryList from "@/components/HistoryList";
+import HistoryList from "@/components/admin/HistoryList";
 import DispatchList from "@/components/DispatchList";
 import CarManagement from "@/components/admin/CarManagement";
 import CustomerManagement from "@/components/admin/CustomerManagement";
