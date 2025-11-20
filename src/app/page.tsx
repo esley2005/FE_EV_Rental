@@ -4,7 +4,7 @@ import HeroSection from "@/components/HeroSection";
 import CarsSection from "@/components/home/CarsSection";
 import Footer from "@/components/Footer";
 import ChatBox from "@/components/chat/ChatBox"; // 👈 Thêm dòng này
-import Feedback from "@/components/Feedback";
+
 export default function Home() {
   return (
     <div className="min-h-screen bg-white flex flex-col font-sans">

@@ -251,26 +251,9 @@ export default function HeroSection() {
     </Select>
   </div>
 
-            {/* Date Range Picker */}
-            {/* <div className="relative">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Thời gian thuê
-              </label>
-              <RangePicker
-                size="large"
-                showTime={{
-                  format: "HH:mm",
-                  defaultValue: [dayjs().hour(21).minute(0), dayjs().add(1, "day").hour(20).minute(0)],
-                }}
-                format="HH:mm, DD/MM/YYYY"
-                value={dateRange}
-                onChange={(dates) => setDateRange(dates as [Dayjs | null, Dayjs | null] | null)}
-                disabledDate={disabledDate}
-                className="w-full time-range-picker"
-                placeholder={["Thời gian bắt đầu", "Thời gian kết thúc"]}
-              />
-            </div> */}
+           
           </div>
+          <br></br>
 
           {/* Search Button */}
           <motion.button
@@ -288,6 +271,7 @@ export default function HeroSection() {
             >
               <Search />
             </motion.div>
+         
             <span>Tìm Xe</span>
           </motion.button>
         </motion.div>
