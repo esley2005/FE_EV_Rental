@@ -1298,27 +1298,6 @@ export const carDeliveryHistoryApi = {
   },
 };
 
-export const carReturnHistoryApi = {
-  // Tạo lịch sử trả xe
-  create: (data: {
-    returnDate: string;
-    odometerEnd: number;
-    batteryLevelEnd: number;
-    vehicleConditionEnd: string;
-    orderId: number;
-  }) => {
-    return apiCall<{ message: string }>('/CarReturnHistory', {
-      method: 'POST',
-      body: JSON.stringify({
-        ReturnDate: data.returnDate,
-        OdometerEnd: data.odometerEnd,
-        BatteryLevelEnd: data.batteryLevelEnd,
-        VehicleConditionEnd: data.vehicleConditionEnd,
-        OrderId: data.orderId,
-      }),
-    });
-  },
-};
 
 export const paymentApi = {
   // Lấy doanh thu theo từng điểm thuê (Admin/Staff)
@@ -1335,28 +1314,7 @@ export const paymentApi = {
   },
 };
 
-// Car Delivery History API
-export const carDeliveryHistoryApi = {
-  // Tạo lịch sử giao xe (Bắt đầu thuê)
-  create: (data: {
-    deliveryDate: string;
-    odometerStart: number;
-    batteryLevelStart: number;
-    vehicleConditionStart: string;
-    orderId: number;
-  }) => {
-    return apiCall<{ message: string }>('/CarDeliveryHistory', {
-      method: 'POST',
-      body: JSON.stringify({
-        DeliveryDate: data.deliveryDate,
-        OdometerStart: data.odometerStart,
-        BatteryLevelStart: data.batteryLevelStart,
-        VehicleConditionStart: data.vehicleConditionStart,
-        OrderId: data.orderId,
-      }),
-    });
-  },
-};
+
 
 // Car Return History API
 export const carReturnHistoryApi = {
