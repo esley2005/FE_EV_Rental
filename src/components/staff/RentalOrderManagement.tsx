@@ -220,6 +220,26 @@ export default function RentalOrderManagement() {
       return;
     }
 
+    // Nếu chọn "Hủy đơn" (Cancelled), gọi API CancelOrder
+    if (newStatus === RentalOrderStatus.Cancelled) {
+      try {
+        setLoading(true);
+        const response = await rentalOrderApi.cancelOrder(orderId);
+        if (response.success) {
+          message.success('Hủy đơn hàng thành công!');
+          await loadOrders();
+        } else {
+          message.error(response.error || 'Hủy đơn hàng thất bại');
+        }
+      } catch (error) {
+        console.error('Cancel order error:', error);
+        message.error('Có lỗi xảy ra khi hủy đơn hàng');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     // Các status khác thì cập nhật trực tiếp
     try {
       setLoading(true);
