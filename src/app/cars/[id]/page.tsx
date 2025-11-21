@@ -14,7 +14,6 @@ import type { Car } from "@/types/car";
 import type { User } from "@/services/api";
 import { authUtils } from "@/utils/auth";
 import { geocodeAddress } from "@/utils/geocode";
-import Feedback from "@/components/feedback/Feedback";
 import {
   MapPin,
   Bluetooth,
@@ -1746,23 +1745,6 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
         </div>
 
 
-        <div className="bg-white rounded-lg shadow-lg p-6 mt-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Đánh giá từ khách hàng</h2>
-          <p className="text-sm text-gray-500 mb-6">
-            Trải nghiệm thực tế của khách thuê xe {car.name}.
-          </p>
-          <Feedback
-            carId={car.id}
-            allowCreate={Boolean(userOrderIdForCar)}
-            createRentalOrderId={userOrderIdForCar ?? undefined}
-            userId={user?.id}
-          />
-          {!checkingReviewEligibility && !userOrderIdForCar && (
-            <p className="text-sm text-gray-500 mt-4">
-              Bạn cần hoàn tất ít nhất một đơn thuê xe này để có thể gửi đánh giá.
-            </p>
-          )}
-        </div>
 
         {/* Xe khác */}
         {otherCars.length > 0 ? (

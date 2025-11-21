@@ -51,7 +51,7 @@ export default function CarsGrid({ cars, className = '' }: CarsGridProps) {
         <div className="flex items-center justify-center gap-4 relative">
           {/* Previous Card (Left) - Peek */}
           {cars.length > 1 && (
-            <div className="flex-shrink-0 w-[280px] opacity-40 scale-90 transition-all duration-300 ease-out overflow-hidden">
+            <div className="flex-shrink-0 w-[280px] opacity-100 scale-90 transition-all duration-300 ease-out overflow-hidden">
               <div 
                 key={`prev-${getPreviousIndex()}-${currentIndex}`}
                 className={`transition-all duration-400 ease-out ${
@@ -79,7 +79,7 @@ export default function CarsGrid({ cars, className = '' }: CarsGridProps) {
 
           {/* Next Card (Right) - Peek */}
           {cars.length > 1 && (
-            <div className="flex-shrink-0 w-[280px] opacity-40 scale-90 transition-all duration-300 ease-out overflow-hidden">
+            <div className="flex-shrink-0 w-[280px] opacity-100 scale-90 transition-all duration-300 ease-out overflow-hidden">
               <div 
                 key={`next-${getNextIndex()}-${currentIndex}`}
                 className={`transition-all duration-400 ease-out ${

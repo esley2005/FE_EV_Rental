@@ -23,7 +23,6 @@ import {
   IdcardOutlined,
   ReloadOutlined,
   DeleteOutlined,
-  MessageOutlined
 } from "@ant-design/icons";
 import { 
   Card, 
@@ -48,7 +47,6 @@ import type { Car } from "@/types/car";
 import dayjs from "dayjs";
 import Link from "next/link";
 import { formatDateTime, formatDateOnly } from "@/utils/dateFormat";
-import Feedback from "@/components/feedback/Feedback";
 
 // Extended interface với thông tin car và location
 interface BookingWithDetails extends RentalOrderData {
@@ -667,15 +665,6 @@ export default function MyBookingsPage() {
                                 </Button>
                               </Popconfirm>
                             )}
-                            {normalizeStatus(booking.status) === 'completed' && (
-                              <Button
-                                icon={<MessageOutlined />}
-                                onClick={() => showBookingDetail(booking)}
-                                className="border-green-500 text-green-600 hover:bg-green-50"
-                              >
-                                Đánh giá
-                              </Button>
-                            )}
                             <Button
                               type="primary"
                               icon={<EyeOutlined />}
@@ -946,18 +935,6 @@ export default function MyBookingsPage() {
               />
             </Card>
 
-            {/* Feedback Section - Chỉ hiển thị cho đơn hàng đã hoàn thành */}
-            {normalizeStatus(selectedBooking.status) === 'completed' && selectedBooking.car && (
-              <Card title="Đánh giá đơn hàng" size="small">
-                <Feedback
-                  rentalOrderId={selectedBooking.id}
-                  userId={user?.id}
-                  carId={selectedBooking.car.id}
-                  allowCreate={true}
-                  createRentalOrderId={selectedBooking.id}
-                />
-              </Card>
-            )}
           </div>
         )}
       </Modal>

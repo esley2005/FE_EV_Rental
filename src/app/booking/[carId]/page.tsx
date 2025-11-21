@@ -380,19 +380,22 @@ export default function BookingPage() {
     
     if (totalHours <= 0) return 0;
     
-    // Tính số ngày đầy đủ và số giờ còn lại
-    const fullDays = Math.floor(totalHours / 24);
-    const remainingHours = totalHours % 24;
-    
     // Lấy giá theo loại (có tài xế hay không)
     const pricePerDay = withDriver ? car.rentPricePerDayWithDriver : car.rentPricePerDay;
     // Sử dụng giá/giờ trực tiếp từ database
     const pricePerHour = withDriver ? car.rentPricePerHourWithDriver : car.rentPricePerHour;
     
+    // Tính số ngày đầy đủ và số giờ còn lại
+    const fullDays = Math.floor(totalHours / 24);
+    const remainingHours = totalHours % 24;
+    
     // Debug: log để kiểm tra giá
     if (process.env.NODE_ENV === 'development') {
       console.log('[calculateRentalFee]', {
         withDriver,
+        totalHours,
+        fullDays,
+        remainingHours,
         pricePerDay,
         pricePerHour,
         rentPricePerHour: car.rentPricePerHour,
@@ -400,11 +403,12 @@ export default function BookingPage() {
       });
     }
     
-    // Tính tổng: (số ngày * giá/ngày) + (số giờ * giá/giờ)
+    // Tính tổng: (số ngày * giá/ngày) + (số giờ lẻ / 24 * giá/ngày)
+    // Ví dụ: 2.5 ngày = 2 ngày × 450,000 + (12 giờ / 24) × 450,000 = 900,000 + 225,000 = 1,125,000
     const dayFee = fullDays * pricePerDay;
-    const hourFee = remainingHours * (pricePerHour || 0);
+    const partialDayFee = (remainingHours / 24) * pricePerDay;
     
-    return dayFee + hourFee;
+    return dayFee + partialDayFee;
   };
 
   const calculateTotal = () => {
@@ -581,19 +585,22 @@ export default function BookingPage() {
     
     if (totalHours <= 0) return 0;
     
-    // Tính số ngày đầy đủ và số giờ còn lại
-    const fullDays = Math.floor(totalHours / 24);
-    const remainingHours = totalHours % 24;
-    
     // Lấy giá theo loại (có tài xế hay không)
     const pricePerDay = withDriverValue ? car.rentPricePerDayWithDriver : car.rentPricePerDay;
     // Sử dụng giá/giờ trực tiếp từ database
     const pricePerHour = withDriverValue ? car.rentPricePerHourWithDriver : car.rentPricePerHour;
     
+    // Tính số ngày đầy đủ và số giờ còn lại
+    const fullDays = Math.floor(totalHours / 24);
+    const remainingHours = totalHours % 24;
+    
     // Debug: log để kiểm tra giá
     if (process.env.NODE_ENV === 'development') {
       console.log('[calculateRentalFeeWithDates]', {
         withDriver: withDriverValue,
+        totalHours,
+        fullDays,
+        remainingHours,
         pricePerDay,
         pricePerHour,
         rentPricePerHour: car.rentPricePerHour,
@@ -601,11 +608,12 @@ export default function BookingPage() {
       });
     }
     
-    // Tính tổng: (số ngày * giá/ngày) + (số giờ * giá/giờ)
+    // Tính tổng: (số ngày * giá/ngày) + (số giờ lẻ / 24 * giá/ngày)
+    // Ví dụ: 2.5 ngày = 2 ngày × 450,000 + (12 giờ / 24) × 450,000 = 900,000 + 225,000 = 1,125,000
     const dayFee = fullDays * pricePerDay;
-    const hourFee = remainingHours * (pricePerHour || 0);
+    const partialDayFee = (remainingHours / 24) * pricePerDay;
     
-    return dayFee + hourFee;
+    return dayFee + partialDayFee;
   };
 
   const rentalFee = calculateRentalFeeWithDates(getDateRange());
