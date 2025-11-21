@@ -12,6 +12,8 @@ import {
   notification as antdNotification,
   Spin,
   Empty,
+  Button,
+  Modal,
 } from "antd";
 import {
   UserOutlined,
@@ -23,6 +25,7 @@ import {
   EnvironmentOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
+  SwapOutlined,
 } from "@ant-design/icons";
 import { authApi, rentalLocationApi } from "@/services/api";
 import type { User, RentalLocationData } from "@/services/api";
@@ -30,7 +33,11 @@ import dayjs from "dayjs";
 
 const { Search } = Input;
 
-export default function StaffManagement() {
+interface StaffManagementProps {
+  mode?: "list" | "transfer";
+}
+
+export default function StaffManagement({ mode = "list" }: StaffManagementProps) {
   const [api, contextHolder] = antdNotification.useNotification();
   const [staff, setStaff] = useState<User[]>([]);
   const [filteredStaff, setFilteredStaff] = useState<User[]>([]);
@@ -39,6 +46,10 @@ export default function StaffManagement() {
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [selectedLocationId, setSelectedLocationId] = useState<number | undefined>(undefined);
+  const [transferringStaff, setTransferringStaff] = useState<Record<number, boolean>>({});
+  const [selectedNewLocation, setSelectedNewLocation] = useState<Record<number, number | undefined>>({});
+  const [transferModalVisible, setTransferModalVisible] = useState(false);
+  const [staffToTransfer, setStaffToTransfer] = useState<User | null>(null);
 
   useEffect(() => {
     loadLocations();
@@ -364,13 +375,7 @@ export default function StaffManagement() {
       key: "status",
       render: (_: any, record: any) => (
         <Space direction="vertical" size="small">
-          {record.isEmailConfirmed ? (
-            <Tag color="success" icon={<CheckCircleOutlined />}>
-              Email đã xác thực
-            </Tag>
-          ) : (
-            <Tag color="warning">Email chưa xác thực</Tag>
-          )}
+          
           {record.isActive !== false ? (
             <Tag color="success">Đang hoạt động</Tag>
           ) : (
@@ -379,13 +384,205 @@ export default function StaffManagement() {
         </Space>
       ),
     },
-    
   ];
 
-  return (
-    <div>
-      {contextHolder}
-      <Card>
+  // Columns cho tab điều phối (có thêm cột hành động)
+  const transferColumns = [
+    ...columns,
+    {
+      title: "Hành động",
+      key: "action",
+      width: 300,
+      render: (_: any, record: User) => {
+        const currentLocationId = record.rentalLocationId || record.locationId;
+        const isTransferring = transferringStaff[record.id] || false;
+        const newLocationId = selectedNewLocation[record.id];
+
+        return (
+          <Space direction="vertical" size="small" style={{ width: "100%" }}>
+            <Select
+              placeholder="Chọn điểm thuê mới"
+              style={{ width: "100%" }}
+              value={newLocationId}
+              onChange={(value) => {
+                setSelectedNewLocation((prev) => ({
+                  ...prev,
+                  [record.id]: value,
+                }));
+              }}
+              options={locations
+                .filter((loc) => loc.id !== currentLocationId)
+                .map((loc) => ({
+                  label: `${loc.name}${loc.address ? ` - ${loc.address}` : ""}`,
+                  value: loc.id,
+                }))}
+              disabled={isTransferring}
+            />
+            <Button
+              type="primary"
+              icon={<SwapOutlined />}
+              onClick={() => {
+                setStaffToTransfer(record);
+                setTransferModalVisible(true);
+              }}
+              disabled={!newLocationId || isTransferring || newLocationId === currentLocationId}
+              loading={isTransferring}
+              block
+            >
+              Điều phối
+            </Button>
+          </Space>
+        );
+      },
+    },
+  ];
+
+  const handleTransferStaff = async () => {
+    if (!staffToTransfer) return;
+
+    const newLocationId = selectedNewLocation[staffToTransfer.id];
+    if (!newLocationId) {
+      api.error({
+        message: "Lỗi",
+        description: "Vui lòng chọn điểm thuê mới",
+        placement: "topRight",
+      });
+      return;
+    }
+
+    setTransferringStaff((prev) => ({ ...prev, [staffToTransfer.id]: true }));
+    setTransferModalVisible(false);
+
+    try {
+      const response = await authApi.updateStaffRentalLocation(
+        staffToTransfer.id,
+        newLocationId
+      );
+
+      if (response.success) {
+        api.success({
+          message: "Điều phối thành công",
+          description: `Đã chuyển nhân viên ${staffToTransfer.fullName} đến điểm thuê mới`,
+          placement: "topRight",
+          icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
+        });
+
+        // Reset selection
+        setSelectedNewLocation((prev) => {
+          const updated = { ...prev };
+          delete updated[staffToTransfer.id];
+          return updated;
+        });
+
+        // Reload staff list
+        if (selectedLocationId !== undefined) {
+          await loadStaffByLocation(selectedLocationId);
+        } else {
+          await loadStaff();
+        }
+      } else {
+        api.error({
+          message: "Điều phối thất bại",
+          description: response.error || "Không thể cập nhật điểm thuê của nhân viên",
+          placement: "topRight",
+          icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+        });
+      }
+    } catch (error) {
+      console.error("Transfer staff error:", error);
+      api.error({
+        message: "Có lỗi xảy ra",
+        description: "Không thể điều phối nhân viên. Vui lòng thử lại!",
+        placement: "topRight",
+        icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+      });
+    } finally {
+      setTransferringStaff((prev) => {
+        const updated = { ...prev };
+        delete updated[staffToTransfer.id];
+        return updated;
+      });
+      setStaffToTransfer(null);
+    }
+  };
+
+  // Render content dựa trên mode
+  const renderContent = () => {
+    if (mode === "transfer") {
+      // Mode điều phối: chỉ hiển thị bảng với cột điều phối
+      return (
+        <div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: "bold" }}>
+                Điều phối nhân viên qua điểm thuê khác
+              </h2>
+              <Search
+                placeholder="Tìm kiếm theo tên, email, số điện thoại..."
+                allowClear
+                enterButton={<SearchOutlined />}
+                size="large"
+                style={{ width: 400 }}
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                onSearch={(value) => setSearchText(value)}
+              />
+            </div>
+            <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+              <span style={{ fontWeight: 500 }}>Lọc theo điểm thuê:</span>
+              <Select
+                placeholder="Chọn điểm thuê"
+                allowClear
+                style={{ width: 300 }}
+                value={selectedLocationId}
+                onChange={(value) => setSelectedLocationId(value)}
+                options={[
+                  { label: "Tất cả điểm", value: undefined },
+                  ...locations.map((loc) => ({
+                    label: `${loc.name} (ID: ${loc.id})`,
+                    value: loc.id,
+                  })),
+                ]}
+              />
+              {selectedLocationId && (
+                <Tag
+                  closable
+                  onClose={() => setSelectedLocationId(undefined)}
+                  color="blue"
+                >
+                  Đang lọc: {locationMap[selectedLocationId]?.name || `ID: ${selectedLocationId}`}
+                </Tag>
+              )}
+            </div>
+          </div>
+
+          <Spin spinning={loading}>
+            <Table
+              columns={transferColumns}
+              dataSource={filteredStaff}
+              rowKey="id"
+              pagination={{
+                pageSize: 10,
+                showSizeChanger: true,
+                showTotal: (total) => `Tổng cộng: ${total} nhân viên`,
+              }}
+              locale={{
+                emptyText: (
+                  <Empty
+                    description="Không có nhân viên nào"
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  />
+                ),
+              }}
+            />
+          </Spin>
+        </div>
+      );
+    }
+
+    // Mode list: chỉ hiển thị bảng danh sách (không có cột điều phối)
+    return (
+      <div>
         <div style={{ marginBottom: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: "bold" }}>
@@ -450,7 +647,51 @@ export default function StaffManagement() {
             }}
           />
         </Spin>
+      </div>
+    );
+  };
+
+  return (
+    <div>
+      {contextHolder}
+      <Card>
+        {renderContent()}
       </Card>
+
+      <Modal
+        title="Xác nhận điều phối nhân viên"
+        open={transferModalVisible}
+        onOk={handleTransferStaff}
+        onCancel={() => {
+          setTransferModalVisible(false);
+          setStaffToTransfer(null);
+        }}
+        okText="Xác nhận"
+        cancelText="Hủy"
+        okButtonProps={{
+          icon: <SwapOutlined />,
+        }}
+      >
+        {staffToTransfer && (
+          <div>
+            <p>
+              Bạn có chắc chắn muốn điều phối nhân viên{" "}
+              <strong>{staffToTransfer.fullName}</strong> đến điểm thuê mới?
+            </p>
+            <Space direction="vertical" style={{ width: "100%" }}>
+              <div>
+                <strong>Điểm thuê hiện tại:</strong>{" "}
+                {locationMap[staffToTransfer.rentalLocationId || staffToTransfer.locationId || 0]
+                  ?.name || "Chưa phân công"}
+              </div>
+              <div>
+                <strong>Điểm thuê mới:</strong>{" "}
+                {locationMap[selectedNewLocation[staffToTransfer.id] || 0]?.name || "N/A"}
+              </div>
+            </Space>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

@@ -29,6 +29,7 @@ import AIAnalysis from "@/components/admin/AIAnalysis";
 import RevenueByLocation from "@/components/admin/RevenueByLocation";
 import TransactionHistory from "@/components/admin/TransactionHistory";
 import RentalHistory from "@/components/admin/RentalHistory";
+import CarIssueReports from "@/components/admin/CarIssueReports";
 
 
 const { Header, Sider, Content, Footer } = Layout;
@@ -46,7 +47,8 @@ const subMenus: Record<string, { key: string; label: string; icon: React.ReactNo
   cars: [
     { key: "1", label: "Danh sách xe", icon: <Car /> },
     { key: "2", label: "Lịch sử giao nhận xe", icon: <History /> },
-    // { key: "3", label: "Điều phối xe", icon: <Shuffle /> },
+    { key: "3", label: "Báo cáo sự cố từ staff", icon: <FileText /> },
+    // { key: "4", label: "Điều phối xe", icon: <Shuffle /> },
   ],
 
   customers: [
@@ -57,7 +59,7 @@ const subMenus: Record<string, { key: string; label: string; icon: React.ReactNo
 
   staff: [
     { key: "1", label: "Danh sách nhân viên tại các điểm", icon: <Users /> },
-
+    { key: "2", label: "Điều phối nhân viên", icon: <Shuffle /> },
   ],
 
   reports: [
@@ -121,7 +123,9 @@ export default function AdminLayout() {
             return <CarManagement />;
           case "2":
             return <TransactionHistory />;
-          // case "3":
+          case "3":
+            return <CarIssueReports />;
+          // case "4":
           //   return <VehicleDispatch />;
           default:
             return <p>Chưa có nội dung.</p>;
@@ -140,7 +144,9 @@ export default function AdminLayout() {
       case "staff":
         switch (selectedSubMenu) {
           case "1":
-            return <StaffManagement />;
+            return <StaffManagement mode="list" />;
+          case "2":
+            return <StaffManagement mode="transfer" />;
           default:
             return <p>Chưa có nội dung.</p>;
         }
