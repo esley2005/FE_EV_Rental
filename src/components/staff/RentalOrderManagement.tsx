@@ -924,15 +924,7 @@ export default function RentalOrderManagement() {
         return (
           <Space direction="vertical" size="small" style={{ width: '100%' }}>
             {getOrderStatusTag(record)}
-            {availableStatuses.length > 0 && (
-              <Select
-                style={{ width: '100%' }}
-                size="small"
-                placeholder="Chọn hành động"
-                options={availableStatuses}
-                onChange={(value) => handleStatusChange(record.id, value)}
-              />
-            )}
+            
             {currentStatus === RentalOrderStatus.DepositPending && (
               <Popconfirm
                 title="Xác nhận thanh toán đặt cọc?"
@@ -945,6 +937,7 @@ export default function RentalOrderManagement() {
                 </Button>
               </Popconfirm>
             )}
+            
             {currentStatus === RentalOrderStatus.Returned && (
               <Space direction="vertical" size="small" style={{ width: '100%' }}>
                 <Button 
@@ -981,7 +974,7 @@ export default function RentalOrderManagement() {
             )}
             {currentStatus === RentalOrderStatus.PaymentPending && (
               <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                <Popconfirm
+                {/* <Popconfirm
                   title="Xác nhận tổng tiền (tạo payment record)?"
                   onConfirm={() => handleConfirmTotal(record.id)}
                   okText="Xác nhận"
@@ -990,7 +983,7 @@ export default function RentalOrderManagement() {
                   <Button size="small" type="default" block>
                     Xác nhận tổng tiền
                   </Button>
-                </Popconfirm>
+                </Popconfirm> */}
                 <Popconfirm
                   title="Xác nhận thanh toán đã hoàn thành?"
                   onConfirm={() => handleConfirmPayment(record.id)}
@@ -1002,6 +995,14 @@ export default function RentalOrderManagement() {
                   </Button>
                 </Popconfirm>
               </Space>
+            )}{availableStatuses.length > 0 && (
+              <Select
+                style={{ width: '100%' }}
+                size="small"
+                placeholder="Chọn hành động"
+                options={availableStatuses}
+                onChange={(value) => handleStatusChange(record.id, value)}
+              />
             )}
           </Space>
         );
