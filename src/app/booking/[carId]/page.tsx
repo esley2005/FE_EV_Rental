@@ -159,13 +159,8 @@ export default function BookingPage() {
       return;
     }
 
-    // Lấy relation đầu tiên (active nếu có)
-    const primaryRelation =
-      relations.find(
-        (rel: any) =>
-          (rel?.isActive ?? rel?.IsActive ?? true) &&
-          !(rel?.isDeleted ?? rel?.IsDeleted)
-      ) || relations[0];
+    // ✅ Đồng bộ với admin: Chỉ lấy location đầu tiên (1 xe = 1 location)
+    const primaryRelation = relations[0];
 
     console.log("resolveCarLocation: primaryRelation", primaryRelation);
 
