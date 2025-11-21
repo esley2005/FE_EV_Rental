@@ -281,17 +281,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <Input.Search placeholder="Tìm kiếm nhanh" allowClear style={{ width: 260 }} />
-            <Badge count={3} size="small">
-              <span
-                style={{
-                  display: "inline-block",
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
-                  background: "rgba(255,255,255,0.2)",
-                }}
-              />
-            </Badge>
+            
           </div>
 
           {/* ✅ Dropdown người dùng */}
