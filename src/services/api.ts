@@ -735,6 +735,39 @@ export const authApi = {
       method: 'GET',
     }),
 
+  // Lấy thông tin user theo ID
+  getProfileById: async (userId: number) => {
+    // Thử nhiều endpoint để tương thích với backend
+    const candidates = [
+      `/User/GetById?id=${userId}`,
+      `/User/${userId}`,
+      `/user/${userId}`,
+      `/auth/user/${userId}`,
+    ];
+    
+    for (const ep of candidates) {
+      try {
+        const res = await apiCall<User>(ep, { method: 'GET' });
+        if (res.success && res.data) {
+          return res;
+        }
+      } catch (error) {
+        continue;
+      }
+    }
+    
+    // Fallback: lấy từ getAllUsers và filter
+    const allUsersRes = await authApi.getAllUsers();
+    if (allUsersRes.success && allUsersRes.data) {
+      const user = allUsersRes.data.find((u) => u.id === userId);
+      if (user) {
+        return { success: true, data: user };
+      }
+    }
+    
+    return { success: false, error: 'Không tìm thấy user' };
+  },
+
   // Lấy tất cả user (khách hàng) từ hệ thống auth
   getAllUsers: async () => {
     const candidates = [
@@ -1285,6 +1318,50 @@ export const rentalOrderApi = {
   // Lấy đơn hàng theo rental location ID
   getByRentalLocationId: (rentalLocationId: number) =>
     apiCall<RentalOrderData[]>(`/RentalOrder/GetByRentalLocationId/${rentalLocationId}`, {
+      method: 'GET',
+    }),
+
+  // Lấy đơn hàng kèm payments theo orderId
+  getByOrderWithPayments: (orderId: number) =>
+    apiCall<{
+      id: number;
+      phoneNumber: string;
+      orderDate: string;
+      pickupTime: string;
+      expectedReturnTime: string;
+      actualReturnTime?: string;
+      subTotal: number;
+      deposit: number;
+      total: number;
+      discount?: number;
+      extraFee: number;
+      damageFee: number;
+      damageNotes?: string;
+      withDriver: boolean;
+      status: string;
+      createdAt: string;
+      updatedAt?: string;
+      userId: number;
+      carId: number;
+      rentalLocationId: number;
+      rentalContactId?: number;
+      citizenId?: number;
+      driverLicenseId?: number;
+      paymentId?: number;
+      payments?: {
+        $values: Array<{
+          paymentId: number;
+          paymentType: string;
+          paymentDate: string;
+          amount: number;
+          paymentMethod: string;
+          status: string;
+          userId: string;
+          orderId: string;
+          orderDate: string;
+        }>;
+      };
+    }>(`/RentalOrder/GetByOrderWithPayments?orderId=${orderId}`, {
       method: 'GET',
     }),
 

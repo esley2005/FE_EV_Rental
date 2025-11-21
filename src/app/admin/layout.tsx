@@ -32,6 +32,7 @@ import TransactionHistory from "@/components/admin/TransactionHistory";
 import RentalHistory from "@/components/admin/RentalHistory";
 import CarIssueReports from "@/components/admin/CarIssueReports";
 import RentalOrdersByLocation from "@/components/admin/RentalOrdersByLocation";
+import OrderDetailsWithPayments from "@/components/admin/OrderDetailsWithPayments";
 
 
 const { Header, Sider, Content, Footer } = Layout;
@@ -41,7 +42,8 @@ const mainMenu = [
   { key: "cars", label: "Đội xe & Điểm thuê", icon: <Car /> },
   { key: "customers", label: "Khách hàng", icon: <User /> },
   { key: "staff", label: "Nhân viên", icon: <Users /> },
-  { key: "orders", label: "Đơn hàng theo địa điểm", icon: <MapPin /> },
+  { key: "order-details", label: "Chi tiết đơn hàng", icon: <FileText /> },
+
   { key: "reports", label: "Báo cáo & Phân tích", icon: <BarChart3 /> },
 ];
 
@@ -54,9 +56,7 @@ const subMenus: Record<string, { key: string; label: string; icon: React.ReactNo
     // { key: "4", label: "Điều phối xe", icon: <Shuffle /> },
   ],
 
-  orders: [
-    { key: "1", label: "Đơn hàng theo địa điểm", icon: <MapPin /> },
-  ],
+
 
   customers: [
     { key: "1", label: "Hồ sơ khách hàng", icon: <User /> },
@@ -137,13 +137,7 @@ export default function AdminLayout() {
           default:
             return <p>Chưa có nội dung.</p>;
         }
-      case "orders":
-        switch (selectedSubMenu) {
-          case "1":
-            return <RentalOrdersByLocation />;
-          default:
-            return <p>Chưa có nội dung.</p>;
-        }
+
       case "customers":
         switch (selectedSubMenu) {
           case "1":
@@ -164,6 +158,8 @@ export default function AdminLayout() {
           default:
             return <p>Chưa có nội dung.</p>;
         }
+      case "order-details":
+        return <OrderDetailsWithPayments />;
       case "reports":
         switch (selectedSubMenu) {
           case "1":
@@ -223,7 +219,7 @@ export default function AdminLayout() {
         <Menu
           mode="inline"
           theme="light"
-          items={subMenus[selectedModule]}
+          items={subMenus[selectedModule] || []}
           selectedKeys={[selectedSubMenu]}
           onClick={(e) => setSelectedSubMenu(e.key)}
           style={{ borderRight: 0 }}
@@ -247,7 +243,13 @@ export default function AdminLayout() {
             items={mainMenu}
             onClick={(e) => {
               setSelectedModule(e.key);
-              setSelectedSubMenu(subMenus[e.key]?.[0]?.key || "1");
+              // Chỉ set submenu nếu module có submenu
+              const moduleSubMenus = subMenus[e.key];
+              if (moduleSubMenus && moduleSubMenus.length > 0) {
+                setSelectedSubMenu(moduleSubMenus[0].key);
+              } else {
+                setSelectedSubMenu("1"); // Default value
+              }
             }}
             style={{ flex: 1, background: "transparent" }}
           />
@@ -278,8 +280,10 @@ export default function AdminLayout() {
           <Breadcrumb
             style={{ marginBottom: 16 }}
             items={[
-              { title: mainMenu.find((m) => m.key === selectedModule)?.label },
-              { title: subMenus[selectedModule].find((s) => s.key === selectedSubMenu)?.label },
+              { title: mainMenu.find((m) => m.key === selectedModule)?.label || 'Admin' },
+              ...(subMenus[selectedModule] && subMenus[selectedModule].length > 0
+                ? [{ title: subMenus[selectedModule].find((s) => s.key === selectedSubMenu)?.label || '' }]
+                : []),
             ]}
           />
           <div style={{ padding: 24, background: "#fff", borderRadius: 8, minHeight: 400 }}>
