@@ -77,6 +77,13 @@ export default function CarIssueReports() {
       const stored = localStorage.getItem("carIssueReports");
       if (stored) {
         const reports = JSON.parse(stored);
+        console.log('[CarIssueReports] Loaded reports:', reports.length);
+        // Debug: Log ảnh của từng report
+        reports.forEach((report: CarIssueReport) => {
+          if (report.images && report.images.length > 0) {
+            console.log(`[CarIssueReports] Report #${report.id} has ${report.images.length} images:`, report.images);
+          }
+        });
         setIssueReports(reports);
       }
     } catch (error) {
@@ -396,19 +403,40 @@ export default function CarIssueReports() {
               </Descriptions.Item>
               {selectedReport.images && selectedReport.images.length > 0 && (
                 <Descriptions.Item label="Hình ảnh">
-                  <Space wrap>
-                    {selectedReport.images.map((img, index) => (
-                      <Image
-                        key={index}
-                        src={img}
-                        alt={`Hình ảnh ${index + 1}`}
-                        width={150}
-                        height={100}
-                        style={{ objectFit: "cover", borderRadius: 4 }}
-                        fallback="/logo_ev.png"
-                      />
-                    ))}
-                  </Space>
+                  <div style={{ marginTop: 8 }}>
+                    <Image.PreviewGroup>
+                      <Space wrap>
+                        {selectedReport.images.map((img, index) => {
+                          // Xử lý cả URL string và object có url property
+                          const imageUrl = typeof img === 'string' ? img : (img as any)?.url || img;
+                          if (!imageUrl) return null;
+                          
+                          return (
+                            <Image
+                              key={index}
+                              src={imageUrl}
+                              alt={`Hình ảnh sự cố ${index + 1}`}
+                              width={200}
+                              height={150}
+                              style={{ 
+                                objectFit: "cover", 
+                                borderRadius: 8,
+                                border: "1px solid #d9d9d9",
+                                cursor: "pointer"
+                              }}
+                              fallback="/logo_ev.png"
+                              preview={{
+                                mask: "Xem ảnh",
+                              }}
+                            />
+                          );
+                        })}
+                      </Space>
+                    </Image.PreviewGroup>
+                    <div style={{ marginTop: 8, fontSize: "12px", color: "#666" }}>
+                      Tổng cộng: {selectedReport.images.length} ảnh - Click vào ảnh để xem phóng to
+                    </div>
+                  </div>
                 </Descriptions.Item>
               )}
             </Descriptions>
