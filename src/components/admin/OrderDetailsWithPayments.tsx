@@ -568,7 +568,9 @@ export default function OrderDetailsWithPayments() {
                             <Tag color="blue">{payment.paymentMethod || '-'}</Tag>
                           </Descriptions.Item>
                           <Descriptions.Item label="Ngày thanh toán">
-                            {formatVietnamTime(payment.paymentDate)}
+                            {payment.paymentDate && payment.paymentDate !== '0001-01-01T00:00:00' 
+                              ? formatVietnamTime(payment.paymentDate) 
+                              : <Tag color="default">Chưa cập nhật</Tag>}
                           </Descriptions.Item>
                           <Descriptions.Item label="Mã thanh toán">
                             #{payment.paymentId}

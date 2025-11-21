@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { Form, Input, DatePicker, Button, message, Checkbox, Radio, notification, Alert, Modal } from "antd";
 import { Calendar, MapPin, Phone, User as UserIcon, Search, Car as CarIcon, FileText, Download, Percent, Info, UserCheck } from "lucide-react";
 import dayjs, { Dayjs } from "dayjs";
@@ -18,6 +18,7 @@ const { RangePicker } = DatePicker;
 export default function BookingPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [form] = Form.useForm();
   const [api, contextHolder] = notification.useNotification({
     placement: 'topRight',
@@ -29,7 +30,7 @@ export default function BookingPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<RentalLocationData | null>(null);
-  const [pickupOption, setPickupOption] = useState<'self' | 'delivery'>('self');
+  const [availableLocations, setAvailableLocations] = useState<RentalLocationData[]>([]);
   const [withDriver, setWithDriver] = useState<boolean>(false);
   const [hasDocuments, setHasDocuments] = useState<boolean | null>(null);
   const [dateRangeValue, setDateRangeValue] = useState<[Dayjs, Dayjs] | null>(null);
@@ -200,7 +201,6 @@ export default function BookingPage() {
       console.log("resolveCarLocation: Found location from relation", location);
       setSelectedLocation(location);
       form.setFieldsValue({ rentalLocationId: location.id });
-      setPickupOption('self');
       return;
     }
 
@@ -232,7 +232,6 @@ export default function BookingPage() {
           console.log("resolveCarLocation: Found location from getAll", locationData);
           setSelectedLocation(locationData);
           form.setFieldsValue({ rentalLocationId: locationData.id });
-          setPickupOption('self');
           return;
         }
       }
@@ -252,7 +251,6 @@ export default function BookingPage() {
       console.log("resolveCarLocation: Created fallback location with id only", location);
       setSelectedLocation(location);
       form.setFieldsValue({ rentalLocationId: location.id });
-      setPickupOption('self');
       return;
     }
 
@@ -263,6 +261,7 @@ export default function BookingPage() {
   }, [form]);
 
   const carId = params?.carId as string;
+  const locationIdFromUrl = searchParams?.get('locationId');
 
   useEffect(() => {
     if (!carId) return;
@@ -317,8 +316,42 @@ export default function BookingPage() {
           }
         }
 
-        // Resolve car location từ data của xe
-        await resolveCarLocation(carResponse.data);
+        // Load all available locations
+        const locationsResponse = await rentalLocationApi.getAll();
+        if (locationsResponse.success && locationsResponse.data) {
+          const locationsData = locationsResponse.data as any;
+          const locationsList = Array.isArray(locationsData)
+            ? locationsData
+            : (locationsData?.$values && Array.isArray(locationsData.$values) ? locationsData.$values : []);
+          
+          const formattedLocations: RentalLocationData[] = locationsList
+            .filter((loc: any) => loc?.isActive !== false && !loc?.isDeleted)
+            .map((loc: any) => ({
+              id: loc.id ?? loc.Id ?? loc.locationId ?? loc.LocationId,
+              name: loc.name ?? loc.Name ?? "",
+              address: loc.address ?? loc.Address ?? "",
+              coordinates: loc.coordinates ?? loc.Coordinates ?? "",
+              isActive: loc.isActive ?? loc.IsActive ?? true,
+            }));
+          
+          setAvailableLocations(formattedLocations);
+
+          // Nếu có locationId từ URL, tự động chọn địa điểm đó
+          if (locationIdFromUrl) {
+            const locationId = parseInt(locationIdFromUrl);
+            const locationFromUrl = formattedLocations.find(loc => loc.id === locationId);
+            if (locationFromUrl) {
+              setSelectedLocation(locationFromUrl);
+              form.setFieldsValue({ rentalLocationId: locationFromUrl.id });
+              return; // Không cần resolve car location nữa vì đã chọn từ URL
+            }
+          }
+        }
+
+        // Resolve car location từ data của xe (chỉ khi không có locationId từ URL)
+        if (!locationIdFromUrl) {
+          await resolveCarLocation(carResponse.data);
+        }
       } catch (error) {
         console.error("Load data error:", error);
         message.error("Có lỗi xảy ra khi tải dữ liệu!");
@@ -580,6 +613,7 @@ export default function BookingPage() {
   const deposit = calculateDeposit();
   const remaining = total - deposit;
 
+
   return (
     <>
       {contextHolder}
@@ -643,6 +677,34 @@ export default function BookingPage() {
         )}
 
         <Form form={form} layout="vertical" onFinish={handleSubmit} className="space-y-6">
+          {/* Thông tin xe */}
+          {car && (
+            <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+              <div className="flex gap-4">
+                <div className="w-32 h-24 flex-shrink-0">
+                  <img
+                    src={car.imageUrl || "/logo_ev.png"}
+                    alt={car.name}
+                    className="w-full h-full object-cover rounded-lg"
+                  />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">{car.name}</h3>
+                  <p className="text-sm text-gray-600 mb-3">{car.model}</p>
+                  {selectedLocation && (
+                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <MapPin className="w-4 h-4 text-blue-500" />
+                      <span>
+                        {selectedLocation.name && `${selectedLocation.name} - `}
+                        {selectedLocation.address}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Thông tin đặt xe */}
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-2">Thông tin đặt xe</h2>

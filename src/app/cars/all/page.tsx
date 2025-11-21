@@ -752,7 +752,14 @@ export default function AllCarsPage() {
                         </div>
                       </div>
                     }
-                    onClick={() => router.push(`/cars/${car.id}`)}
+                    onClick={() => {
+                      const params = new URLSearchParams();
+                      if (selectedLocationId) {
+                        params.set('locationId', String(selectedLocationId));
+                      }
+                      const queryString = params.toString();
+                      router.push(`/cars/${car.id}${queryString ? `?${queryString}` : ''}`);
+                    }}
                   >
                     <div>
                       <h3 className="text-lg font-semibold text-gray-800 mb-1">
