@@ -422,6 +422,20 @@ export default function RentalOrderManagement() {
       
       if (response.success) {
         message.success('Cập nhật tổng tiền thành công!');
+        
+        // Sau khi cập nhật tổng tiền thành công, tự động chuyển status sang "Chờ thanh toán"
+        try {
+          const confirmResponse = await rentalOrderApi.confirmTotal(selectedOrder.id);
+          if (confirmResponse.success) {
+            message.success('Đơn hàng đã chuyển sang trạng thái "Chờ thanh toán"');
+          } else {
+            console.warn('Không thể tự động chuyển status:', confirmResponse.error);
+          }
+        } catch (confirmError) {
+          console.error('Error confirming total:', confirmError);
+          // Không hiển thị lỗi cho user vì cập nhật tổng tiền đã thành công
+        }
+        
         setUpdateTotalModalVisible(false);
         form.resetFields();
         await loadOrders();
@@ -437,22 +451,17 @@ export default function RentalOrderManagement() {
   };
 
   // Xác nhận tổng tiền (tạo payment record)
-  const handleConfirmTotal = async (orderId: number, currentStatus?: number) => {
+  const handleConfirmTotal = async (orderId: number) => {
     try {
       setLoading(true);
       
-      // Gọi confirmTotal trực tiếp
-      // Backend sẽ tự động xử lý chuyển status từ Returned sang PaymentPending nếu cần
+      // Gọi ConfirmTotal trực tiếp - backend sẽ tự động xử lý chuyển status
       const response = await rentalOrderApi.confirmTotal(orderId);
       
       if (response.success) {
         message.success('Xác nhận tổng tiền thành công!');
         await loadOrders();
       } else {
-        // Nếu lỗi do status, thử chuyển status trước (nếu backend hỗ trợ)
-        if (response.error?.includes('trạng thái') && currentStatus === RentalOrderStatus.Returned) {
-          message.warning('Vui lòng đợi backend cập nhật để hỗ trợ chuyển trạng thái tự động');
-        }
         message.error(response.error || 'Xác nhận tổng tiền thất bại');
       }
     } catch (error) {
@@ -959,7 +968,7 @@ export default function RentalOrderManagement() {
                   <Popconfirm
                     title="Xác nhận tổng tiền (tạo payment record)?"
                     description="Sau khi xác nhận, đơn hàng sẽ chuyển sang trạng thái 'Chờ thanh toán'"
-                    onConfirm={() => handleConfirmTotal(record.id, currentStatus)}
+                    onConfirm={() => handleConfirmTotal(record.id)}
                     okText="Xác nhận"
                     cancelText="Hủy"
                   >
@@ -974,7 +983,7 @@ export default function RentalOrderManagement() {
               <Space direction="vertical" size="small" style={{ width: '100%' }}>
                 <Popconfirm
                   title="Xác nhận tổng tiền (tạo payment record)?"
-                  onConfirm={() => handleConfirmTotal(record.id, currentStatus)}
+                  onConfirm={() => handleConfirmTotal(record.id)}
                   okText="Xác nhận"
                   cancelText="Hủy"
                 >
