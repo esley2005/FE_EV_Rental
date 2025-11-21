@@ -145,8 +145,6 @@ export default function StaffManagement() {
           locationId: u.RentalLocationId ?? u.LocationId ?? u.rentalLocationId ?? u.locationId,
           rentalLocationId: u.RentalLocationId ?? u.LocationId ?? u.rentalLocationId ?? u.locationId,
           rentalLocation: u.rentalLocation ?? u.RentalLocation ?? null,
-          createdAt: u.createdAt,
-          updatedAt: u.updatedAt,
           isEmailConfirmed: u.isEmailConfirmed,
           isActive: u.isActive,
         })) as User[];
@@ -208,7 +206,6 @@ export default function StaffManagement() {
           locationId: u.RentalLocationId ?? u.LocationId ?? u.rentalLocationId ?? u.locationId,
           rentalLocationId: u.RentalLocationId ?? u.LocationId ?? u.rentalLocationId ?? u.locationId,
           rentalLocation: u.rentalLocation ?? u.RentalLocation ?? null,
-          createdAt: u.createdAt,
         })) as User[];
         // Điền rentalLocation nếu thiếu bằng map hiện có
         normalized = fillStaffWithLocation(normalized as any[], locationMap) as any;
@@ -273,30 +270,7 @@ export default function StaffManagement() {
         </Space>
       ),
     },
-    {
-      title: "Số điện thoại",
-      dataIndex: "phone",
-      key: "phone",
-      render: (text: string) => (
-        <Space>
-          <PhoneOutlined />
-          <span>{text || "Chưa cập nhật"}</span>
-        </Space>
-      ),
-    },
-    {
-      title: "Địa chỉ",
-      dataIndex: "address",
-      key: "address",
-      render: (text: string) => text || "Chưa cập nhật",
-    },
-    {
-      title: "Ngày sinh",
-      dataIndex: "dateOfBirth",
-      key: "dateOfBirth",
-      render: (text: string) =>
-        text ? dayjs(text).format("DD/MM/YYYY") : "Chưa cập nhật",
-    },
+    // Đã xóa các cột Số điện thoại, Địa chỉ, Ngày sinh theo yêu cầu
     {
       title: "Điểm thuê",
       key: "location",
