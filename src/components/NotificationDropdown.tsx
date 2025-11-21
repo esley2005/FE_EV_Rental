@@ -5,12 +5,7 @@ import { BellOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { 
   Gift, 
-  Tag, 
-  Sparkles, 
-  TrendingDown, 
-  Calendar,
   Info,
-  CheckCircle,
   AlertCircle,
   XCircle
 } from "lucide-react";
@@ -25,72 +20,30 @@ export interface Notification {
   link?: string;
 }
 
-// thông báo mẫu 
-const mockNotifications: Notification[] = [
-  {
-    id: "1",
-    title: "🎉 Giảm giá đặc biệt hôm nay!",
-    message: "Giảm 30% cho tất cả các dòng xe điện trong ngày hôm nay. Đặt ngay để nhận ưu đãi!",
-    type: "success",
-    read: false,
-    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 giờ trước
-    link: "/cars/all",
-  },
-  {
-    id: "2",
-    title: "🚗 Khuyến mãi cuối tuần",
-    message: "Thuê xe cuối tuần giảm 20% + tặng kèm bảo hiểm miễn phí. Áp dụng từ thứ 6 đến chủ nhật.",
-    type: "success",
-    read: false,
-    createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), // 5 giờ trước
-    link: "/cars/all",
-  },
-  {
-    id: "3",
-    title: "✨ Chương trình khách hàng thân thiết",
-    message: "Tích điểm mỗi lần thuê xe và đổi lấy voucher giảm giá. Tham gia ngay!",
-    type: "info",
-    read: false,
-    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 1 ngày trước
-    link: "/profile",
-  },
-  {
-    id: "4",
-    title: "Welcome to EV Rental",
-    message: "Chào mừng bạn đến với EV Rental! Khám phá bộ sưu tập hơn 1000 xe điện đời mới.",
-    type: "info",
-    read: false,
-    createdAt: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(), // 1 năm trước
-    link: "/about",
-  },
-  {
-    id: "5",
-    title: "⚡ Xe mới về kho",
-    message: "Nhiều mẫu xe điện mới đã có mặt tại các điểm thuê. Đặt ngay để trải nghiệm!",
-    type: "info",
-    read: true,
-    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 ngày trước
-    link: "/cars/all",
-  },
-  {
-    id: "6",
-    title: "🎁 Ưu đãi sinh nhật",
-    message: "Nhân dịp sinh nhật, bạn được giảm 50% cho đơn thuê đầu tiên trong tháng này!",
-    type: "success",
-    read: true,
-    createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 ngày trước
-    link: "/cars/all",
-  },
-];
+// thông báo mẫu - chỉ giữ Welcome
+const getWelcomeNotification = (): Notification => ({
+  id: "4",
+  title: "Welcome to EV Rental",
+  message: "Chào mừng bạn đến với EV Rental! Khám phá bộ sưu tập hơn 1000 xe điện đời mới.",
+  type: "info",
+  read: false,
+  createdAt: new Date().toISOString(), // Thời gian hiện tại khi login
+  link: "/about",
+});
 
 interface NotificationDropdownProps {
   userId?: string;
 }
 
 export default function NotificationDropdown({ userId }: NotificationDropdownProps) {
-  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([getWelcomeNotification()]);
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Cập nhật thời gian welcome notification khi component mount (sau khi login)
+  useEffect(() => {
+    setNotifications([getWelcomeNotification()]);
+  }, [userId]); // Cập nhật khi userId thay đổi (sau khi login)
 
   // Đếm số thông báo chưa đọc
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -181,7 +134,6 @@ export default function NotificationDropdown({ userId }: NotificationDropdownPro
 
   // Lọc thông báo theo trạng thái
   const newNotifications = notifications.filter((n) => !n.read);
-  const oldNotifications = notifications.filter((n) => n.read);
 
   return (
     <div className="relative" ref={dropdownRef}>
