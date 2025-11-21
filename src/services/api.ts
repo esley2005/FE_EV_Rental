@@ -1117,14 +1117,20 @@ export const rentalLocationApi = {
 };
 // Payment API
 export interface PaymentData {
-  id: number;
-  userId: number;
+  paymentId?: number;
+  id?: number;
+  userId?: number;
   rentalOrderId?: number;
   amount: number;
-  paymentDate: string;
-  status: string; // Pending, Completed, Cancelled
+  paymentDate?: string | null;
+  paymentType?: number;
+  paymentMethod?: string;
+  billingImageUrl?: string | null;
+  status: number | string; // Pending, Completed, Cancelled
   rentalLocationId?: number;
   rentalLocationName?: string;
+  user?: User;
+  order?: RentalOrderData;
 }
 
 // Payment API
@@ -1206,6 +1212,7 @@ export interface CreateRentalOrderData {
 
 export interface RentalOrderData {
   id: number;
+  orderId?: number; // For compatibility with backend response (order.orderId)
   phoneNumber: string;
   orderDate: string;
   pickupTime: string;
@@ -1272,6 +1279,12 @@ export const rentalOrderApi = {
   // Lấy đơn hàng của user
   getByUserId: (userId: number) =>
     apiCall<RentalOrderData[]>(`/RentalOrder/GetByUserId?userId=${userId}`, {
+      method: 'GET',
+    }),
+
+  // Lấy đơn hàng theo rental location ID
+  getByRentalLocationId: (rentalLocationId: number) =>
+    apiCall<RentalOrderData[]>(`/RentalOrder/GetByRentalLocationId/${rentalLocationId}`, {
       method: 'GET',
     }),
 
@@ -1453,6 +1466,17 @@ export const paymentApi = {
   // Lấy doanh thu theo từng điểm thuê (Admin/Staff)
   getRevenueByLocation: () =>
     apiCall<RevenueByLocationData[]>("/Payment/ByRentalLocation", {
+      method: "GET",
+    }),
+
+  // Lấy payments theo location ID (Admin/Staff)
+  getByLocation: (locationId: number) =>
+    apiCall<{ 
+      location: RentalLocationData; 
+      payments: { $values: PaymentData[] }; 
+      totalPayments?: number;
+      totalAmount?: number;
+    }>(`/Payment/GetByLocation/${locationId}`, {
       method: "GET",
     }),
 

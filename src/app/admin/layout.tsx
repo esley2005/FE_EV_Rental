@@ -15,6 +15,7 @@ import {
   LineChart,
   FileText,
   ChevronDown,
+  MapPin,
 } from "lucide-react";
 import { Layout, Menu, Dropdown, Space, Avatar, Breadcrumb, message, Result, Button } from "antd";
 import { authUtils } from "@/utils/auth";
@@ -30,6 +31,7 @@ import RevenueByLocation from "@/components/admin/RevenueByLocation";
 import TransactionHistory from "@/components/admin/TransactionHistory";
 import RentalHistory from "@/components/admin/RentalHistory";
 import CarIssueReports from "@/components/admin/CarIssueReports";
+import RentalOrdersByLocation from "@/components/admin/RentalOrdersByLocation";
 
 
 const { Header, Sider, Content, Footer } = Layout;
@@ -39,6 +41,7 @@ const mainMenu = [
   { key: "cars", label: "Đội xe & Điểm thuê", icon: <Car /> },
   { key: "customers", label: "Khách hàng", icon: <User /> },
   { key: "staff", label: "Nhân viên", icon: <Users /> },
+  { key: "orders", label: "Đơn hàng theo địa điểm", icon: <MapPin /> },
   { key: "reports", label: "Báo cáo & Phân tích", icon: <BarChart3 /> },
 ];
 
@@ -49,6 +52,10 @@ const subMenus: Record<string, { key: string; label: string; icon: React.ReactNo
     { key: "2", label: "Lịch sử giao nhận xe", icon: <History /> },
     { key: "3", label: "Báo cáo sự cố từ staff", icon: <FileText /> },
     // { key: "4", label: "Điều phối xe", icon: <Shuffle /> },
+  ],
+
+  orders: [
+    { key: "1", label: "Đơn hàng theo địa điểm", icon: <MapPin /> },
   ],
 
   customers: [
@@ -127,6 +134,13 @@ export default function AdminLayout() {
             return <CarIssueReports />;
           // case "4":
           //   return <VehicleDispatch />;
+          default:
+            return <p>Chưa có nội dung.</p>;
+        }
+      case "orders":
+        switch (selectedSubMenu) {
+          case "1":
+            return <RentalOrdersByLocation />;
           default:
             return <p>Chưa có nội dung.</p>;
         }
