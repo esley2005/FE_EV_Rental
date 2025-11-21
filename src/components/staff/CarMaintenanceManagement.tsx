@@ -153,11 +153,64 @@ export default function CarMaintenanceManagement({
     }
   };
 
+  // Upload ảnh lên Cloudinary
+  const uploadImageToCloudinary = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'ev_rental_cars';
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'your-cloud-name';
+    
+    formData.append('upload_preset', uploadPreset);
+    
+    try {
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        {
+          method: 'POST',
+          body: formData,
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error?.message || `Upload failed with status: ${response.status}`);
+      }
+
+      if (data.secure_url) {
+        return data.secure_url;
+      }
+      throw new Error('No secure_url in response');
+    } catch (error) {
+      console.error('[Upload] Cloudinary upload failed:', error);
+      throw error;
+    }
+  };
+
   const handleSubmitIssue = async (values: any) => {
     if (!selectedCar) return;
 
     setUploading(true);
     try {
+      // Upload tất cả ảnh lên Cloudinary trước
+      const uploadedImageUrls: string[] = [];
+      
+      for (const file of issueImages) {
+        if (file.originFileObj) {
+          try {
+            const imageUrl = await uploadImageToCloudinary(file.originFileObj);
+            uploadedImageUrls.push(imageUrl);
+          } catch (error) {
+            console.error('Failed to upload image:', error);
+            message.warning(`Không thể upload ảnh ${file.name}. Báo cáo sẽ được gửi không có ảnh này.`);
+          }
+        } else if (file.url && file.url.startsWith('http')) {
+          // Nếu đã có URL (đã upload trước đó), giữ nguyên
+          uploadedImageUrls.push(file.url);
+        }
+      }
+
       const report: CarIssueReport = {
         carId: selectedCar.id,
         carName: selectedCar.name,
@@ -165,11 +218,22 @@ export default function CarMaintenanceManagement({
         severity: values.severity,
         description: values.description,
         status: "pending",
-        images: issueImages.map((file) => file.url || "").filter(Boolean),
+        images: uploadedImageUrls,
       };
 
+      console.log('[CarMaintenanceManagement] Saving report with images:', {
+        reportId: report.id,
+        carId: report.carId,
+        imageCount: uploadedImageUrls.length,
+        imageUrls: uploadedImageUrls
+      });
+
       saveIssueReport(report);
-      message.success("Báo cáo sự cố đã được gửi lên admin!");
+      message.success(
+        uploadedImageUrls.length > 0
+          ? `Báo cáo sự cố đã được gửi lên admin! (${uploadedImageUrls.length} ảnh đã được upload)`
+          : "Báo cáo sự cố đã được gửi lên admin!"
+      );
       setIssueModalVisible(false);
       issueForm.resetFields();
       setIssueImages([]);

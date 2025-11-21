@@ -284,30 +284,7 @@ export default function StaffManagement({ mode = "list" }: StaffManagementProps)
         </Space>
       ),
     },
-    {
-      title: "Số điện thoại",
-      dataIndex: "phone",
-      key: "phone",
-      render: (text: string) => (
-        <Space>
-          <PhoneOutlined />
-          <span>{text || "Chưa cập nhật"}</span>
-        </Space>
-      ),
-    },
-    {
-      title: "Địa chỉ",
-      dataIndex: "address",
-      key: "address",
-      render: (text: string) => text || "Chưa cập nhật",
-    },
-    {
-      title: "Ngày sinh",
-      dataIndex: "dateOfBirth",
-      key: "dateOfBirth",
-      render: (text: string) =>
-        text ? dayjs(text).format("DD/MM/YYYY") : "Chưa cập nhật",
-    },
+ 
     {
       title: "Điểm thuê",
       key: "location",
