@@ -216,7 +216,7 @@ export default function HeroSection() {
 
           </div> */}
 
-          <div className="flex flex-col lg:flex-row gap-6 mb-6 bg-white/30 rounded-2xl p-4" >
+          <div className="flex flex-col lg:flex-row gap-6 mb-6 bg-white/70 rounded-2xl p-4" >
             {/* Location Select */}
             <div className="flex-1 flex flex-col gap-4">
               <label className="block text-sm  text-white mb-2 flex items-center gap-1">
