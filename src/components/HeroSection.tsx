@@ -123,7 +123,8 @@ export default function HeroSection() {
       <div 
         className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
         style={{
-          backgroundImage: "url('https://images.unsplash.com/photo-1488646953014-85cb44e25828?q=80&w=2070&auto=format&fit=crop')",
+          // backgroundImage: "url('https://images.unsplash.com/photo-1488646953014-85cb44e25828?q=80&w=2070&auto=format&fit=crop')",
+          backgroundImage: "url('https://res.cloudinary.com/dv4y7cdpi/image/upload/v1763895456/gi5azdf5eip5uf8f5atl.png')",
           // Có thể thay bằng ảnh local: backgroundImage: "url('/hero-bg.jpg')"
         }}
       >
