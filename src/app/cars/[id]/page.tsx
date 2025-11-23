@@ -765,12 +765,19 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             console.warn('[Car Detail] ⚠️ No coordinates found for car');
           }
           
-          // Lọc các xe khác (không phải xe hiện tại) và lấy 3 xe đầu tiên
+          // Lọc các xe khác (không phải xe hiện tại) theo cùng sizeType và lấy 3 xe đầu tiên
+          const currentCarSizeType = currentCar.sizeType;
+          console.log('[Car Detail] Current car sizeType:', currentCarSizeType);
+          
           const otherCarsList = activeCars
-            .filter((c: Car) => c && c.id !== carId)
+            .filter((c: Car) => 
+              c && 
+              c.id !== carId && 
+              c.sizeType === currentCarSizeType
+            )
             .slice(0, 3);
           
-          console.log('[Car Detail] otherCarsList:', otherCarsList);
+          console.log('[Car Detail] otherCarsList (filtered by sizeType):', otherCarsList);
           console.log('[Car Detail] otherCarsList length:', otherCarsList.length);
           
           setOtherCars(otherCarsList);
