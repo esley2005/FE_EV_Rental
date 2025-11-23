@@ -1110,6 +1110,9 @@ export interface PaymentData {
   rentalLocationName?: string;
   user?: User;
   order?: RentalOrderData;
+  momoOrderId?: string;
+  momoTransactionId?: string;
+  payUrl?: string;
 }
 
 // Payment API
@@ -1485,7 +1488,23 @@ export const carDeliveryHistoryApi = {
 };
 
 
+// MoMo Payment Response Interface
+export interface CreateMomoPaymentResponse {
+  momoPayUrl?: string; // URL để redirect user đến MoMo
+  payUrl?: string; // Alias cho momoPayUrl
+  momoOrderId?: string;
+  momoRequestId?: string;
+  requestId?: string; // Alias cho momoRequestId
+  status?: string;
+}
+
 export const paymentApi = {
+  // Lấy tất cả payments (Admin/Staff)
+  getAll: () =>
+    apiCall<PaymentData[]>("/Payment/GetAll", {
+      method: "GET",
+    }),
+
   // Lấy doanh thu theo từng điểm thuê (Admin/Staff)
   getRevenueByLocation: () =>
     apiCall<RevenueByLocationData[]>("/Payment/ByRentalLocation", {
@@ -1502,6 +1521,44 @@ export const paymentApi = {
     }>(`/Payment/GetByLocation/${locationId}`, {
       method: "GET",
     }),
+
+  // Lấy payments theo userId (Admin/Staff/Customer)
+  getAllByUserId: (userId: number) =>
+    apiCall<PaymentData[]>(`/Payment/GetAllByUserId?userId=${userId}`, {
+      method: "GET",
+    }),
+
+  // Lấy payment theo payment ID
+  getById: (id: number) =>
+    apiCall<PaymentData>(`/Payment/GetByPaymentId?id=${id}`, {
+      method: "GET",
+    }),
+
+  // Lấy payment theo MoMo Order ID
+  getByMomoOrderId: (momoOrderId: string) =>
+    apiCall<PaymentData>(`/Payment/GetByMomoOrderId?momoOrderId=${momoOrderId}`, {
+      method: "GET",
+    }),
+
+  // Tạo MoMo payment - trả về payUrl để redirect user
+  createMomoPayment: async (
+    rentalOrderId: number,
+    userId: number,
+    amount: number
+  ): Promise<ApiResponse<CreateMomoPaymentResponse>> => {
+    // Backend trả về format: { isSuccess, data, message }
+    // apiCall sẽ tự động parse và trả về format ApiResponse
+    const response = await apiCall<CreateMomoPaymentResponse>(
+      `/Payment/CreateMomoPayment?rentalOrderId=${rentalOrderId}&userId=${userId}&amount=${amount}`,
+      {
+        method: "POST",
+      }
+    );
+
+    // apiCall đã xử lý response format từ backend
+    // Nếu backend trả về { isSuccess, data, message }, apiCall sẽ convert thành { success, data, error }
+    return response;
+  },
 
   // Xác nhận thanh toán đặt cọc (Admin/Staff only)
   confirmDepositPayment: (orderId: number) => {

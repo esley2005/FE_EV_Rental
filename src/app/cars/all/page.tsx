@@ -193,6 +193,23 @@ export default function AllCarsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageIndex, keyword, selectedLocationId, selectedCarType, minPrice, maxPrice]);
 
+  // ✅ Listen to paymentSuccess event để refresh danh sách xe
+  useEffect(() => {
+    const handlePaymentSuccess = () => {
+      console.log('[All Cars Page] Payment success event received, refreshing cars list...');
+      loadCars();
+    };
+    
+    if (typeof window !== 'undefined') {
+      window.addEventListener('paymentSuccess', handlePaymentSuccess);
+      
+      return () => {
+        window.removeEventListener('paymentSuccess', handlePaymentSuccess);
+      };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const loadCars = async () => {
     setLoading(true);
     try {
@@ -334,6 +351,56 @@ export default function AllCarsPage() {
           new Set(activeCars.map((car: Car) => car.sizeType).filter(Boolean))
         ) as string[];
         setAvailableCarTypes(uniqueCarTypes.sort());
+        
+      
+        activeCars = activeCars.filter((car: any) => {
+          const carLocations = car.carRentalLocations;
+          if (!carLocations) {
+            // Nếu không có location, vẫn hiển thị (backward compatibility)
+            return true;
+          }
+
+          // Handle .NET format: có thể là array hoặc { $values: [...] }
+          const locationsList = Array.isArray(carLocations)
+            ? carLocations
+            : (carLocations as any)?.$values || [];
+
+          if (!Array.isArray(locationsList) || locationsList.length === 0) {
+            // Không có location nào, vẫn hiển thị (backward compatibility)
+            return true;
+          }
+
+          // Lấy location đầu tiên (1 xe = 1 location)
+          const firstLocation = locationsList[0];
+          if (!firstLocation) {
+            return true;
+          }
+
+          // Lấy quantity từ relation
+          const quantity = firstLocation?.quantity ?? 
+                          firstLocation?.Quantity ?? 
+                          firstLocation?.availableQuantity ?? 
+                          firstLocation?.AvailableQuantity ?? 
+                          firstLocation?.stock ?? 
+                          firstLocation?.Stock ?? 
+                          firstLocation?.carQuantity ?? 
+                          firstLocation?.CarQuantity ?? 
+                          null;
+
+          // Nếu quantity là null/undefined, vẫn hiển thị (backward compatibility)
+          if (quantity === null || quantity === undefined) {
+            return true;
+          }
+
+          // Chỉ hiển thị xe có quantity > 0
+          const quantityNum = Number(quantity);
+          if (Number.isNaN(quantityNum)) {
+            return true; // Nếu không parse được, vẫn hiển thị
+          }
+
+          return quantityNum > 0;
+        });
+        console.log(`[All Cars Page] After quantity filter (quantity > 0): ${activeCars.length} cars`);
         
         console.log('[All Cars Page] Active cars:', activeCars);
 

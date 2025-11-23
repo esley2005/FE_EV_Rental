@@ -1608,23 +1608,18 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   {/* Theo giờ - Tự lái */}
   <div className="flex justify-between items-center mb-3">
     <div>
-      <p className="text-xs text-gray-600">Theo giờ (Tự lái)</p>
-      {/* <div className="flex items-center gap-2">
-        <span className="text-sm text-gray-500 line-through">
-          {formatCurrency(Math.round(car.rentPricePerHour * 1.1))}
-        </span>
-        
-      </div> */}
+      {/* <p className="text-xs text-gray-600">Theo giờ (Tự lái)</p> */}
+
     </div>
-    <p className="text-lg font-bold text-gray-900 text-right">
+    {/* <p className="text-lg font-bold text-gray-900 text-right">
       {formatCurrency(car.rentPricePerHour)}/giờ
-    </p>
+    </p> */}
   </div>
 
   {/* Theo ngày - Tự lái */}
   <div className="flex justify-between items-center mb-3">
     <div>
-      <p className="text-xs text-gray-600">Theo ngày (Tự lái)</p>
+      <p className="text-xs text-gray-600">Thuê theo ngày (Tự lái)</p>
       <div className="flex items-center gap-2">
         {/* <span className="text-sm text-gray-500 line-through">
           {formatCurrency(Math.round(car.rentPricePerDay * 1.1))}
@@ -1640,7 +1635,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   {/* Theo giờ - Có tài xế */}
   <div className="flex justify-between items-center mb-3">
     <div>
-      <p className="text-xs text-gray-600">Theo giờ (Có tài xế)</p>
+      {/* <p className="text-xs text-gray-600">Theo giờ (Có tài xế)</p> */}
       <div className="flex items-center gap-2">
         {/* <span className="text-sm text-gray-500 line-through">
           {formatCurrency(Math.round(car.rentPricePerHourWithDriver * 1.1))}
@@ -1648,15 +1643,15 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
         {/* <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span> */}
       </div>
     </div>
-    <p className="text-lg font-bold text-gray-900 text-right">
+    {/* <p className="text-lg font-bold text-gray-900 text-right">
       {formatCurrency(car.rentPricePerHourWithDriver)}/giờ
-    </p>
+    </p> */}
   </div>
 
   {/* Theo ngày - Có tài xế */}
   <div className="flex justify-between items-center">
     <div>
-      <p className="text-xs text-gray-600">Theo ngày (Có tài xế)</p>
+      <p className="text-xs text-gray-600">Thuê theo ngày (Có tài xế)</p>
       <div className="flex items-center gap-2">
         {/* <span className="text-sm text-gray-500 line-through">
           {formatCurrency(Math.round(car.rentPricePerDayWithDriver * 1.1))}
