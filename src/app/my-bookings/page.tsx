@@ -140,7 +140,29 @@ export default function MyBookingsPage() {
       // Load orders
       const ordersResponse = await rentalOrderApi.getByUserId(userId);
       
-      if (!ordersResponse.success || !ordersResponse.data) {
+      // Xử lý trường hợp 403 (Forbidden) - user không có quyền
+      if (!ordersResponse.success) {
+        // Nếu là lỗi permission (403), chỉ log warning và không hiển thị error cho user
+        if (ordersResponse.error?.includes('không có quyền') || ordersResponse.error?.includes('403')) {
+          console.warn('[MyBookings] User may not have permission to view orders:', ordersResponse.error);
+          setBookings([]);
+          setLoading(false);
+          return;
+        }
+        
+        // Với các lỗi khác, hiển thị error message
+        api.error({
+          message: "Không thể tải danh sách đơn hàng",
+          description: ordersResponse.error || "Vui lòng thử lại sau.",
+          placement: "topRight",
+          duration: 5,
+        });
+        setBookings([]);
+        setLoading(false);
+        return;
+      }
+      
+      if (!ordersResponse.data) {
         setBookings([]);
         setLoading(false);
         return;
