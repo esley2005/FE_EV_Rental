@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { notFound, useRouter } from "next/navigation";
+import { notFound, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Spin, message, notification, Modal, Button } from "antd";
 // Removed @ant-design/icons to standardize on lucide-react icons
@@ -14,7 +14,6 @@ import type { Car } from "@/types/car";
 import type { User } from "@/services/api";
 import { authUtils } from "@/utils/auth";
 import { geocodeAddress } from "@/utils/geocode";
-import Feedback from "@/components/feedback/Feedback";
 import {
   MapPin,
   Bluetooth,
@@ -197,6 +196,7 @@ const getQuantityFromRelation = (relation: any): number | null => {
 export default function CarDetailPage({ params }: CarDetailPageProps) {
   const resolvedParams = React.use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
@@ -214,6 +214,45 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   const [carLocationsLoading, setCarLocationsLoading] = useState(false);
   const [userOrderIdForCar, setUserOrderIdForCar] = useState<number | null>(null);
   const [checkingReviewEligibility, setCheckingReviewEligibility] = useState(false);
+  const [selectedLocationFromUrl, setSelectedLocationFromUrl] = useState<{ id: number; name: string; address: string } | null>(null);
+
+  // Load location from URL if locationId exists
+  useEffect(() => {
+    const locationId = searchParams?.get('locationId');
+    if (locationId) {
+      const loadLocationFromUrl = async () => {
+        try {
+          const locationIdNum = parseInt(locationId);
+          const response = await rentalLocationApi.getAll();
+          if (response.success && response.data) {
+            const locationsData = response.data as any;
+            const locationsList = Array.isArray(locationsData)
+              ? locationsData
+              : (locationsData?.$values && Array.isArray(locationsData.$values) ? locationsData.$values : []);
+            
+            const location = locationsList.find((loc: any) => {
+              const locId = loc.id ?? loc.Id ?? loc.locationId ?? loc.LocationId;
+              return Number(locId) === locationIdNum;
+            });
+            
+            if (location) {
+              setSelectedLocationFromUrl({
+                id: location.id ?? location.Id ?? locationIdNum,
+                name: location.name ?? location.Name ?? '',
+                address: location.address ?? location.Address ?? '',
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Load location from URL error:', error);
+        }
+      };
+      
+      loadLocationFromUrl();
+    } else {
+      setSelectedLocationFromUrl(null);
+    }
+  }, [searchParams]);
 
   // Debug: Log khi otherCars thay đổi
   useEffect(() => {
@@ -869,7 +908,13 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
   // Điều hướng đến trang booking
   const handleBookingClick = () => {
-    router.push(`/booking/${car.id}`);
+    const locationId = searchParams?.get('locationId');
+    const params = new URLSearchParams();
+    if (locationId) {
+      params.set('locationId', locationId);
+    }
+    const queryString = params.toString();
+    router.push(`/booking/${car.id}${queryString ? `?${queryString}` : ''}`);
   };
 
   //5
@@ -1072,7 +1117,15 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
                   {/* Location */}
                   <p className="text-sm text-gray-500 mb-4">
-                    {carAddress ? (
+                    {selectedLocationFromUrl ? (
+                      <span className="flex items-center gap-2">
+                        <MapPin className="text-blue-600" />
+                        <span>
+                          {selectedLocationFromUrl.name && `${selectedLocationFromUrl.name} - `}
+                          {selectedLocationFromUrl.address}
+                        </span>
+                      </span>
+                    ) : carAddress ? (
                       <span className="flex items-center gap-2">
                         <MapPin className="text-blue-600" />
                         <span>{carAddress}</span>
@@ -1704,23 +1757,6 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
         </div>
 
 
-        <div className="bg-white rounded-lg shadow-lg p-6 mt-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Đánh giá từ khách hàng</h2>
-          <p className="text-sm text-gray-500 mb-6">
-            Trải nghiệm thực tế của khách thuê xe {car.name}.
-          </p>
-          <Feedback
-            carId={car.id}
-            allowCreate={Boolean(userOrderIdForCar)}
-            createRentalOrderId={userOrderIdForCar ?? undefined}
-            userId={user?.id}
-          />
-          {!checkingReviewEligibility && !userOrderIdForCar && (
-            <p className="text-sm text-gray-500 mt-4">
-              Bạn cần hoàn tất ít nhất một đơn thuê xe này để có thể gửi đánh giá.
-            </p>
-          )}
-        </div>
 
         {/* Xe khác */}
         {otherCars.length > 0 ? (

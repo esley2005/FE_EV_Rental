@@ -22,7 +22,7 @@ import {
   MailOutlined,
   IdcardOutlined,
   ReloadOutlined,
-  DeleteOutlined
+  DeleteOutlined,
 } from "@ant-design/icons";
 import { 
   Card, 
@@ -934,6 +934,7 @@ export default function MyBookingsPage() {
                 ]}
               />
             </Card>
+
           </div>
         )}
       </Modal>

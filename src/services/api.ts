@@ -639,60 +639,6 @@ export interface CitizenIdData {
   createdAt?: string;
   updatedAt?: string;
 }
-// Feedback API
-export interface FeedbackData {
-  id: number;
-  title: string;
-  content: string;
-  createdAt: string;
-  userFullName: string;
-  rentalOrderId: number;
-  userId?: number;
-  carId?: number;
-}
-
-export const feedbackApi = {
-  // Lấy tất cả feedback
-  getAll: () =>
-    apiCall<{ $values: FeedbackData[] }>("/Feedback/GetAll", {
-      method: "GET",
-      skipAuth: true, // Nếu public, không cần token
-    }),
-
-  // Lấy feedback theo ID
-  getById: async (id: number) => {
-    const res = await feedbackApi.getAll();
-    if (res.success && res.data?.$values) {
-      const fb = res.data.$values.find((f) => f.id === id);
-      if (fb) {
-        return { success: true, data: fb };
-      } else {
-        return { success: false, error: "Feedback not found" };
-      }
-    }
-    return res;
-  },
-
-  // Tạo feedback mới
-  create: (feedback: Partial<FeedbackData>) =>
-    apiCall<FeedbackData>("/Feedback/Create", {
-      method: "POST",
-      body: JSON.stringify(feedback),
-    }),
-
-  // Cập nhật feedback
-  update: (feedback: Partial<FeedbackData>) =>
-    apiCall<FeedbackData>("/Feedback/Update", {
-      method: "PUT",
-      body: JSON.stringify(feedback),
-    }),
-
-  // Xóa feedback
-  delete: (id: number) =>
-    apiCall(`/Feedback/Delete/${id}`, {
-      method: "DELETE",
-    }),
-};
 
 export const authApi = {
   // Đăng nhập
@@ -734,6 +680,39 @@ export const authApi = {
     apiCall<User>('/user/profile', {
       method: 'GET',
     }),
+
+  // Lấy thông tin user theo ID
+  getProfileById: async (userId: number) => {
+    // Thử nhiều endpoint để tương thích với backend
+    const candidates = [
+      `/User/GetById?id=${userId}`,
+      `/User/${userId}`,
+      `/user/${userId}`,
+      `/auth/user/${userId}`,
+    ];
+    
+    for (const ep of candidates) {
+      try {
+        const res = await apiCall<User>(ep, { method: 'GET' });
+        if (res.success && res.data) {
+          return res;
+        }
+      } catch (error) {
+        continue;
+      }
+    }
+    
+    // Fallback: lấy từ getAllUsers và filter
+    const allUsersRes = await authApi.getAllUsers();
+    if (allUsersRes.success && allUsersRes.data) {
+      const user = allUsersRes.data.find((u) => u.id === userId);
+      if (user) {
+        return { success: true, data: user };
+      }
+    }
+    
+    return { success: false, error: 'Không tìm thấy user' };
+  },
 
   // Lấy tất cả user (khách hàng) từ hệ thống auth
   getAllUsers: async () => {
@@ -857,6 +836,60 @@ export const authApi = {
         isActive: isActive,
       }),
     });
+  },
+
+  // Cập nhật điểm thuê của nhân viên (Admin only)
+  updateStaffRentalLocation: async (userId: number, rentalLocationId: number) => {
+    // Thử nhiều endpoint có thể có
+    const attempts = [
+      {
+        endpoint: '/User/UpdateStaffRentalLocation',
+        method: 'PUT',
+        body: { userId, rentalLocationId }
+      },
+      {
+        endpoint: '/User/UpdateStaffLocation',
+        method: 'PUT',
+        body: { userId, rentalLocationId }
+      },
+      {
+        endpoint: '/User/UpdateRentalLocation',
+        method: 'PUT',
+        body: { userId, rentalLocationId }
+      },
+      {
+        endpoint: `/User/UpdateStaffRentalLocation/${userId}`,
+        method: 'PUT',
+        body: { rentalLocationId }
+      },
+      {
+        endpoint: '/User/Update',
+        method: 'PUT',
+        body: { userId, rentalLocationId }
+      },
+    ];
+
+    for (const attempt of attempts) {
+      try {
+        const response = await apiCall<User>(attempt.endpoint, {
+          method: attempt.method as 'PUT',
+          body: JSON.stringify(attempt.body),
+        });
+        
+        if (response.success) {
+          return response;
+        }
+      } catch (error) {
+        // Tiếp tục thử endpoint tiếp theo
+        continue;
+      }
+    }
+    
+    // Nếu không có endpoint nào hoạt động, trả về lỗi
+    return {
+      success: false,
+      error: 'Không tìm thấy endpoint để cập nhật điểm thuê của nhân viên. Vui lòng kiểm tra backend có endpoint UpdateStaffRentalLocation không.'
+    };
   },
 
   // Đổi mật khẩu
@@ -1063,14 +1096,20 @@ export const rentalLocationApi = {
 };
 // Payment API
 export interface PaymentData {
-  id: number;
-  userId: number;
+  paymentId?: number;
+  id?: number;
+  userId?: number;
   rentalOrderId?: number;
   amount: number;
-  paymentDate: string;
-  status: string; // Pending, Completed, Cancelled
+  paymentDate?: string | null;
+  paymentType?: number;
+  paymentMethod?: string;
+  billingImageUrl?: string | null;
+  status: number | string; // Pending, Completed, Cancelled
   rentalLocationId?: number;
   rentalLocationName?: string;
+  user?: User;
+  order?: RentalOrderData;
 }
 
 // Payment API
@@ -1152,6 +1191,7 @@ export interface CreateRentalOrderData {
 
 export interface RentalOrderData {
   id: number;
+  orderId?: number; // For compatibility with backend response (order.orderId)
   phoneNumber: string;
   orderDate: string;
   pickupTime: string;
@@ -1218,6 +1258,56 @@ export const rentalOrderApi = {
   // Lấy đơn hàng của user
   getByUserId: (userId: number) =>
     apiCall<RentalOrderData[]>(`/RentalOrder/GetByUserId?userId=${userId}`, {
+      method: 'GET',
+    }),
+
+  // Lấy đơn hàng theo rental location ID
+  getByRentalLocationId: (rentalLocationId: number) =>
+    apiCall<RentalOrderData[]>(`/RentalOrder/GetByRentalLocationId/${rentalLocationId}`, {
+      method: 'GET',
+    }),
+
+  // Lấy đơn hàng kèm payments theo orderId
+  getByOrderWithPayments: (orderId: number) =>
+    apiCall<{
+      id: number;
+      phoneNumber: string;
+      orderDate: string;
+      pickupTime: string;
+      expectedReturnTime: string;
+      actualReturnTime?: string;
+      subTotal: number;
+      deposit: number;
+      total: number;
+      discount?: number;
+      extraFee: number;
+      damageFee: number;
+      damageNotes?: string;
+      withDriver: boolean;
+      status: string;
+      createdAt: string;
+      updatedAt?: string;
+      userId: number;
+      carId: number;
+      rentalLocationId: number;
+      rentalContactId?: number;
+      citizenId?: number;
+      driverLicenseId?: number;
+      paymentId?: number;
+      payments?: {
+        $values: Array<{
+          paymentId: number;
+          paymentType: string;
+          paymentDate: string;
+          amount: number;
+          paymentMethod: string;
+          status: string;
+          userId: string;
+          orderId: string;
+          orderDate: string;
+        }>;
+      };
+    }>(`/RentalOrder/GetByOrderWithPayments?orderId=${orderId}`, {
       method: 'GET',
     }),
 
@@ -1399,6 +1489,17 @@ export const paymentApi = {
   // Lấy doanh thu theo từng điểm thuê (Admin/Staff)
   getRevenueByLocation: () =>
     apiCall<RevenueByLocationData[]>("/Payment/ByRentalLocation", {
+      method: "GET",
+    }),
+
+  // Lấy payments theo location ID (Admin/Staff)
+  getByLocation: (locationId: number) =>
+    apiCall<{ 
+      location: RentalLocationData; 
+      payments: { $values: PaymentData[] }; 
+      totalPayments?: number;
+      totalAmount?: number;
+    }>(`/Payment/GetByLocation/${locationId}`, {
       method: "GET",
     }),
 

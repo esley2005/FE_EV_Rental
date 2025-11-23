@@ -516,8 +516,8 @@ export default function DocumentsPage() {
                   {orders.map((order) => (
                     <Select.Option key={order.id} value={order.id}>
                       {order.car
-                        ? `${order.car.name} - Đơn hàng #${order.id} (${dayjs(order.orderDate).format("DD/MM/YYYY")})`
-                        : `Đơn hàng #${order.id} (${dayjs(order.orderDate).format("DD/MM/YYYY")})`}
+                        ? `${order.car.name} - Đơn hàng #${order.id} `
+                        : `Đơn hàng #${order.id} `}
                     </Select.Option>
                   ))}
                 </Select>

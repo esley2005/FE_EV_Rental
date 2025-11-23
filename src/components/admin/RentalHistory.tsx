@@ -306,12 +306,7 @@ export default function RentalHistory() {
         );
       },
     },
-    {
-      title: "Ngày đặt",
-      key: "orderDate",
-      width: 150,
-      render: (record: OrderWithDetails) => formatVietnamTime(record.orderDate || record.createdAt),
-    },
+   
     {
       title: "Thao tác",
       key: "action",
@@ -409,9 +404,7 @@ export default function RentalHistory() {
                   );
                 })()}
               </Descriptions.Item>
-              <Descriptions.Item label="Ngày đặt">
-                {formatVietnamTime(selectedOrder.orderDate || selectedOrder.createdAt)}
-              </Descriptions.Item>
+             
               <Descriptions.Item label="Số điện thoại">{selectedOrder.phoneNumber || "-"}</Descriptions.Item>
             </Descriptions>
 
@@ -420,8 +413,7 @@ export default function RentalHistory() {
                 {selectedOrder.user?.fullName || selectedOrder.user?.email || "N/A"}
               </Descriptions.Item>
               <Descriptions.Item label="Email">{selectedOrder.user?.email || "-"}</Descriptions.Item>
-              <Descriptions.Item label="Số điện thoại">{selectedOrder.user?.phone || "-"}</Descriptions.Item>
-              <Descriptions.Item label="Địa chỉ">{selectedOrder.user?.address || "-"}</Descriptions.Item>
+            
             </Descriptions>
 
             <Descriptions title="Thông tin xe" bordered column={2} style={{ marginTop: 16 }}>
