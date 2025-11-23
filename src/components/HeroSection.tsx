@@ -118,7 +118,7 @@ export default function HeroSection() {
   };
 
   return (
-    <div className="relative w-full min-h-[600px] lg:min-h-[700px] flex items-center justify-center overflow-hidden">
+    <div className="relative w-full min-h-[600px] lg:min-h-[800px] flex items-center justify-center overflow-hidden">
       {/* Background Image với overlay */}
       <div 
         className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
