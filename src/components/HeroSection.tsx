@@ -118,12 +118,13 @@ export default function HeroSection() {
   };
 
   return (
-    <div className="relative w-full min-h-[600px] lg:min-h-[700px] flex items-center justify-center overflow-hidden">
+    <div className="relative w-full min-h-[600px] lg:min-h-[800px] flex items-center justify-center overflow-hidden">
       {/* Background Image với overlay */}
       <div 
         className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
         style={{
-          backgroundImage: "url('https://images.unsplash.com/photo-1488646953014-85cb44e25828?q=80&w=2070&auto=format&fit=crop')",
+          // backgroundImage: "url('https://images.unsplash.com/photo-1488646953014-85cb44e25828?q=80&w=2070&auto=format&fit=crop')",
+          backgroundImage: "url('https://res.cloudinary.com/dv4y7cdpi/image/upload/v1763895456/gi5azdf5eip5uf8f5atl.png')",
           // Có thể thay bằng ảnh local: backgroundImage: "url('/hero-bg.jpg')"
         }}
       >
@@ -215,7 +216,7 @@ export default function HeroSection() {
 
           </div> */}
 
-          <div className="flex flex-col lg:flex-row gap-6 mb-6 bg-white/30 rounded-2xl p-4" >
+          <div className="flex flex-col lg:flex-row gap-6 mb-6 bg-white/70 rounded-2xl p-4" >
             {/* Location Select */}
             <div className="flex-1 flex flex-col gap-4">
               <label className="block text-sm  text-white mb-2 flex items-center gap-1">

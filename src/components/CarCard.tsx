@@ -53,9 +53,20 @@ export default function CarCard({ car }: CarCardProps) {
       return null;
     }
 
-    const locationsList: any[] = Array.isArray(carLocations)
-      ? carLocations
-      : carLocations?.$values || [];
+    // Xử lý nhiều format khác nhau từ backend
+    let locationsList: any[] = [];
+    
+    if (Array.isArray(carLocations)) {
+      locationsList = carLocations;
+    } else if (Array.isArray(carLocations?.$values)) {
+      locationsList = carLocations.$values;
+    } else if (carLocations?.data) {
+      if (Array.isArray(carLocations.data)) {
+        locationsList = carLocations.data;
+      } else if (Array.isArray(carLocations.data?.$values)) {
+        locationsList = carLocations.data.$values;
+      }
+    }
 
     if (!Array.isArray(locationsList) || locationsList.length === 0) {
       return null;
@@ -63,11 +74,34 @@ export default function CarCard({ car }: CarCardProps) {
 
     // ✅ Chỉ lấy location đầu tiên (theo yêu cầu: 1 xe = 1 location)
     const firstLocation = locationsList[0];
-    const rentalLocation = firstLocation?.rentalLocation ?? firstLocation?.RentalLocation;
+    if (!firstLocation) {
+      return null;
+    }
+
+    // Thử nhiều cách để lấy rentalLocation
+    const rentalLocation = firstLocation?.rentalLocation ?? 
+                          firstLocation?.RentalLocation ?? 
+                          firstLocation;
+
+    if (!rentalLocation) {
+      return null;
+    }
+
+    // Lấy name và address từ nhiều nguồn khác nhau
+    const name = rentalLocation?.name ?? 
+                 rentalLocation?.Name ?? 
+                 rentalLocation?.locationName ?? 
+                 rentalLocation?.LocationName ?? 
+                 null;
     
-    if (rentalLocation) {
-      const name = rentalLocation?.name ?? rentalLocation?.Name ?? null;
-      const address = rentalLocation?.address ?? rentalLocation?.Address ?? null;
+    const address = rentalLocation?.address ?? 
+                   rentalLocation?.Address ?? 
+                   rentalLocation?.locationAddress ?? 
+                   rentalLocation?.LocationAddress ?? 
+                   null;
+
+    // Chỉ trả về nếu có ít nhất name hoặc address
+    if (name || address) {
       return { name, address };
     }
 
@@ -226,7 +260,7 @@ export default function CarCard({ car }: CarCardProps) {
               animate={{ opacity: 1 }}
               transition={{ delay: 0.8 }}
             >
-              {formatPrice(pricePerHour, false)}₫/giờ
+              {/* {formatPrice(pricePerHour, false)}₫/giờ */}
             </motion.p>
           )}
         </motion.div>

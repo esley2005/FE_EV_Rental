@@ -12,19 +12,19 @@ const logger = {
   log: (...args: any[]) => {
     if (process.env.NODE_ENV !== 'production') {
       // eslint-disable-next-line no-console
-      console.log(...args);
+      // console.log(...args);
     }
   },
   warn: (...args: any[]) => {
     if (process.env.NODE_ENV !== 'production') {
       // eslint-disable-next-line no-console
-      console.warn(...args);
+      // console.warn(...args);
     }
   },
   error: (...args: any[]) => {
     if (process.env.NODE_ENV !== 'production') {
       // eslint-disable-next-line no-console
-      console.error(...args);
+      // console.error(...args);
     }
   },
 };
@@ -112,62 +112,10 @@ export async function apiCall<T>(
         headers,
       });
     } catch (fetchError: any) {
-      const errorMsg = fetchError.message || String(fetchError);
-      
-      // ✅ Xử lý SSL errors - detect và log chi tiết để debug
-      const isSSLError = errorMsg.includes('ERR_SSL_PROTOCOL_ERROR') ||
-                        errorMsg.includes('ERR_CERT_AUTHORITY_INVALID') ||
-                        errorMsg.includes('ERR_CERT_COMMON_NAME_INVALID') ||
-                        errorMsg.includes('SSL') ||
-                        errorMsg.includes('certificate') ||
-                        errorMsg.includes('TLS');
-      
-      if (isSSLError) {
-        logger.error(`[API] SSL Error detected: ${errorMsg}`);
-        logger.error(`[API] URL causing SSL error: ${url}`);
-        logger.error(`[API] Debug info:`, {
-          protocol: url.startsWith('https://') ? 'HTTPS' : 'HTTP',
-          endpoint,
-          hasToken: !!headers['Authorization'],
-        });
-        
-        // Nếu là HTTPS và có lỗi SSL, thử HTTP ngay
-        if (url.startsWith('https://') && !useHttp) {
-          logger.warn(`[API] SSL error on HTTPS, trying HTTP fallback...`);
-          url = `${API_BASE_URL_HTTP}${endpoint}`;
-          useHttp = true;
-          try {
-            response = await fetch(url, {
-              ...fetchOptions,
-              headers,
-            });
-        } catch (httpError: unknown) {
-          const httpErrorMsg = httpError instanceof Error ? httpError.message : String(httpError);
-          logger.error(`[API] HTTP also failed after SSL error: ${httpErrorMsg}`);
-          return {
-            success: false,
-            error: `Lỗi SSL: Không thể kết nối HTTPS do certificate không hợp lệ.\n\n` +
-                   `Giải pháp:\n` +
-                   `1. Backend config MoMo RedirectUrl: http://localhost:3000/payment-success (không dùng https)\n` +
-                   `2. Hoặc cấu hình Next.js để chạy HTTP: npm run dev (mặc định đã là HTTP)\n` +
-                   `3. Kiểm tra backend có chạy trên HTTP (http://localhost:5027) không`
-          };
-        }
-        } else {
-          return {
-            success: false,
-            error: `Lỗi SSL Certificate: ${errorMsg}\n\n` +
-                   `Có thể do:\n` +
-                   `- Frontend đang cố kết nối HTTPS với self-signed certificate\n` +
-                   `- Cần config MoMo RedirectUrl thành HTTP: http://localhost:3000/payment-success`
-          };
-        }
-      }
-      
       // Nếu HTTPS fail với connection error, thử HTTP
-      if ((errorMsg.includes('Failed to fetch') || 
-           errorMsg.includes('ERR_CONNECTION_REFUSED') ||
-           errorMsg.includes('NetworkError')) &&
+      if ((fetchError.message?.includes('Failed to fetch') || 
+           fetchError.message?.includes('ERR_CONNECTION_REFUSED') ||
+           fetchError.message?.includes('NetworkError')) &&
           url.startsWith('https://') && !useHttp) {
         logger.warn(`[API] HTTPS failed, trying HTTP fallback...`);
         url = `${API_BASE_URL_HTTP}${endpoint}`;
@@ -202,9 +150,8 @@ export async function apiCall<T>(
 
     // Xử lý 404 Not Found
     if (response.status === 404) {
-      // Chỉ log trong development và không log quá nhiều để tránh spam console
-      // (đặc biệt khi updateOrderDate thử nhiều endpoint)
-      logger.log(`[API] 404 Not Found: ${endpoint} - endpoint may not exist (silent)`);
+      // Chỉ log warning thay vì error để tránh spam console khi thử nhiều endpoint
+      logger.warn(`[API] ⚠️ 404 Not Found: ${endpoint} - endpoint may not exist`);
       return {
         success: false,
         error: `Endpoint not found: ${endpoint}`
@@ -218,16 +165,6 @@ export async function apiCall<T>(
       return {
         success: false,
         error: `Method not allowed: ${endpoint}`
-      };
-    }
-
-    // Xử lý 403 Forbidden - user không có quyền truy cập
-    // Không log error vì đây là expected behavior
-    if (response.status === 403) {
-      logger.warn(`[API] 403 Forbidden on ${endpoint} - user may not have permission, treating as non-critical`);
-      return {
-        success: false,
-        error: 'Bạn không có quyền truy cập tài nguyên này'
       };
     }
 
@@ -295,9 +232,20 @@ export async function apiCall<T>(
       }
       
       // Chỉ logout nếu user đã đăng nhập VÀ không phải public endpoint
+      // VÀ không phải đang trong payment flow (tránh logout khi thanh toán)
       if (!skipAuth && authUtils.isAuthenticated()) {
-  logger.warn('[API] Token expired, logging out...');
-        authUtils.logout();
+        // Kiểm tra xem có đang trong payment flow không
+        const isPaymentFlow = typeof window !== 'undefined' && 
+          (window.location.pathname.includes('/checkout') || 
+           window.location.pathname.includes('/payment'));
+        
+        if (!isPaymentFlow) {
+          logger.warn('[API] Token expired, logging out...');
+          authUtils.logout();
+        } else {
+          // Trong payment flow, chỉ log warning, không logout
+          logger.warn('[API] Token expired but in payment flow, skipping logout to avoid disrupting payment');
+        }
       }
       
       // Nếu là public endpoint sau khi retry vẫn fail
@@ -366,26 +314,7 @@ export async function apiCall<T>(
             error: `Method not allowed: ${endpoint}`
           };
         }
-        
-        // Xử lý 403 và 401 với empty response - không log error vì đây là permission issue
-        if (response.status === 403) {
-          logger.warn(`[API] 403 Forbidden with empty response on ${endpoint} - user may not have permission`);
-          return {
-            success: false,
-            error: 'Bạn không có quyền truy cập tài nguyên này'
-          };
-        }
-        
-        if (response.status === 401) {
-          logger.warn(`[API] 401 Unauthorized with empty response on ${endpoint} - token may be invalid or expired`);
-          return {
-            success: false,
-            error: 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại'
-          };
-        }
-        
-        // Chỉ log error cho các status code khác (không phải 403/401/405)
-        logger.error(`[API] Empty response with error status: ${response.status}`);
+  logger.error(`[API] Empty response with error status: ${response.status}`);
         return {
           success: false,
           error: `HTTP error! status: ${response.status} - Empty response`
@@ -1439,9 +1368,8 @@ export const rentalOrderApi = {
 
   // Cập nhật ngày đặt đơn hàng (orderDate = createdAt)
   // Thử nhiều endpoint và method có thể có
-  // Lưu ý: Backend có thể không có endpoint này - đó là bình thường, OrderDate đã được set khi tạo đơn hàng
   updateOrderDate: async (orderId: number, orderDate: string) => {
-    logger.log('[RentalOrder API] Attempting to update OrderDate (silent mode - will not spam console with 404s):', { orderId, orderDate });
+    console.log('[RentalOrder API] Attempting to update OrderDate:', { orderId, orderDate });
     
     // Thử các endpoint và method khác nhau
     const attempts = [
@@ -1495,32 +1423,34 @@ export const rentalOrderApi = {
       },
     ];
     
-    // Thử từng endpoint nhưng không log chi tiết để tránh spam console
     for (const attempt of attempts) {
       try {
-        // Gọi API với silent mode - không log 404/405 warnings từ apiCall
+        console.log(`[RentalOrder API] Trying ${attempt.method} ${attempt.endpoint}...`);
         const response = await apiCall<RentalOrderData>(attempt.endpoint, {
           method: attempt.method as 'PUT' | 'POST',
           body: JSON.stringify(attempt.body),
         });
         
         if (response.success) {
-          logger.log(`[RentalOrder API] Successfully updated OrderDate via ${attempt.method} ${attempt.endpoint}`);
+          console.log(`[RentalOrder API] Successfully updated OrderDate via ${attempt.method} ${attempt.endpoint}`);
           return response;
+        } else {
+          console.log(`[RentalOrder API] ${attempt.method} ${attempt.endpoint} returned success=false:`, response.error);
         }
-        // Không log mỗi lần fail - chỉ tiếp tục thử endpoint tiếp theo
       } catch (error) {
-        // Không log mỗi lần fail - chỉ tiếp tục thử endpoint tiếp theo
-        continue;
+        console.log(`[RentalOrder API] ${attempt.method} ${attempt.endpoint} failed:`, error);
+        // Tiếp tục thử endpoint tiếp theo
       }
     }
     
-    // Nếu không có endpoint nào hoạt động, trả về lỗi nhưng không log warning
-    // Đây không phải là lỗi nghiêm trọng vì OrderDate đã được set khi tạo đơn hàng
-    logger.log('[RentalOrder API] Could not update OrderDate - no working endpoint found. This is expected if backend does not have UpdateOrderDate endpoint. OrderDate should already be set when creating the order.');
+    // Nếu không có endpoint nào hoạt động, trả về lỗi (nhưng không log error vì đây không phải lỗi nghiêm trọng)
+    // OrderDate đã được set khi tạo order, nên việc update này là optional
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[RentalOrder API] UpdateOrderDate endpoint not available (this is OK, OrderDate was set on create)');
+    }
     return {
       success: false,
-      error: 'Không tìm thấy endpoint để cập nhật OrderDate. Backend có thể không có endpoint này - đó là bình thường, OrderDate đã được set khi tạo đơn hàng.'
+      error: 'Endpoint UpdateOrderDate không khả dụng. OrderDate đã được set khi tạo order.'
     };
   },
 

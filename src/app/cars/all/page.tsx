@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
-import { Search, Zap, Users, XCircle, MapPin } from "lucide-react";
+import { Search, XCircle, MapPin } from "lucide-react";
 import { 
   Card,
   Input,
@@ -13,12 +13,12 @@ import {
   Empty,
   Spin,
   notification as antdNotification,
-  Tag,
   Alert
 } from "antd";
 import { carsApi, rentalLocationApi, carRentalLocationApi } from "@/services/api";
 import type { Car } from "@/types/car";
 import type { RentalLocationData, CarRentalLocationData } from "@/services/api";
+import CarCard from "@/components/CarCard";
 
 export default function AllCarsPage() {
   const router = useRouter();
@@ -36,6 +36,10 @@ export default function AllCarsPage() {
   const [selectedLocation, setSelectedLocation] = useState<RentalLocationData | null>(null);
   const [locations, setLocations] = useState<RentalLocationData[]>([]);
   const [locationsLoading, setLocationsLoading] = useState(false);
+  const [selectedCarType, setSelectedCarType] = useState<string | null>(null);
+  const [minPrice, setMinPrice] = useState<string>("");
+  const [maxPrice, setMaxPrice] = useState<string>("");
+  const [availableCarTypes, setAvailableCarTypes] = useState<string[]>([]);
 
   const loadLocations = async () => {
     setLocationsLoading(true);
@@ -91,6 +95,9 @@ export default function AllCarsPage() {
     const search = searchParams.get('search');
     const locationId = searchParams.get('locationId');
     const locationName = searchParams.get('location');
+    const carType = searchParams.get('carType');
+    const minPriceParam = searchParams.get('minPrice');
+    const maxPriceParam = searchParams.get('maxPrice');
     
     if (page) {
       setPageIndex(parseInt(page) - 1);
@@ -104,6 +111,24 @@ export default function AllCarsPage() {
     } else {
       setKeyword("");
       setSearchInput("");
+    }
+
+    if (carType) {
+      setSelectedCarType(carType);
+    } else {
+      setSelectedCarType(null);
+    }
+
+    if (minPriceParam) {
+      setMinPrice(minPriceParam);
+    } else {
+      setMinPrice("");
+    }
+
+    if (maxPriceParam) {
+      setMaxPrice(maxPriceParam);
+    } else {
+      setMaxPrice("");
     }
 
     // Load location info if locationId exists
@@ -163,10 +188,11 @@ export default function AllCarsPage() {
   };
 
   useEffect(() => {
-    // Tải lại danh sách xe khi pageIndex, keyword hoặc selectedLocationId thay đổi
+    // Tải lại danh sách xe khi pageIndex, keyword, selectedLocationId, selectedCarType, minPrice, maxPrice thay đổi
+    // Hoặc khi locations đã được load (để có thể sử dụng trong loadCars)
     loadCars();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageIndex, keyword, selectedLocationId]);
+  }, [pageIndex, keyword, selectedLocationId, selectedCarType, minPrice, maxPrice, locations]);
 
   // ✅ Listen to paymentSuccess event để refresh danh sách xe
   useEffect(() => {
@@ -272,13 +298,30 @@ export default function AllCarsPage() {
                     const locationId = firstLocation.locationId ?? firstLocation.LocationId ?? 
                                       firstLocation.rentalLocationId ?? firstLocation.RentalLocationId;
                     if (locationId) {
-                      try {
-                        const locationDetailResponse = await rentalLocationApi.getById(locationId);
-                        if (locationDetailResponse.success && locationDetailResponse.data) {
-                          firstLocation.rentalLocation = locationDetailResponse.data;
+                      // Thử lấy từ danh sách locations đã có sẵn (từ getAll) thay vì gọi getById
+                      // để tránh lỗi 401 nếu endpoint getById yêu cầu authentication
+                      const existingLocation = locations.find(loc => Number(loc.id) === Number(locationId));
+                      if (existingLocation) {
+                        firstLocation.rentalLocation = {
+                          id: existingLocation.id,
+                          name: existingLocation.name,
+                          address: existingLocation.address,
+                          coordinates: existingLocation.coordinates,
+                          isActive: existingLocation.isActive,
+                        };
+                      } else {
+                        // Nếu không tìm thấy trong danh sách, thử gọi API (nhưng bỏ qua lỗi 401)
+                        try {
+                          const locationDetailResponse = await rentalLocationApi.getById(locationId);
+                          if (locationDetailResponse.success && locationDetailResponse.data) {
+                            firstLocation.rentalLocation = locationDetailResponse.data;
+                          }
+                        } catch (err: any) {
+                          // Bỏ qua lỗi 401 hoặc các lỗi khác, không log warning để tránh spam console
+                          if (err?.status !== 401) {
+                            console.warn(`[Car ${car.id}] Failed to fetch location detail for ${locationId}:`, err);
+                          }
                         }
-                      } catch (err) {
-                        console.warn(`[Car ${car.id}] Failed to fetch location detail for ${locationId}:`, err);
                       }
                     }
                   }
@@ -321,7 +364,13 @@ export default function AllCarsPage() {
         activeCars = carsWithDetails;
         console.log(`[All Cars Page] Fetched details for ${activeCars.length} cars`);
         
-        // ✅ Filter xe có quantity > 0 (ẩn xe hết hàng)
+        // Lấy danh sách loại xe có sẵn từ dữ liệu
+        const uniqueCarTypes = Array.from(
+          new Set(activeCars.map((car: Car) => car.sizeType).filter(Boolean))
+        ) as string[];
+        setAvailableCarTypes(uniqueCarTypes.sort());
+        
+      
         activeCars = activeCars.filter((car: any) => {
           const carLocations = car.carRentalLocations;
           if (!carLocations) {
@@ -382,6 +431,35 @@ export default function AllCarsPage() {
             car.sizeType?.toLowerCase().includes(searchTerm)
           );
           console.log('[All Cars Page] After search filter:', activeCars.length);
+        }
+
+        // Filter theo loại xe nếu có
+        if (selectedCarType && selectedCarType.trim()) {
+          activeCars = activeCars.filter((car: Car) => 
+            car.sizeType === selectedCarType
+          );
+          console.log('[All Cars Page] After car type filter:', activeCars.length);
+        }
+
+        // Filter theo giá tiền nếu có
+        if (minPrice && minPrice.trim()) {
+          const minPriceNum = parseFloat(minPrice.replace(/[^\d]/g, ''));
+          if (!isNaN(minPriceNum)) {
+            activeCars = activeCars.filter((car: Car) => 
+              car.rentPricePerDay >= minPriceNum
+            );
+            console.log('[All Cars Page] After min price filter:', activeCars.length);
+          }
+        }
+
+        if (maxPrice && maxPrice.trim()) {
+          const maxPriceNum = parseFloat(maxPrice.replace(/[^\d]/g, ''));
+          if (!isNaN(maxPriceNum)) {
+            activeCars = activeCars.filter((car: Car) => 
+              car.rentPricePerDay <= maxPriceNum
+            );
+            console.log('[All Cars Page] After max price filter:', activeCars.length);
+          }
         }
 
         // Filter theo location nếu có (dựa trên CarRentalLocation)
@@ -597,24 +675,104 @@ export default function AllCarsPage() {
     }
     setSelectedLocation(selectedLoc);
 
+    updateURLParams({ locationId: newLocationId, selectedLoc });
+  };
+
+  const handleCarTypeChange = (value: string | null) => {
+    setSelectedCarType(value);
+    setPageIndex(0);
+    updateURLParams({ carType: value });
+  };
+
+  const formatPriceInput = (value: string) => {
+    // Remove all non-digit characters
+    const numericValue = value.replace(/[^\d]/g, '');
+    if (!numericValue) return '';
+    // Format with thousand separators
+    return Number(numericValue).toLocaleString('vi-VN');
+  };
+
+  const handlePriceChange = (type: 'min' | 'max', value: string) => {
+    // Store raw numeric value (without formatting)
+    const numericValue = value.replace(/[^\d]/g, '');
+    if (type === 'min') {
+      setMinPrice(numericValue);
+    } else {
+      setMaxPrice(numericValue);
+    }
+    setPageIndex(0);
+  };
+
+  const handlePriceBlur = (type: 'min' | 'max') => {
+    const priceValue = type === 'min' ? minPrice : maxPrice;
+    if (priceValue) {
+      updateURLParams({ 
+        minPrice: type === 'min' ? priceValue : minPrice,
+        maxPrice: type === 'max' ? priceValue : maxPrice
+      });
+    } else {
+      updateURLParams({ 
+        minPrice: type === 'min' ? '' : minPrice,
+        maxPrice: type === 'max' ? '' : maxPrice
+      });
+    }
+  };
+
+  const updateURLParams = (updates: {
+    locationId?: number | null;
+    selectedLoc?: RentalLocationData | null;
+    carType?: string | null;
+    minPrice?: string;
+    maxPrice?: string;
+  }) => {
     const params = new URLSearchParams(searchParams.toString());
 
-    if (newLocationId !== null && selectedLoc) {
-      params.set('locationId', String(newLocationId));
-      params.set('location', selectedLoc.name);
-      if (selectedLoc.address) {
-        params.set('locationAddress', selectedLoc.address);
+    // Location params
+    if (updates.locationId !== undefined) {
+      const newLocationId = updates.locationId;
+      if (newLocationId !== null && updates.selectedLoc) {
+        params.set('locationId', String(newLocationId));
+        params.set('location', updates.selectedLoc.name);
+        if (updates.selectedLoc.address) {
+          params.set('locationAddress', updates.selectedLoc.address);
+        } else {
+          params.delete('locationAddress');
+        }
+      } else if (newLocationId !== null) {
+        params.set('locationId', String(newLocationId));
+        params.delete('location');
+        params.delete('locationAddress');
       } else {
+        params.delete('locationId');
+        params.delete('location');
         params.delete('locationAddress');
       }
-    } else if (newLocationId !== null) {
-      params.set('locationId', String(newLocationId));
-      params.delete('location');
-      params.delete('locationAddress');
-    } else {
-      params.delete('locationId');
-      params.delete('location');
-      params.delete('locationAddress');
+    }
+
+    // Car type params
+    if (updates.carType !== undefined) {
+      if (updates.carType && updates.carType.trim()) {
+        params.set('carType', updates.carType);
+      } else {
+        params.delete('carType');
+      }
+    }
+
+    // Price params
+    if (updates.minPrice !== undefined) {
+      if (updates.minPrice && updates.minPrice.trim()) {
+        params.set('minPrice', updates.minPrice);
+      } else {
+        params.delete('minPrice');
+      }
+    }
+
+    if (updates.maxPrice !== undefined) {
+      if (updates.maxPrice && updates.maxPrice.trim()) {
+        params.set('maxPrice', updates.maxPrice);
+      } else {
+        params.delete('maxPrice');
+      }
     }
 
     params.set('page', '1');
@@ -648,6 +806,15 @@ export default function AllCarsPage() {
         params.set('locationAddress', selectedLocation.address);
       }
     }
+    if (selectedCarType) {
+      params.set('carType', selectedCarType);
+    }
+    if (minPrice) {
+      params.set('minPrice', minPrice);
+    }
+    if (maxPrice) {
+      params.set('maxPrice', maxPrice);
+    }
     params.set('page', '1');
     router.push(`/cars/all?${params.toString()}`);
   };
@@ -669,6 +836,15 @@ export default function AllCarsPage() {
         params.set('locationAddress', selectedLocation.address);
       }
     }
+    if (selectedCarType) {
+      params.set('carType', selectedCarType);
+    }
+    if (minPrice) {
+      params.set('minPrice', minPrice);
+    }
+    if (maxPrice) {
+      params.set('maxPrice', maxPrice);
+    }
     params.set('page', page.toString());
     router.push(`/cars/all?${params.toString()}`);
     
@@ -676,20 +852,6 @@ export default function AllCarsPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('vi-VN', { 
-      style: 'currency', 
-      currency: 'VND' 
-    }).format(amount);
-  };
-
-  const getStatusTag = (status: number) => {
-    return status === 1 ? (
-      <Tag color="blue">Sẵn sàng</Tag>
-    ) : (
-      <Tag color="red">Hết xe</Tag>
-    );
-  };
 
   return (
     <>
@@ -735,52 +897,98 @@ export default function AllCarsPage() {
 
           {/* Search & Filter */}
           <Card className="mb-6 shadow-md">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1">
-                <Input
-                  size="large"
-                  placeholder="Tìm kiếm theo tên xe, model..."
-                  prefix={<Search />}
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  onPressEnter={handleSearch}
-                  allowClear
-                />
+            <div className="space-y-4">
+              {/* Row 1: Search input and location */}
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1">
+                  <Input
+                    size="large"
+                    placeholder="Tìm kiếm theo tên xe, model..."
+                    prefix={<Search />}
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    onPressEnter={handleSearch}
+                    allowClear
+                  />
+                </div>
+                <div className="md:w-72">
+                  <Select
+                    size="large"
+                    placeholder="Chọn địa điểm nhận xe"
+                    value={selectedLocationId ?? undefined}
+                    onChange={(value) => handleLocationChange(value)}
+                    allowClear
+                    loading={locationsLoading}
+                    className="w-full"
+                    showSearch
+                    optionFilterProp="label"
+                    suffixIcon={<MapPin size={16} />}
+                    options={locations.map((location) => ({
+                      value: location.id,
+                      label: location.address
+                        ? `${location.name} - ${location.address}`
+                        : location.name,
+                    }))}
+                    filterOption={(input, option) => {
+                      const optionLabel = ((option?.label ?? '') as string).toLowerCase();
+                      return optionLabel.includes(input.toLowerCase());
+                    }}
+                  />
+                </div>
+                <div className="md:w-auto">
+                  <Button
+                    type="primary"
+                    size="large"
+                    icon={<Search />}
+                    onClick={handleSearch}
+                    className="bg-blue-600 w-full md:w-auto"
+                  >
+                    Tìm kiếm
+                  </Button>
+                </div>
               </div>
-              <div className="md:w-72">
-                <Select
-                  size="large"
-                  placeholder="Chọn địa điểm nhận xe"
-                  value={selectedLocationId ?? undefined}
-                  onChange={(value) => handleLocationChange(value)}
-                  allowClear
-                  loading={locationsLoading}
-                  className="w-full"
-                  showSearch
-                  optionFilterProp="label"
-                  suffixIcon={<MapPin size={16} />}
-                  options={locations.map((location) => ({
-                    value: location.id,
-                    label: location.address
-                      ? `${location.name} - ${location.address}`
-                      : location.name,
-                  }))}
-                  filterOption={(input, option) => {
-                    const optionLabel = ((option?.label ?? '') as string).toLowerCase();
-                    return optionLabel.includes(input.toLowerCase());
-                  }}
-                />
-              </div>
-              <div className="md:w-auto">
-                <Button
-                  type="primary"
-                  size="large"
-                  icon={<Search />}
-                  onClick={handleSearch}
-                  className="bg-blue-600 w-full md:w-auto"
-                >
-                  Tìm kiếm
-                </Button>
+              
+              {/* Row 2: Car type and price filters */}
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="md:w-64">
+                  <Select
+                    size="large"
+                    placeholder="Chọn loại xe"
+                    value={selectedCarType ?? undefined}
+                    onChange={(value) => handleCarTypeChange(value)}
+                    allowClear
+                    className="w-full"
+                    options={availableCarTypes.map((type) => ({
+                      value: type,
+                      label: type,
+                    }))}
+                  />
+                </div>
+                <div className="flex-1 flex gap-2">
+                  <Input
+                    size="large"
+                    placeholder="Giá tối thiểu (VNĐ)"
+                    value={minPrice ? formatPriceInput(minPrice) : ''}
+                    onChange={(e) => {
+                      handlePriceChange('min', e.target.value);
+                    }}
+                    onBlur={() => handlePriceBlur('min')}
+                    allowClear
+                    className="flex-1"
+                  />
+                  <span className="self-center text-gray-500">-</span>
+                  <Input
+                    size="large"
+                    placeholder="Giá tối đa (VNĐ)"
+                    value={maxPrice ? formatPriceInput(maxPrice) : ''}
+                    onChange={(e) => {
+                      handlePriceChange('max', e.target.value);
+                    }}
+                    onBlur={() => handlePriceBlur('max')}
+                    allowClear
+                    className="flex-1"
+                  />
+                </div>
               </div>
             </div>
           </Card>
@@ -797,17 +1005,22 @@ export default function AllCarsPage() {
             <Card className="shadow-md">
               <Empty
                 description={
-                  keyword 
-                    ? `Không tìm thấy xe phù hợp với "${keyword}"`
+                  keyword || selectedLocationId || selectedCarType || minPrice || maxPrice
+                    ? `Không tìm thấy xe phù hợp với bộ lọc đã chọn`
                     : "Chưa có xe nào trong hệ thống"
                 }
               >
-                {keyword && (
+                {(keyword || selectedLocationId || selectedCarType || minPrice || maxPrice) && (
                   <Button 
                     type="primary" 
                     onClick={() => {
                       setKeyword("");
                       setSearchInput("");
+                      setSelectedLocationId(null);
+                      setSelectedLocation(null);
+                      setSelectedCarType(null);
+                      setMinPrice("");
+                      setMaxPrice("");
                       router.push('/cars/all');
                     }}
                     className="bg-blue-600"
@@ -821,75 +1034,7 @@ export default function AllCarsPage() {
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {cars.map((car) => (
-                  <Card
-                    key={car.id}
-                    hoverable
-                    className="shadow-md overflow-hidden"
-                    cover={
-                      <div className="h-48 bg-gray-100 relative">
-                        <img
-                          src={car.imageUrl || '/logo_ev.png'}
-                          alt={car.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = '/logo_ev.png';
-                          }}
-                        />
-                        <div className="absolute top-2 right-2">
-                          {getStatusTag(car.status)}
-                        </div>
-                      </div>
-                    }
-                    onClick={() => {
-                      const params = new URLSearchParams();
-                      if (selectedLocationId) {
-                        params.set('locationId', String(selectedLocationId));
-                      }
-                      const queryString = params.toString();
-                      router.push(`/cars/${car.id}${queryString ? `?${queryString}` : ''}`);
-                    }}
-                  >
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-800 mb-1">
-                        {car.name}
-                      </h3>
-                      <p className="text-sm text-gray-600 mb-3">{car.model}</p>
-
-                      <div className="space-y-2 mb-3">
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Users className="text-blue-600" />
-                          <span>{car.seats} chỗ</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Zap className="text-yellow-600" />
-                          <span>{car.batteryDuration} km</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                            {car.sizeType}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="pt-3 border-t border-gray-200">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-xs text-gray-500">Giá thuê/ngày</div>
-                            <div className="text-lg font-bold text-blue-600">
-                              {formatCurrency(car.rentPricePerDay)}
-                            </div>
-                          </div>
-                          <Button 
-                            type="primary" 
-                            size="small"
-                            className="bg-blue-600"
-                          >
-                            Xem chi tiết
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
+                  <CarCard key={car.id} car={car} />
                 ))}
               </div>
 

@@ -31,10 +31,10 @@ export default function Home() {
       <Header />
 
       <main className="flex-1 flex flex-col">
-        {/* Hero Section với ảnh nền và form tìm kiếm */}
+
         <HeroSection />
         
-        {/* Cars Section */}
+
         <div className="bg-gradient-to-br from-blue-50 to-blue-100 py-12">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <CarsSection />
@@ -42,12 +42,12 @@ export default function Home() {
         </div>
         
         {/* About Section */}
-        <AboutSection />
+        {/* <AboutSection /> */}
       </main>
 
       <Footer />
 
-      {/* 💬 Chat box nổi */}
+
       <ChatBox  />
     </div>
   );

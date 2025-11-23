@@ -56,6 +56,11 @@ export default function CustomerManagement() {
   
   // Map để lưu documents mới nhất cho mỗi user (userId -> { driverLicense, citizenId })
   const [userDocumentsMap, setUserDocumentsMap] = useState<Map<number, { driverLicense?: DriverLicenseData; citizenId?: CitizenIdData }>>(new Map());
+  // Order history states
+  const [orderHistoryVisible, setOrderHistoryVisible] = useState(false);
+  const [orderHistoryLoading, setOrderHistoryLoading] = useState(false);
+  const [orderHistory, setOrderHistory] = useState<RentalOrderData[]>([]);
+  const [orderHistoryCustomer, setOrderHistoryCustomer] = useState<User | null>(null);
 
   useEffect(() => {
     loadCustomers();
@@ -325,6 +330,44 @@ export default function CustomerManagement() {
     loadCustomerDocuments(customer);
   };
 
+  const loadCustomerOrders = async (customer: User) => {
+    if (!customer?.id) return;
+    setOrderHistoryLoading(true);
+    try {
+      const res = await rentalOrderApi.getByUserId(customer.id);
+      if (res.success && res.data) {
+        const raw = Array.isArray(res.data) ? res.data : (res.data as any)?.$values || [];
+        // Normalize basic fields (avoid adding unused ones)
+        const normalized: RentalOrderData[] = raw.map((o: any) => ({
+          id: o.id ?? o.Id,
+          userId: o.userId ?? o.UserId,
+          carId: o.carId ?? o.CarId,
+          startDate: o.startDate ?? o.StartDate,
+          endDate: o.endDate ?? o.EndDate,
+          pickupLocation: o.pickupLocation ?? o.PickupLocation,
+          dropoffLocation: o.dropoffLocation ?? o.DropoffLocation,
+          totalPrice: o.totalPrice ?? o.TotalPrice,
+          status: o.status ?? o.Status,
+          createdAt: o.createdAt ?? o.CreatedAt,
+        })) as RentalOrderData[];
+        setOrderHistory(normalized);
+      } else {
+        setOrderHistory([]);
+      }
+    } catch (e) {
+      console.error('Load order history error', e);
+      setOrderHistory([]);
+    } finally {
+      setOrderHistoryLoading(false);
+    }
+  };
+
+  const handleViewOrderHistory = (customer: User) => {
+    setOrderHistoryCustomer(customer);
+    setOrderHistoryVisible(true);
+    loadCustomerOrders(customer);
+  };
+
   const handleToggleActive = async (customer: User, isActive: boolean) => {
     if (!customer.id) return;
     
@@ -438,46 +481,21 @@ export default function CustomerManagement() {
         </Space>
       ),
     },
-    
-    
+    {
+      title: "Số điện thoại",
+      dataIndex: "phone",
+      key: "phone",
+      render: (text: string) => (
+        <Space>
+          <PhoneOutlined />
+          <span>{text || "Chưa cập nhật"}</span>
+        </Space>
+      ),
+    },
+    // Đã xóa các cột Địa chỉ, Ngày sinh theo yêu cầu
     {
       title: "Trạng thái",
-      key: "status",
-      render: (_: any, record: User) => {
-        // isActive: true = Đang hoạt động, false = Đã khóa
-        // Kiểm tra cả boolean true và string "true" từ backend
-        const activeValue = record.isActive ?? (record as any).IsActive;
-        const isActive = activeValue === true || activeValue === "true" || activeValue === 1;
-        return (
-          <Space direction="vertical" size="small">
-            
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={isActive}
-                checkedChildren="Mở"
-                unCheckedChildren="Khóa"
-                onChange={(checked) => handleToggleActive(record, checked)}
-                loading={loading}
-                style={{
-                  minWidth: '60px',
-                  ...(isActive 
-                    ? { backgroundColor: '#52c41a' } 
-                    : { backgroundColor: '#ff4d4f' }
-                  ),
-                }}
-              />
-              {isActive ? (
-                <Tag color="success" className="m-0 font-semibold">Đang hoạt động</Tag>
-              ) : (
-                <Tag color="error" className="m-0 font-semibold">Đã khóa</Tag>
-              )}
-            </div>
-          </Space>
-        );
-      },
-    },
-    {
-      title: "Trạng thái xác thực",
+      // Đã xóa các cột Ngày tạo & Ngày cập nhật theo yêu cầu
       key: "verification",
       render: (_: any, record: User) => {
         const userDocs = userDocumentsMap.get(record.id);
@@ -518,6 +536,15 @@ export default function CustomerManagement() {
           </Space>
         );
       },
+    },
+    {
+      title: "Lịch sử đặt hàng",
+      key: "orderHistory",
+      render: (_: any, record: User) => (
+        <Button size="small" type="primary" onClick={() => handleViewOrderHistory(record)}>
+          Xem lịch sử
+        </Button>
+      ),
     },
   
     {
@@ -764,6 +791,54 @@ export default function CustomerManagement() {
               },
             ]}
           />
+        </Spin>
+      </Modal>
+      {/* Order History Modal */}
+      <Modal
+        title={
+          <Space>
+            <ClockCircleOutlined />
+            <span>Lịch sử đặt hàng của {orderHistoryCustomer?.fullName || orderHistoryCustomer?.email}</span>
+          </Space>
+        }
+        open={orderHistoryVisible}
+        onCancel={() => {
+          setOrderHistoryVisible(false);
+          setOrderHistoryCustomer(null);
+          setOrderHistory([]);
+        }}
+        footer={null}
+        width={800}
+      >
+        <Spin spinning={orderHistoryLoading}>
+          {orderHistory.length === 0 ? (
+            <Empty description="Không có đơn hàng" />
+          ) : (
+            <Table
+              size="small"
+              rowKey="id"
+              dataSource={orderHistory}
+              pagination={{ pageSize: 8 }}
+              columns={[
+                { title: 'ID', dataIndex: 'id', key: 'id', width: 80 },
+                { title: 'Xe', dataIndex: 'carId', key: 'carId', width: 90 },
+                { title: 'Bắt đầu', dataIndex: 'startDate', key: 'startDate', render: (t: any) => t ? dayjs(t).format('DD/MM/YYYY HH:mm') : '-' },
+                { title: 'Kết thúc', dataIndex: 'endDate', key: 'endDate', render: (t: any) => t ? dayjs(t).format('DD/MM/YYYY HH:mm') : '-' },
+                { title: 'Đón', dataIndex: 'pickupLocation', key: 'pickupLocation', ellipsis: true },
+                { title: 'Trả', dataIndex: 'dropoffLocation', key: 'dropoffLocation', ellipsis: true },
+                { title: 'Giá', dataIndex: 'totalPrice', key: 'totalPrice', render: (v: any) => v != null ? new Intl.NumberFormat('vi-VN').format(v) + '₫' : '-' },
+                { title: 'Trạng thái', dataIndex: 'status', key: 'status', render: (s: any) => {
+                    const st = (s || '').toString().toLowerCase();
+                    if (st.includes('completed') || st === 'done') return <Tag color="success">Hoàn tất</Tag>;
+                    if (st.includes('cancel')) return <Tag color="error">Đã hủy</Tag>;
+                    if (st.includes('pending')) return <Tag color="warning">Chờ xử lý</Tag>;
+                    return <Tag color="blue">{s}</Tag>;
+                  }
+                },
+                { title: 'Tạo lúc', dataIndex: 'createdAt', key: 'createdAt', render: (t: any) => t ? dayjs(t).format('DD/MM/YYYY HH:mm') : '-' },
+              ]}
+            />
+          )}
         </Spin>
       </Modal>
     </div>

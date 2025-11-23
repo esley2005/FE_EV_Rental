@@ -156,8 +156,6 @@ export default function StaffManagement({ mode = "list" }: StaffManagementProps)
           locationId: u.RentalLocationId ?? u.LocationId ?? u.rentalLocationId ?? u.locationId,
           rentalLocationId: u.RentalLocationId ?? u.LocationId ?? u.rentalLocationId ?? u.locationId,
           rentalLocation: u.rentalLocation ?? u.RentalLocation ?? null,
-          createdAt: u.createdAt,
-          updatedAt: u.updatedAt,
           isEmailConfirmed: u.isEmailConfirmed,
           isActive: u.isActive,
         })) as User[];
@@ -219,7 +217,6 @@ export default function StaffManagement({ mode = "list" }: StaffManagementProps)
           locationId: u.RentalLocationId ?? u.LocationId ?? u.rentalLocationId ?? u.locationId,
           rentalLocationId: u.RentalLocationId ?? u.LocationId ?? u.rentalLocationId ?? u.locationId,
           rentalLocation: u.rentalLocation ?? u.RentalLocation ?? null,
-          createdAt: u.createdAt,
         })) as User[];
         // Điền rentalLocation nếu thiếu bằng map hiện có
         normalized = fillStaffWithLocation(normalized as any[], locationMap) as any;

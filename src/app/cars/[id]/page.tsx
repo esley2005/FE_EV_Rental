@@ -3,7 +3,10 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { notFound, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Spin, message, notification, Modal, Button } from "antd";
+import { Spin, message, notification, Modal, Button, DatePicker } from "antd";
+import dayjs, { Dayjs } from "dayjs";
+
+const { RangePicker } = DatePicker;
 // Removed @ant-design/icons to standardize on lucide-react icons
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -39,6 +42,7 @@ import {
   Phone,
   CheckCircle,
   Sparkles,
+  Calendar,
 } from "lucide-react";
 
 //1
@@ -215,6 +219,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   const [userOrderIdForCar, setUserOrderIdForCar] = useState<number | null>(null);
   const [checkingReviewEligibility, setCheckingReviewEligibility] = useState(false);
   const [selectedLocationFromUrl, setSelectedLocationFromUrl] = useState<{ id: number; name: string; address: string } | null>(null);
+  const [dateRangeValue, setDateRangeValue] = useState<[Dayjs, Dayjs] | null>(null);
 
   // Load location from URL if locationId exists
   useEffect(() => {
@@ -339,6 +344,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
           const locationsResponse = await rentalLocationApi.getAll();
           if (locationsResponse.success && locationsResponse.data) {
             const locationsList = normalizeRentalLocationsData(locationsResponse.data);
+            // CHỈ lấy thông tin cho các locationIds đã có trong relations (có xe này)
             locationsList.forEach((location: any) => {
               const locId = Number(
                 location?.id ??
@@ -349,7 +355,8 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                   location?.RentalLocationId
               );
 
-              if (!Number.isNaN(locId)) {
+              // CHỈ lấy thông tin nếu locationId có trong danh sách locations có xe này
+              if (!Number.isNaN(locId) && locationIds.has(locId)) {
                 locationInfoMap.set(locId, {
                   name: getNameFromSource(location),
                   address: getAddressFromSource(location),
@@ -362,45 +369,61 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
         }
       }
 
-      const details: CarLocationDisplay[] = Array.from(locationIds).map((locId) => {
-        const relationList = relationsByLocation.get(locId) ?? [];
-        let totalQuantity = 0;
-        let hasQuantity = false;
+      // ✅ Đồng bộ với admin: Lấy location đầu tiên TRƯỚC KHI sort/filter
+      // Lấy relation đầu tiên từ danh sách relations gốc
+      const firstRelation = relations[0];
+      if (!firstRelation) {
+        console.log('[Car Detail] loadCarLocations: No first relation found');
+        setCarLocations([]);
+        return;
+      }
 
-        relationList.forEach((relation) => {
-          const quantity = getQuantityFromRelation(relation);
-          if (quantity !== null) {
-            hasQuantity = true;
-            totalQuantity += quantity;
+      const firstLocationId = getLocationIdFromRelation(firstRelation);
+      if (!firstLocationId) {
+        console.log('[Car Detail] loadCarLocations: Could not extract locationId from first relation');
+        setCarLocations([]);
+        return;
+      }
+
+      // Lấy thông tin location từ locationInfoMap hoặc fetch
+      let locationName: string | null = null;
+      let locationAddress: string | null = null;
+
+      const infoFromMap = locationInfoMap.get(firstLocationId);
+      if (infoFromMap) {
+        locationName = infoFromMap.name;
+        locationAddress = infoFromMap.address;
+      } else {
+        // Nếu chưa có trong map, lấy từ relation
+        const infoSource = firstRelation?.rentalLocation ?? firstRelation?.RentalLocation ?? firstRelation;
+        locationName = getNameFromSource(infoSource);
+        locationAddress = getAddressFromSource(infoSource);
+      }
+
+      // Nếu vẫn chưa có, fetch từ API
+      if ((!locationName && !locationAddress) && locationInfoMap.size < locationIds.size) {
+        try {
+          const locationResponse = await rentalLocationApi.getById(firstLocationId);
+          if (locationResponse.success && locationResponse.data) {
+            const loc = locationResponse.data as any;
+            locationName = loc.name ?? loc.Name ?? null;
+            locationAddress = loc.address ?? loc.Address ?? null;
           }
-        });
-
-        const info = locationInfoMap.get(locId) ?? { name: null, address: null };
-        const fallbackSource = relationList[0];
-        const name = info.name ?? getNameFromSource(fallbackSource);
-        const address = info.address ?? getAddressFromSource(fallbackSource);
-
-        return {
-          id: locId,
-          name: name ?? null,
-          address: address ?? null,
-          quantity: hasQuantity ? totalQuantity : null,
-        };
-      });
-
-      const filteredDetails = details.filter((detail) => detail.quantity === null || detail.quantity > 0);
-
-      filteredDetails.sort((a, b) => {
-        const labelA = (a.name || a.address || '').toLowerCase();
-        const labelB = (b.name || b.address || '').toLowerCase();
-        if (labelA === labelB) {
-          return a.id - b.id;
+        } catch (error) {
+          console.warn('[Car Detail] loadCarLocations: Failed to fetch location detail', error);
         }
-        return labelA.localeCompare(labelB);
-      });
+      }
 
-      console.log('[Car Detail] loadCarLocations: Final details', filteredDetails);
-      setCarLocations(filteredDetails);
+      // Tạo final details với chỉ location đầu tiên
+      const finalDetails: CarLocationDisplay[] = [{
+        id: firstLocationId,
+        name: locationName,
+        address: locationAddress,
+        quantity: null, // Không cần quantity cho display
+      }];
+
+      console.log('[Car Detail] loadCarLocations: Final details (first location only)', finalDetails);
+      setCarLocations(finalDetails);
     } catch (error) {
       console.error('[Car Detail] loadCarLocations error:', error);
       setCarLocations([]);
@@ -747,12 +770,19 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             console.warn('[Car Detail] ⚠️ No coordinates found for car');
           }
           
-          // Lọc các xe khác (không phải xe hiện tại) và lấy 3 xe đầu tiên
+          // Lọc các xe khác (không phải xe hiện tại) theo cùng sizeType và lấy 3 xe đầu tiên
+          const currentCarSizeType = currentCar.sizeType;
+          console.log('[Car Detail] Current car sizeType:', currentCarSizeType);
+          
           const otherCarsList = activeCars
-            .filter((c: Car) => c && c.id !== carId)
+            .filter((c: Car) => 
+              c && 
+              c.id !== carId && 
+              c.sizeType === currentCarSizeType
+            )
             .slice(0, 3);
           
-          console.log('[Car Detail] otherCarsList:', otherCarsList);
+          console.log('[Car Detail] otherCarsList (filtered by sizeType):', otherCarsList);
           console.log('[Car Detail] otherCarsList length:', otherCarsList.length);
           
           setOtherCars(otherCarsList);
@@ -890,10 +920,20 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
   // Điều hướng đến trang booking
   const handleBookingClick = () => {
+    if (!dateRangeValue || !dateRangeValue[0] || !dateRangeValue[1]) {
+      message.warning('Vui lòng chọn thời gian thuê xe');
+      return;
+    }
+    
     const locationId = searchParams?.get('locationId');
     const params = new URLSearchParams();
     if (locationId) {
       params.set('locationId', locationId);
+    }
+    // Thêm thời gian thuê vào URL params
+    if (dateRangeValue[0] && dateRangeValue[1]) {
+      params.set('startDate', dateRangeValue[0].format('YYYY-MM-DDTHH:mm'));
+      params.set('endDate', dateRangeValue[1].format('YYYY-MM-DDTHH:mm'));
     }
     const queryString = params.toString();
     router.push(`/booking/${car.id}${queryString ? `?${queryString}` : ''}`);
@@ -1255,25 +1295,20 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                       </p>
                     </>
                   ) : carLocations.length > 0 ? (
-                    <div className="space-y-2">
-                      <p className="text-sm text-gray-700 mb-2">
-                        <MapPin className="inline-block mr-2 text-blue-600" />
-                        <strong>Xe có sẵn tại các địa điểm sau:</strong>
-                      </p>
-                      <div className="space-y-1">
-                        {carLocations.map((loc) => (
-                          <div key={loc.id} className="text-sm text-gray-600 pl-6">
-                            • {loc.name || loc.address || `Địa điểm #${loc.id}`}
-                            {loc.address && loc.name && ` - ${loc.address}`}
-                            {loc.quantity !== null && (
-                              <span className="text-gray-500 ml-2">({loc.quantity} xe)</span>
-                            )}
+                    <div className="flex items-start gap-1.5 bg-blue-50 border border-blue-200 rounded-lg px-2 py-1.5 max-w-[250px]">
+                      <MapPin size={12} className="flex-shrink-0 text-blue-600 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        {carLocations[0].name && (
+                          <div className="text-xs font-medium text-gray-800 leading-tight">
+                            {carLocations[0].name}
                           </div>
-                        ))}
+                        )}
+                        {carLocations[0].address && (
+                          <div className="text-xs text-gray-600 leading-tight mt-0.5">
+                            {carLocations[0].address}
+                          </div>
+                        )}
                       </div>
-                      <p className="text-xs text-gray-400 mt-2">
-                        Đang xử lý tọa độ để hiển thị bản đồ...
-                      </p>
                     </div>
                   ) : (
                     <>
@@ -1307,21 +1342,20 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                       {carLocations.map((location) => (
                         <div
                           key={`${location.id}-${location.name ?? ''}-${location.address ?? ''}`}
-                          className="flex items-start gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg"
+                          className="flex items-start gap-1.5 bg-blue-50 border border-blue-200 rounded-lg px-2 py-1.5 max-w-[250px]"
                         >
-                          <MapPin className="mt-1 text-blue-600" />
-                          <div className="flex-1">
-                            <p className="font-medium text-gray-900">
-                              {location.name || `Địa điểm thuê #${location.id}`}
-                            </p>
-                            {location.address && (
-                              <p className="text-sm text-gray-600">{location.address}</p>
+                          <MapPin size={12} className="flex-shrink-0 text-blue-600 mt-0.5" />
+                          <div className="flex-1 min-w-0">
+                            {location.name && (
+                              <div className="text-xs font-medium text-gray-800 leading-tight">
+                                {location.name}
+                              </div>
                             )}
-                            {/* {location.quantity !== null && location.quantity !== undefined && (
-                              <p className="text-xs text-gray-500 mt-1">
-                                Số lượng xe sẵn có: {location.quantity}
-                              </p>
-                            )} */}
+                            {location.address && (
+                              <div className="text-xs text-gray-600 leading-tight mt-0.5">
+                                {location.address}
+                              </div>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -1654,12 +1688,89 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                 </span>
               </div>
 
+              {/* Thời gian thuê */}
+              <div className="mb-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <Calendar className="w-5 h-5 text-blue-500" />
+                  <span className="font-semibold text-gray-900">Thời gian thuê</span>
+                </div>
+                <RangePicker
+                  showTime={{ format: 'HH:mm' }}
+                  format="DD/MM/YYYY HH:mm"
+                  size="large"
+                  className="w-full"
+                  placeholder={["Thời gian nhận xe", "Thời gian trả xe"]}
+                  value={dateRangeValue}
+                  onChange={(dates) => {
+                    if (dates && dates[0] && dates[1]) {
+                      setDateRangeValue([dates[0], dates[1]]);
+                    } else {
+                      setDateRangeValue(null);
+                    }
+                  }}
+                  disabledDate={(current) => {
+                    // Chặn các ngày trong quá khứ
+                    return current && current < dayjs().startOf('day');
+                  }}
+                  disabledTime={(value, type) => {
+                    const now = dayjs();
+                    
+                    // Nếu chọn ngày hôm nay, chặn các giờ và phút trong quá khứ
+                    if (value && value.isSame(now, 'day')) {
+                      const currentHour = now.hour();
+                      const currentMinute = now.minute();
+                      
+                      return {
+                        disabledHours: () => {
+                          const hours = [];
+                          // Chặn giờ từ 0-4 (00:00 - 04:59)
+                          for (let i = 0; i < 5; i++) {
+                            hours.push(i);
+                          }
+                          // Chặn các giờ đã qua trong ngày hôm nay (từ 5 trở đi)
+                          if (currentHour >= 5) {
+                            for (let i = 5; i < currentHour; i++) {
+                              hours.push(i);
+                            }
+                          }
+                          return hours;
+                        },
+                        disabledMinutes: (selectedHour: number) => {
+                          // Nếu chọn giờ hiện tại, chặn các phút đã qua
+                          if (selectedHour === currentHour) {
+                            const minutes = [];
+                            for (let i = 0; i <= currentMinute; i++) {
+                              minutes.push(i);
+                            }
+                            return minutes;
+                          }
+                          return [];
+                        },
+                      };
+                    }
+                    
+                    // Nếu không phải ngày hôm nay, chỉ chặn giờ ngoài khoảng 05:00 - 23:00
+                    return {
+                      disabledHours: () => {
+                        // Chặn giờ từ 0-4 (00:00 - 04:59)
+                        const hours = [];
+                        for (let i = 0; i < 5; i++) {
+                          hours.push(i);
+                        }
+                        return hours;
+                      },
+                      disabledMinutes: () => [],
+                    };
+                  }}
+                />
+              </div>
+
               {/* Booking Button */}
               <button
                 onClick={handleBookingClick}
-                disabled={car.status !== 1}
+                disabled={car.status !== 1 || !dateRangeValue}
                 className={`w-full py-4 px-6 rounded-lg font-bold text-lg transition-colors mb-5 flex items-center justify-center gap-2 ${
-                  car.status === 1
+                  car.status === 1 && dateRangeValue
                     ? 'bg-blue-500 text-white hover:bg-blue-600'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}

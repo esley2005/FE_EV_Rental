@@ -21,6 +21,7 @@ import { rentalOrderApi, carsApi, rentalLocationApi, authApi, paymentApi } from 
 import type { RentalOrderData, User } from "@/services/api";
 import type { Car } from "@/types/car";
 import { formatDateTime } from "@/utils/dateFormat";
+import { authUtils } from "@/utils/auth";
 import Image from "next/image";
 import Link from "next/link";
 import dayjs from "dayjs";
@@ -43,7 +44,8 @@ export default function CheckoutPage() {
   const [user, setUser] = useState<User | null>(null);
   
   const orderId = searchParams.get("orderId");
-  const autoPay = searchParams.get("autoPay") === "true"; // Tự động thanh toán sau khi load xong
+  const autoPay = searchParams.get("autoPay") === "true"; // Hiển thị thông báo nhưng không tự động thanh toán
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   useEffect(() => {
     if (orderId) {
@@ -54,17 +56,6 @@ export default function CheckoutPage() {
     }
   }, [orderId]);
 
-  // Tự động thanh toán nếu autoPay=true và đã load xong order + user
-  useEffect(() => {
-    if (autoPay && order && user && !loading) {
-      // Đợi 1 giây để UI render xong rồi mới tự động thanh toán
-      const timer = setTimeout(() => {
-        handleAutoPayment(order, user);
-      }, 1500);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [autoPay, order, user, loading]);
 
   const loadOrderAndUser = async () => {
     if (!orderId) return;
@@ -72,15 +63,20 @@ export default function CheckoutPage() {
     try {
       setLoading(true);
 
-      // Load user first
-      const userResponse = await authApi.getProfile();
-      if (!userResponse.success || !userResponse.data) {
-        message.error("Vui lòng đăng nhập để xem đơn hàng");
-        router.push("/login");
-        return;
+      // Thử lấy user từ localStorage trước (tránh gọi API không cần thiết)
+      let currentUser = authUtils.getCurrentUser();
+      
+      // Nếu không có trong localStorage, mới gọi API
+      if (!currentUser) {
+        const userResponse = await authApi.getProfile();
+        if (!userResponse.success || !userResponse.data) {
+          message.error("Vui lòng đăng nhập để xem đơn hàng");
+          router.push("/login");
+          return;
+        }
+        currentUser = userResponse.data;
       }
       
-      const currentUser = userResponse.data;
       setUser(currentUser);
 
       // Load order details - thử getById trước
@@ -223,115 +219,62 @@ export default function CheckoutPage() {
     return getPaymentAmount() > 0;
   };
 
-  // Tự động thanh toán khi load trang với autoPay=true
-  useEffect(() => {
-    if (autoPay && order && user && !loading) {
-      const handleAutoPayment = async () => {
-        // Tính amount dựa trên order data
-        const amount = (order.deposit && order.deposit > 0) 
-          ? order.deposit 
-          : Math.round((order.total || order.subTotal || 0) * 0.3);
-        
-        if (amount <= 0) {
-          message.warning("Không có số tiền cần thanh toán");
-          return;
-        }
-
-        try {
-          message.loading("Đang tạo yêu cầu thanh toán...", 1);
-          
-          const response = await paymentApi.createMomoPayment(
-            order.id,
-            user.id,
-            amount
-          );
-
-          if (response.success && response.data) {
-            const paymentUrl = response.data.momoPayUrl || response.data.payUrl;
-
-            if (paymentUrl) {
-              message.success("Đang chuyển đến trang thanh toán MoMo...", 2);
-              
-              // Redirect đến MoMo payment page sau 1 giây
-              setTimeout(() => {
-                window.location.href = paymentUrl;
-              }, 1000);
-            } else {
-              throw new Error("Không nhận được payment URL từ MoMo");
-            }
-          } else {
-            throw new Error(response.error || "Không thể tạo payment request");
-          }
-        } catch (error: unknown) {
-          const errorMessage =
-            error instanceof Error
-              ? error.message
-              : "Có lỗi xảy ra khi tạo payment";
-          
-          message.error(errorMessage);
-        }
-      };
-
-      // Đợi 1.5 giây để UI render xong rồi mới tự động thanh toán
-      const timer = setTimeout(() => {
-        handleAutoPayment();
-      }, 1500);
-      
-      return () => clearTimeout(timer);
+  // Hàm xử lý thanh toán khi user bấm nút xác nhận
+  const handleConfirmPayment = async () => {
+    if (!order || !user) {
+      message.error("Thông tin đơn hàng hoặc người dùng không hợp lệ");
+      return;
     }
-  }, [autoPay, order, user, loading]);
+
+    // Tính amount dựa trên order data
+    const amount = (order.deposit && order.deposit > 0) 
+      ? order.deposit 
+      : Math.round((order.total || order.subTotal || 0) * 0.3);
+    
+    if (amount <= 0) {
+      message.warning("Không có số tiền cần thanh toán");
+      return;
+    }
+
+    setIsProcessingPayment(true);
+    
+    try {
+      message.loading("Đang tạo yêu cầu thanh toán...", 1);
+      
+      const response = await paymentApi.createMomoPayment(
+        order.id,
+        user.id,
+        amount
+      );
+
+      if (response.success && response.data) {
+        const paymentUrl = response.data.momoPayUrl || response.data.payUrl;
+
+        if (paymentUrl) {
+          message.success("Đang chuyển đến trang thanh toán MoMo...", 2);
+          
+          // Redirect đến MoMo payment page sau 1 giây
+          setTimeout(() => {
+            window.location.href = paymentUrl;
+          }, 1000);
+        } else {
+          throw new Error("Không nhận được payment URL từ MoMo");
+        }
+      } else {
+        throw new Error(response.error || "Không thể tạo payment request");
+      }
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Có lỗi xảy ra khi tạo payment";
+      
+      message.error(errorMessage);
+      setIsProcessingPayment(false);
+    }
+  };
 
   const paymentAmount = getPaymentAmount();
-
-  // Tự động thanh toán khi autoPay=true và đã load xong order + user
-  useEffect(() => {
-    if (autoPay && order && user && !loading) {
-      // Tính amount
-      const amount = (order.deposit && order.deposit > 0) 
-        ? order.deposit 
-        : Math.round((order.total || order.subTotal || 0) * 0.3);
-      
-      if (amount <= 0) return;
-
-      // Đợi 1.5 giây để UI render xong rồi mới tự động thanh toán
-      const timer = setTimeout(async () => {
-        try {
-          message.loading("Đang tạo yêu cầu thanh toán...", 1);
-          
-          const response = await paymentApi.createMomoPayment(
-            order.id,
-            user.id,
-            amount
-          );
-
-          if (response.success && response.data) {
-            const paymentUrl = response.data.momoPayUrl || response.data.payUrl;
-
-            if (paymentUrl) {
-              message.success("Đang chuyển đến trang thanh toán MoMo...", 2);
-              
-              // Redirect đến MoMo payment page sau 1 giây
-              setTimeout(() => {
-                window.location.href = paymentUrl;
-              }, 1000);
-            } else {
-              message.error("Không nhận được payment URL từ MoMo");
-            }
-          } else {
-            message.error(response.error || "Không thể tạo payment request");
-          }
-        } catch (error: unknown) {
-          const errorMessage =
-            error instanceof Error
-              ? error.message
-              : "Có lỗi xảy ra khi tạo payment";
-          message.error(errorMessage);
-        }
-      }, 1500);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [autoPay, order, user, loading]);
 
   if (loading) {
     return (
@@ -528,16 +471,17 @@ export default function CheckoutPage() {
                 className="sticky top-24"
               >
                 <div className="space-y-4">
-                  {autoPay ? (
-                    <Alert
-                      message="Đang chuyển đến trang thanh toán..."
-                      description="Đơn hàng của bạn đã được tạo. Vui lòng thanh toán cọc để hoàn tất đặt xe. Đang tự động chuyển đến trang thanh toán MoMo..."
-                      type="info"
-                      showIcon
-                      className="mb-4"
-                    />
-                  ) : canMakePayment() ? (
+                  {canMakePayment() ? (
                     <>
+                      {autoPay && (
+                        <Alert
+                          message="Đơn hàng đã được tạo thành công!"
+                          description="Vui lòng xác nhận thanh toán cọc để hoàn tất đặt xe."
+                          type="success"
+                          showIcon
+                          className="mb-4"
+                        />
+                      )}
                       <Alert
                         message={
                           order.deposit && order.deposit > 0
@@ -553,17 +497,18 @@ export default function CheckoutPage() {
                         showIcon
                         className="mb-4"
                       />
-                      <MomoPaymentButton
-                        rentalOrderId={order.id}
-                        userId={user.id}
-                        amount={paymentAmount}
-                        onSuccess={(momoOrderId) => {
-                          console.log("Payment initiated:", momoOrderId);
-                        }}
-                        onError={(error) => {
-                          message.error(error);
-                        }}
-                      />
+                      <Button
+                        type="primary"
+                        size="large"
+                        block
+                        icon={<WalletOutlined />}
+                        onClick={handleConfirmPayment}
+                        loading={isProcessingPayment}
+                        disabled={isProcessingPayment || !order || !user}
+                        className="bg-pink-600 hover:bg-pink-700 h-12 text-lg font-semibold"
+                      >
+                        {isProcessingPayment ? "Đang xử lý..." : "Xác nhận thanh toán"}
+                      </Button>
                     </>
                   ) : (
                     <Alert
