@@ -232,9 +232,20 @@ export async function apiCall<T>(
       }
       
       // Chỉ logout nếu user đã đăng nhập VÀ không phải public endpoint
+      // VÀ không phải đang trong payment flow (tránh logout khi thanh toán)
       if (!skipAuth && authUtils.isAuthenticated()) {
-  logger.warn('[API] Token expired, logging out...');
-        authUtils.logout();
+        // Kiểm tra xem có đang trong payment flow không
+        const isPaymentFlow = typeof window !== 'undefined' && 
+          (window.location.pathname.includes('/checkout') || 
+           window.location.pathname.includes('/payment'));
+        
+        if (!isPaymentFlow) {
+          logger.warn('[API] Token expired, logging out...');
+          authUtils.logout();
+        } else {
+          // Trong payment flow, chỉ log warning, không logout
+          logger.warn('[API] Token expired but in payment flow, skipping logout to avoid disrupting payment');
+        }
       }
       
       // Nếu là public endpoint sau khi retry vẫn fail
@@ -1432,11 +1443,14 @@ export const rentalOrderApi = {
       }
     }
     
-    // Nếu không có endpoint nào hoạt động, trả về lỗi
-    console.error('[RentalOrder API] All update OrderDate attempts failed');
+    // Nếu không có endpoint nào hoạt động, trả về lỗi (nhưng không log error vì đây không phải lỗi nghiêm trọng)
+    // OrderDate đã được set khi tạo order, nên việc update này là optional
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[RentalOrder API] UpdateOrderDate endpoint not available (this is OK, OrderDate was set on create)');
+    }
     return {
       success: false,
-      error: 'Không tìm thấy endpoint để cập nhật OrderDate. Vui lòng kiểm tra backend có endpoint UpdateOrderDate hoặc Update/{orderId} không.'
+      error: 'Endpoint UpdateOrderDate không khả dụng. OrderDate đã được set khi tạo order.'
     };
   },
 
