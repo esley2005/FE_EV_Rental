@@ -953,27 +953,38 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
       {/* Add top padding to prevent content being hidden behind fixed header */}
       <main className="flex-1 container mx-auto px-4 pt-24 pb-8">
-        {/* Breadcrumb */}
+        {/* Breadcrumb - Đường dẫn điều hướng */}
         <nav className="mb-6">
-          <ol className="flex items-center space-x-2 text-sm text-gray-500 mb-6">
+          <ol className="flex items-center space-x-2 text-sm mb-4">
             <li>
-              <Link href="/" className="hover:text-blue-600">
-                Trang chủ
+              <Link 
+                href="/" 
+                className="text-gray-600 hover:text-blue-600 font-medium transition-colors duration-200 flex items-center gap-1"
+              >
+                <span>🏠</span>
+                <span>Trang chủ</span>
               </Link>
             </li>
-            <li>/</li>
+            <li className="text-gray-400">/</li>
             <li>
-              <Link href="/#cars" className="hover:text-blue-600">
-                Xe điện
+              <Link 
+                href="/#cars" 
+                className="text-gray-600 hover:text-blue-600 font-medium transition-colors duration-200 flex items-center gap-1"
+              >
+                <span>🚗</span>
+                <span>Xe điện</span>
               </Link>
             </li>
-            <li>/</li>
-            <li className="text-gray-900">{car.name}</li>
+            <li className="text-gray-400">/</li>
+            <li className="text-blue-600 font-semibold flex items-center gap-1">
+              <span>📋</span>
+              <span>{car.name}</span>
+            </li>
           </ol>
         </nav>
 
         {/* Hình ảnh xe - Gallery với 3 ảnh */}
-        <div className="bg-white rounded-lg shadow-lg p-4 mb-6">
+        <div className="bg-white rounded-lg shadow-lg p-4 mb-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Ảnh chính - chiếm 2 cột */}
             <div 
@@ -1117,11 +1128,11 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
           )}
         </Modal>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
           {/* Phần thông tin xe chính - Chiếm 2/3 cột */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-4">
             {/* Vehicle Header */}
-            <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="bg-white rounded-lg shadow-lg p-4">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
                   <h1 className="text-3xl font-bold text-gray-900 mb-3">
@@ -1226,7 +1237,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             </div>
 
       
-            <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="bg-white rounded-lg shadow-lg p-4">
              
             {/* <h2 className="text-xl font-bold text-gray-900 mb-4">
                 <MapPin className="inline-block mr-2 text-blue-600" /> Vị trí xe
@@ -1372,7 +1383,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             </div>
 
             {/* Đặc điểm (Features) Section */}
-            <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="bg-white rounded-lg shadow-lg p-4">
               <h2 className="text-xl font-bold text-gray-900 mb-4">Đặc điểm</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-gray-200">
                 {/* Truyền động */}
@@ -1422,7 +1433,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             </div>
 
             {/* Mô tả (Description) Section */}
-            <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="bg-white rounded-lg shadow-lg p-4">
               <h2 className="text-xl font-bold text-gray-900 mb-4">Mô tả</h2>
 
               {/* Rental Policies */}
@@ -1469,7 +1480,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             </div>
 
             {/* Các tiện nghi khác (Other Amenities) Section */}
-            <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="bg-white rounded-lg shadow-lg p-4">
               <h2 className="text-xl font-bold text-gray-900 mb-4">Các tiện nghi khác</h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                 {[
@@ -1498,7 +1509,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             </div>
 
             {/* Giấy tờ thuê xe (Rental Documents) Section */}
-            <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="bg-white rounded-lg shadow-lg p-4">
               <div className="flex items-center gap-2 mb-2">
                 <h2 className="text-xl font-bold text-gray-900">Giấy tờ thuê xe</h2>
                 <HelpCircle className="text-gray-400 cursor-help" />
@@ -1527,7 +1538,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             </div>
 
             {/* Tài sản thế chấp (Collateral) Section */}
-            <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="bg-white rounded-lg shadow-lg p-4">
               <div className="flex items-center gap-2 mb-4">
                 <h2 className="text-xl font-bold text-gray-900">Tài sản thế chấp</h2>
                 <HelpCircle className="text-gray-400 cursor-help" />
@@ -1541,7 +1552,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             </div>
 
             {/* Phụ phí có thể phát sinh (Additional Fees) Section */}
-            <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="bg-white rounded-lg shadow-lg p-4">
               <h2 className="text-xl font-bold text-blue-600 mb-4">Phụ phí có thể phát sinh</h2>
               <div className="space-y-4">
                 {/* Phí vượt giới hạn */}
@@ -1613,9 +1624,9 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
           {/* Phần booking panel - Chiếm 1/3 cột */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="bg-white rounded-lg shadow-lg p-4">
               {/* Giá thuê theo các gói */}
-              <div className="mb-6">
+              <div className="mb-4">
                 <h3 className="text-lg font-bold text-gray-900 mb-4">Bảng giá thuê</h3>
                 
                {/* Box chung hiển thị toàn bộ giá thuê */}
@@ -1682,7 +1693,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               </div>
 
               {/* Status */}
-              <div className={`text-center p-3 rounded-lg mb-6 ${car.status === 1 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+              <div className={`text-center p-3 rounded-lg mb-4 ${car.status === 1 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                 <span className="font-semibold">
                   {car.status === 1 ? ' Xe đang có sẵn' : '✗ Hết xe'}
                 </span>
@@ -1810,7 +1821,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
             Thông số kỹ thuật
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-4">
               <div className="flex justify-between py-2 border-b border-gray-100">
                 <span className="text-gray-600">Model</span>
@@ -1855,8 +1866,8 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
         {/* Xe khác */}
         {otherCars.length > 0 ? (
           <div className="mt-12">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Xe điện khác</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Xe điện khác</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {otherCars.map((otherCar) => (
                 <Link key={otherCar.id} href={`/cars/${otherCar.id}`}>
                   <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow cursor-pointer">
@@ -1891,8 +1902,8 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
           </div>
         ) : (
           <div className="mt-12">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Xe điện khác</h2>
-            <p className="text-gray-500 text-center py-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Xe điện khác</h2>
+            <p className="text-gray-500 text-center py-4">
               Hiện chưa có xe khác để hiển thị
             </p>
           </div>
