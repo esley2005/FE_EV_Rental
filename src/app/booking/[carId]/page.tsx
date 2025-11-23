@@ -518,32 +518,19 @@ export default function BookingPage() {
         
         // Thông báo đặt xe thành công và yêu cầu thanh toán cọc
         api.success({
-          message: (
-            <span className="font-bold text-lg">
-              ⚠️ ĐẶT XE THÀNH CÔNG - CẦN THANH TOÁN CỌC NGAY!
-            </span>
-          ),
+          message: "Đặt xe thành công!",
           description: (
             <div>
-              <p className="mb-2 font-semibold text-base">
-                Đơn hàng của bạn đã được tạo thành công!
+              <p className="font-bold text-base mb-2">⚠️ QUAN TRỌNG: BẠN PHẢI THANH TOÁN CỌC NGAY!</p>
+              <p>Đơn hàng của bạn đã được tạo thành công.</p>
+              <p className="font-semibold text-red-600 mt-1">
+                Để đảm bảo đơn hàng được xác nhận, bạn cần thanh toán tiền đặt cọc ngay bây giờ.
               </p>
-              <p className="mb-2 text-base">
-                <strong className="text-red-600">BẮT BUỘC:</strong> Bạn phải thanh toán tiền đặt cọc để xác nhận đơn hàng và giữ chỗ.
-              </p>
-              <p className="mb-1 text-sm text-gray-700">
-                • Tiền đặt cọc thường là 30% tổng giá trị đơn hàng
-              </p>
-              <p className="mb-1 text-sm text-gray-700">
-                • Số tiền còn lại sẽ thanh toán khi nhận xe
-              </p>
-              <p className="mt-2 text-sm font-semibold text-blue-600">
-                Đang chuyển đến trang thanh toán...
-              </p>
+              <p className="mt-1">Đang chuyển đến trang thanh toán...</p>
             </div>
           ),
           placement: "topRight",
-          duration: 6,
+          duration: 8,
         });
         
         // Redirect đến trang checkout để thanh toán cọc ngay

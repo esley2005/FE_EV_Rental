@@ -19,9 +19,7 @@ import {
   DollarOutlined,
   CalendarOutlined,
   CarOutlined,
-  EnvironmentOutlined,
-  ClockCircleOutlined,
-  InfoCircleOutlined
+  EnvironmentOutlined
 } from "@ant-design/icons";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -48,43 +46,16 @@ export default function PaymentSuccessPage() {
   const [order, setOrder] = useState<OrderWithDetails | null>(null);
   const [payment, setPayment] = useState<PaymentData | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<'loading' | 'success' | 'failed' | 'unknown'>('loading');
-  const [countdown, setCountdown] = useState(5); // Countdown cho redirect
-  const [redirecting, setRedirecting] = useState(false);
   
   // Extract query params - MoMo có thể trả về nhiều format
+  const orderId = searchParams.get("orderId") || searchParams.get("partnerRefId") || searchParams.get("orderId");
   const amount = searchParams.get("amount");
   const transactionId = searchParams.get("transactionId") || searchParams.get("transId");
   const paymentId = searchParams.get("paymentId");
-  const momoOrderId = searchParams.get("momoOrderId") || searchParams.get("requestId") || searchParams.get("orderId");
+  const momoOrderId = searchParams.get("momoOrderId") || searchParams.get("requestId");
   const resultCode = searchParams.get("resultCode"); // MoMo callback: 0 = success
   const resultMessage = searchParams.get("message"); // MoMo callback message
   const partnerCode = searchParams.get("partnerCode");
-  const extraData = searchParams.get("extraData"); // extraData chứa rentalOrderId và userId
-  
-  // ✅ Parse extraData để lấy rentalOrderId thực (không phải MoMo orderId)
-  // Format từ MoMo: extraData=rentalOrderId%3D34%26userId%3D18 
-  // Decode: rentalOrderId=34&userId=18
-  let rentalOrderId: number | null = null;
-  if (extraData) {
-    try {
-      // Decode URL encoded string: rentalOrderId%3D34%26userId%3D18 -> rentalOrderId=34&userId=18
-      const decoded = decodeURIComponent(extraData);
-      console.log('[Payment Success] Parsed extraData:', decoded);
-      const params = new URLSearchParams(decoded);
-      const rentalOrderIdStr = params.get("rentalOrderId");
-      if (rentalOrderIdStr) {
-        rentalOrderId = parseInt(rentalOrderIdStr, 10);
-        console.log('[Payment Success] Extracted rentalOrderId from extraData:', rentalOrderId);
-      }
-    } catch (error) {
-      console.warn('[Payment Success] Failed to parse extraData:', error, 'extraData:', extraData);
-    }
-  }
-  
-  // Fallback: thử lấy từ orderId query param nếu không có extraData
-  const orderId = rentalOrderId 
-    ? rentalOrderId.toString() 
-    : searchParams.get("orderId") || searchParams.get("partnerRefId");
 
   useEffect(() => {
     const loadData = async () => {
@@ -104,7 +75,12 @@ export default function PaymentSuccessPage() {
           } else {
             // Payment success
             message.success('Thanh toán thành công!');
-            // Redirect sẽ được xử lý ở phần dưới sau khi load xong payment data
+            // Auto redirect sau 5 giây nếu có orderId
+            if (orderId) {
+              setTimeout(() => {
+                router.push(`/my-bookings?orderId=${orderId}`);
+              }, 5000);
+            }
           }
         }
         
@@ -153,17 +129,14 @@ export default function PaymentSuccessPage() {
           setPaymentStatus('success');
         } else if (!loadedPayment && resultCode !== null && resultCode !== '0') {
           setPaymentStatus('failed');
-        } else if (!loadedPayment && resultCode === null && paymentStatus === 'loading') {
-          // Chỉ set unknown nếu chưa có status nào được set
+        } else if (!loadedPayment && resultCode === null) {
           setPaymentStatus('unknown');
         }
         
-        // Determine which orderId to use - ưu tiên rentalOrderId từ extraData, sau đó từ payment, cuối cùng từ query params
-        const finalOrderId = rentalOrderId 
-          ? rentalOrderId 
-          : (orderId ? Number(orderId) : null) 
-          || loadedPayment?.rentalOrderId 
-          || null;
+        // Determine which orderId to use
+        const finalOrderId = orderId 
+          ? Number(orderId) 
+          : loadedPayment?.rentalOrderId || null;
         
         // Load order details
         if (finalOrderId) {
@@ -181,11 +154,6 @@ export default function PaymentSuccessPage() {
           window.dispatchEvent(new CustomEvent('paymentSuccess', {
             detail: { rentalOrderId: finalOrderId }
           }));
-          
-          // Set redirecting flag để trigger countdown timer trong useEffect riêng
-          if (finalOrderId && !redirecting) {
-            setRedirecting(true);
-          }
         }
       } catch (error) {
         console.error("Load data error:", error);
@@ -197,39 +165,7 @@ export default function PaymentSuccessPage() {
     
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderId, paymentId, momoOrderId, resultCode, resultMessage, rentalOrderId]);
-
-  // ✅ Tách countdown timer ra useEffect riêng để tránh lỗi cleanup và Next.js internal helpers
-  useEffect(() => {
-    if (!redirecting || paymentStatus !== 'success') return;
-    
-    // Determine which orderId to use
-    const finalOrderId = rentalOrderId 
-      ? rentalOrderId 
-      : (orderId ? Number(orderId) : null) 
-      || payment?.rentalOrderId 
-      || null;
-    
-    if (!finalOrderId) return;
-    
-    // Countdown timer
-    let remaining = 5;
-    setCountdown(remaining);
-    
-    const countdownInterval = setInterval(() => {
-      remaining--;
-      setCountdown(remaining);
-      if (remaining <= 0) {
-        clearInterval(countdownInterval);
-        router.push(`/my-bookings?orderId=${finalOrderId}&paymentSuccess=true`);
-      }
-    }, 1000);
-    
-    // Cleanup function - chỉ return từ useEffect, không phải từ async function
-    return () => {
-      clearInterval(countdownInterval);
-    };
-  }, [redirecting, paymentStatus, rentalOrderId, orderId, payment?.rentalOrderId, router]);
+  }, [orderId, paymentId, momoOrderId, resultCode, resultMessage]);
 
 
   const loadOrderDetailsById = async (orderIdParam: number) => {
@@ -295,28 +231,30 @@ export default function PaymentSuccessPage() {
   };
 
 
-  // Luôn hiển thị Header và Footer, không block UI
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <Spin size="large" />
+          <p className="mt-4 text-gray-600">Đang tải thông tin...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <Header />
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-gray-100 pt-24 pb-16">
-        {loading ? (
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="text-center">
-              <Spin size="large" />
-              <p className="mt-4 text-gray-600">Đang tải thông tin thanh toán...</p>
-            </div>
-          </div>
-        ) : (
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-            {/* Status Icon & Title */}
-            <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="text-center mb-8"
-            >
-            {paymentStatus === 'success' ? (
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Status Icon & Title */}
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="text-center mb-8"
+          >
+            {paymentStatus === 'success' && (
               <>
                 <div className="inline-flex items-center justify-center w-24 h-24 bg-green-500 rounded-full mb-6 shadow-lg">
                   <CheckCircle2 className="w-16 h-16 text-white" />
@@ -328,7 +266,8 @@ export default function PaymentSuccessPage() {
                   Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi
                 </p>
               </>
-            ) : paymentStatus === 'failed' ? (
+            )}
+            {paymentStatus === 'failed' && (
               <>
                 <div className="inline-flex items-center justify-center w-24 h-24 bg-red-500 rounded-full mb-6 shadow-lg">
                   <span className="text-white text-6xl">✗</span>
@@ -340,7 +279,8 @@ export default function PaymentSuccessPage() {
                   {resultMessage || 'Vui lòng thử lại hoặc liên hệ hỗ trợ'}
                 </p>
               </>
-            ) : paymentStatus === 'loading' ? (
+            )}
+            {paymentStatus === 'loading' && (
               <>
                 <div className="inline-flex items-center justify-center w-24 h-24 bg-blue-500 rounded-full mb-6 shadow-lg">
                   <Spin size="large" className="text-white" />
@@ -352,7 +292,8 @@ export default function PaymentSuccessPage() {
                   Vui lòng đợi trong giây lát
                 </p>
               </>
-            ) : (
+            )}
+            {paymentStatus === 'unknown' && (
               <>
                 <div className="inline-flex items-center justify-center w-24 h-24 bg-gray-500 rounded-full mb-6 shadow-lg">
                   <CheckCircle2 className="w-16 h-16 text-white" />
@@ -365,133 +306,29 @@ export default function PaymentSuccessPage() {
                 </p>
               </>
             )}
-            </motion.div>
+          </motion.div>
 
-            {/* Main Content Card */}
-            <motion.div
+          {/* Main Content Card */}
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
           >
             <Card className="shadow-xl rounded-2xl overflow-hidden border-0">
-              {/* ✅ Success Message với thông báo rõ ràng về bước tiếp theo */}
-              {paymentStatus === 'success' && order && (
-                <div className="bg-gradient-to-r from-green-50 via-emerald-50 to-green-50 border-l-4 border-green-500 p-6 mb-6 rounded-lg shadow-sm">
-                  <div className="flex items-start gap-4">
-                    <div className="bg-green-500 rounded-full p-2">
-                      <CheckCircleOutlined className="text-white text-2xl" />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="text-xl font-bold text-green-800 mb-3">
-                        ✅ Thanh toán cọc thành công!
-                      </h3>
-                      <div className="bg-white rounded-lg p-4 mb-3 border border-green-200">
-                        <p className="text-base font-semibold text-gray-800 mb-2">
-                          Xe của bạn đã được cọc. Vui lòng di chuyển đến <strong className="text-blue-600">{order.location?.name || order.location?.address || 'trụ sở đã đặt'}</strong> để nhận xe.
-                        </p>
-                        {order.location?.address && (
-                          <p className="text-sm text-gray-600 flex items-center gap-2">
-                            <EnvironmentOutlined />
-                            {order.location.address}
-                          </p>
-                        )}
-                      </div>
-                      <p className="text-sm text-green-700">
-                        Chúng tôi đã nhận được thanh toán của bạn. Đơn hàng đang được xử lý và bạn sẽ nhận được email xác nhận trong vài phút.
-                      </p>
-                    </div>
+              {/* Success Message */}
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-l-4 border-green-500 p-6 mb-6">
+                <div className="flex items-start gap-4">
+                  <CheckCircleOutlined className="text-green-500 text-2xl mt-1" />
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-green-800 mb-2">
+                      Giao dịch đã được xử lý thành công
+                    </h3>
+                    <p className="text-green-700">
+                      Chúng tôi đã nhận được thanh toán của bạn. Đơn hàng đang được xử lý và bạn sẽ nhận được email xác nhận trong vài phút.
+                    </p>
                   </div>
                 </div>
-              )}
-
-              {/* Success Message cho các trường hợp khác */}
-              {paymentStatus === 'success' && !order && (
-                <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-l-4 border-green-500 p-6 mb-6">
-                  <div className="flex items-start gap-4">
-                    <CheckCircleOutlined className="text-green-500 text-2xl mt-1" />
-                    <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-green-800 mb-2">
-                        Giao dịch đã được xử lý thành công
-                      </h3>
-                      <p className="text-green-700">
-                        Chúng tôi đã nhận được thanh toán của bạn. Đơn hàng đang được xử lý và bạn sẽ nhận được email xác nhận trong vài phút.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ✅ Timeline: Các bước tiếp theo */}
-              {paymentStatus === 'success' && order && (
-                <div className="bg-blue-50 rounded-lg p-6 mb-6 border border-blue-200">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                    <ClockCircleOutlined className="text-blue-600" />
-                    Các bước tiếp theo
-                  </h3>
-                  <div className="space-y-4">
-                    <div className="flex items-start gap-4">
-                      <div className="flex-shrink-0 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                        <CheckCircleOutlined className="text-white text-sm" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-semibold text-gray-800">Bước 1: Thanh toán cọc hoàn tất</p>
-                        <p className="text-sm text-gray-600">Bạn đã thanh toán cọc thành công</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-4">
-                      <div className="flex-shrink-0 w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                        <span className="text-white text-sm font-bold">2</span>
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-semibold text-gray-800">Bước 2: Đến trụ sở nhận xe</p>
-                        <p className="text-sm text-gray-600">
-                          Đến địa điểm: <strong className="text-blue-600">{order.location?.name || order.location?.address || 'Trụ sở đã đặt'}</strong>
-                        </p>
-                        {order.pickupTime && (
-                          <p className="text-sm text-gray-600 mt-1">
-                            Thời gian nhận xe: <strong>{formatDateTime(order.pickupTime, "DD/MM/YYYY HH:mm")}</strong>
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-4">
-                      <div className="flex-shrink-0 w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-                        <span className="text-gray-600 text-sm font-bold">3</span>
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-semibold text-gray-600">Bước 3: Thanh toán số tiền còn lại</p>
-                        <p className="text-sm text-gray-600">Thanh toán khi nhận xe tại trụ sở</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-4">
-                      <div className="flex-shrink-0 w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-                        <span className="text-gray-600 text-sm font-bold">4</span>
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-semibold text-gray-600">Bước 4: Nhận xe và bắt đầu chuyến đi</p>
-                        <p className="text-sm text-gray-600">Kiểm tra xe và ký hợp đồng</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ✅ Thông tin hỗ trợ */}
-              {paymentStatus === 'success' && (
-                <div className="bg-yellow-50 rounded-lg p-4 mb-6 border border-yellow-200">
-                  <div className="flex items-start gap-3">
-                    <InfoCircleOutlined className="text-yellow-600 text-xl mt-1" />
-                    <div className="flex-1">
-                      <p className="text-sm text-gray-700">
-                        <strong>Lưu ý:</strong> Vui lòng mang theo giấy tờ tùy thân (CMND/CCCD) và giấy phép lái xe (nếu tự lái) khi đến nhận xe.
-                      </p>
-                      <p className="text-sm text-gray-700 mt-2">
-                        Nếu có bất kỳ thắc mắc nào, vui lòng liên hệ hotline hỗ trợ hoặc email để được hỗ trợ.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
+              </div>
 
               {/* Payment Details */}
               <div className="space-y-6">
@@ -709,38 +546,8 @@ export default function PaymentSuccessPage() {
                 )}
               </div>
 
-              {/* ✅ Countdown và Action Buttons */}
-              {paymentStatus === 'success' && redirecting && (
-                <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200 text-center">
-                  <p className="text-sm text-blue-800">
-                    Đang tự động chuyển đến trang đơn hàng trong <strong className="text-blue-600 text-lg">{countdown}</strong> giây...
-                  </p>
-                  <Button
-                    type="link"
-                    onClick={() => {
-                      setRedirecting(false);
-                      setCountdown(0);
-                    }}
-                    className="mt-2"
-                  >
-                    Hủy tự động chuyển
-                  </Button>
-                </div>
-              )}
-
               {/* Action Buttons */}
               <div className="mt-8 pt-6 border-t flex flex-col sm:flex-row gap-4">
-                {orderId && (
-                  <Button
-                    type="primary"
-                    size="large"
-                    icon={<FileTextOutlined />}
-                    onClick={() => router.push(`/my-bookings?orderId=${orderId}&paymentSuccess=true`)}
-                    className="flex-1 h-12 bg-blue-600 hover:bg-blue-700"
-                  >
-                    Xem đơn hàng ngay
-                  </Button>
-                )}
                 <Button
                   type="default"
                   size="large"
@@ -750,6 +557,17 @@ export default function PaymentSuccessPage() {
                 >
                   Về trang chủ
                 </Button>
+                {orderId && (
+                  <Button
+                    type="primary"
+                    size="large"
+                    icon={<FileTextOutlined />}
+                    onClick={() => router.push(`/my-bookings?orderId=${orderId}`)}
+                    className="flex-1 h-12 bg-blue-600 hover:bg-blue-700"
+                  >
+                    Xem đơn hàng
+                  </Button>
+                )}
                 <Button
                   type="default"
                   size="large"
@@ -775,8 +593,8 @@ export default function PaymentSuccessPage() {
             </Card>
           </motion.div>
 
-            {/* Quick Links */}
-            <motion.div
+          {/* Quick Links */}
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.4 }}
@@ -804,8 +622,7 @@ export default function PaymentSuccessPage() {
               </Card>
             </Link>
           </motion.div>
-          </div>
-        )}
+        </div>
       </div>
       <Footer />
     </>

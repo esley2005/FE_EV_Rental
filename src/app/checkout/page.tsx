@@ -11,8 +11,7 @@ import {
   CheckCircleOutlined,
   ArrowLeftOutlined,
   DollarOutlined,
-  FileTextOutlined,
-  WarningOutlined
+  FileTextOutlined
 } from "@ant-design/icons";
 import { Button, Card, Spin, message, Alert, Descriptions, Tag, Space } from "antd";
 import Header from "@/components/Header";
@@ -539,46 +538,20 @@ export default function CheckoutPage() {
                     />
                   ) : canMakePayment() ? (
                     <>
-                      {/* ✅ THÔNG BÁO QUAN TRỌNG: Cần thanh toán cọc */}
                       <Alert
                         message={
-                          <span className="text-lg font-bold text-red-600">
-                            ⚠️ BẠN CẦN THANH TOÁN CỌC ĐỂ HOÀN TẤT ĐẶT XE
-                          </span>
+                          order.deposit && order.deposit > 0
+                            ? "Thanh toán đặt cọc"
+                            : "Thanh toán đặt cọc (tạm tính)"
                         }
                         description={
-                          <div className="mt-3 space-y-2">
-                            <p className="text-base font-semibold text-gray-800">
-                              Để xác nhận đơn hàng và giữ chỗ, bạn <strong className="text-red-600">PHẢI</strong> thanh toán số tiền đặt cọc sau:
-                            </p>
-                            <div className="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4 my-3">
-                              <p className="text-2xl font-bold text-red-600 text-center">
-                                {formatCurrency(paymentAmount)}
-                              </p>
-                              <p className="text-sm text-gray-600 text-center mt-1">
-                                {!order.deposit && "(30% tổng giá trị đơn hàng)"}
-                              </p>
-                            </div>
-                            <div className="bg-blue-50 border border-blue-300 rounded p-3 space-y-1">
-                              <p className="text-sm text-gray-700">
-                                <strong>✓</strong> Thanh toán cọc để xác nhận đơn hàng
-                              </p>
-                              <p className="text-sm text-gray-700">
-                                <strong>✓</strong> Số tiền còn lại ({formatCurrency((order.total || order.subTotal || 0) - paymentAmount)}) sẽ thanh toán khi nhận xe
-                              </p>
-                              <p className="text-sm text-gray-700">
-                                <strong>✓</strong> Bạn có thể thanh toán ngay, không cần chờ xác nhận
-                              </p>
-                            </div>
-                            <p className="text-sm font-semibold text-gray-600 mt-3">
-                              <strong>Lưu ý:</strong> Đơn hàng chỉ được xác nhận sau khi thanh toán cọc thành công!
-                            </p>
-                          </div>
+                          order.deposit && order.deposit > 0
+                            ? `Bạn sẽ thanh toán ${formatCurrency(order.deposit)} để đặt cọc. Số tiền còn lại sẽ thanh toán khi nhận xe.`
+                            : `Số tiền đặt cọc được tính là 30% tổng giá trị đơn hàng: ${formatCurrency(paymentAmount)}. Bạn có thể thanh toán ngay, không cần chờ xác nhận.`
                         }
-                        type="error"
+                        type="info"
                         showIcon
-                        className="mb-4 border-2 border-red-400"
-                        icon={<WarningOutlined className="text-2xl text-red-600" />}
+                        className="mb-4"
                       />
                       <MomoPaymentButton
                         rentalOrderId={order.id}
