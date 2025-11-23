@@ -609,18 +609,18 @@ export default function CarMaintenanceManagement({
         footer={null}
         width={700}
       >
-        {selectedCar && (
-          <div>
-            <Descriptions column={1} bordered style={{ marginBottom: 16 }}>
-              <Descriptions.Item label="Xe">
-                {selectedCar.name} - {selectedCar.model}
-              </Descriptions.Item>
-            </Descriptions>
-            <Form
-              form={form}
-              layout="vertical"
-              onFinish={handleUpdateTechnicalStatus}
-            >
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleUpdateTechnicalStatus}
+        >
+          {selectedCar ? (
+            <div>
+              <Descriptions column={1} bordered style={{ marginBottom: 16 }}>
+                <Descriptions.Item label="Xe">
+                  {selectedCar.name} - {selectedCar.model}
+                </Descriptions.Item>
+              </Descriptions>
               <Form.Item
                 label="Mức pin (%)"
                 name="batteryLevel"
@@ -685,9 +685,9 @@ export default function CarMaintenanceManagement({
                   <Button onClick={() => setModalVisible(false)}>Hủy</Button>
                 </Space>
               </Form.Item>
-            </Form>
-          </div>
-        )}
+            </div>
+          ) : null}
+        </Form>
       </Modal>
 
       {/* Modal báo cáo sự cố */}
@@ -708,18 +708,18 @@ export default function CarMaintenanceManagement({
         footer={null}
         width={700}
       >
-        {selectedCar && (
-          <div>
-            <Descriptions column={1} bordered style={{ marginBottom: 16 }}>
-              <Descriptions.Item label="Xe">
-                {selectedCar.name} - {selectedCar.model}
-              </Descriptions.Item>
-            </Descriptions>
-            <Form
-              form={issueForm}
-              layout="vertical"
-              onFinish={handleSubmitIssue}
-            >
+        <Form
+          form={issueForm}
+          layout="vertical"
+          onFinish={handleSubmitIssue}
+        >
+          {selectedCar ? (
+            <div>
+              <Descriptions column={1} bordered style={{ marginBottom: 16 }}>
+                <Descriptions.Item label="Xe">
+                  {selectedCar.name} - {selectedCar.model}
+                </Descriptions.Item>
+              </Descriptions>
               <Form.Item
                 label="Loại sự cố"
                 name="issueType"
@@ -788,9 +788,9 @@ export default function CarMaintenanceManagement({
                   <Button onClick={() => setIssueModalVisible(false)}>Hủy</Button>
                 </Space>
               </Form.Item>
-            </Form>
-          </div>
-        )}
+            </div>
+          ) : null}
+        </Form>
       </Modal>
 
       {/* Modal chọn xe để báo cáo sự cố */}

@@ -503,38 +503,44 @@ export default function BookingPage() {
           }
         }
         
-        // Nếu không có tài xế, tự động chuyển đến trang upload giấy tờ
-        if (!withDriverValue) {
-          api.success({
-            message: "Đặt xe thành công",
-            description: "Đang chuyển đến trang upload giấy tờ...",
-            placement: "topRight",
-            duration: 2,
-          });
-          // Tự động chuyển đến trang upload giấy tờ với orderId (chỉ khi có orderId hợp lệ)
-          setTimeout(() => {
-            if (orderId && orderId > 0) {
-              router.push(`/profile/documents?orderId=${orderId}`);
-            } else {
-              router.push('/profile/documents');
-            }
-          }, 1000);
-        } else {
-          // Có tài xế, chỉ thông báo thành công và chuyển đến trang đơn hàng
-          api.success({
-            message: "Đặt xe thành công",
-            description: "Đơn hàng của bạn đã được tạo thành công. Đang chuyển đến trang đơn hàng...",
-            placement: "topRight",
-            duration: 3,
-          });
-          setTimeout(() => {
-            if (orderId && orderId > 0) {
-              router.push(`/my-bookings?orderId=${orderId}`);
-            } else {
-              router.push('/my-bookings');
-            }
-          }, 1500);
-        }
+        // Thông báo đặt xe thành công và yêu cầu thanh toán cọc
+        api.success({
+          message: (
+            <span className="font-bold text-lg">
+              ⚠️ ĐẶT XE THÀNH CÔNG - CẦN THANH TOÁN CỌC NGAY!
+            </span>
+          ),
+          description: (
+            <div>
+              <p className="mb-2 font-semibold text-base">
+                Đơn hàng của bạn đã được tạo thành công!
+              </p>
+              <p className="mb-2 text-base">
+                <strong className="text-red-600">BẮT BUỘC:</strong> Bạn phải thanh toán tiền đặt cọc để xác nhận đơn hàng và giữ chỗ.
+              </p>
+              <p className="mb-1 text-sm text-gray-700">
+                • Tiền đặt cọc thường là 30% tổng giá trị đơn hàng
+              </p>
+              <p className="mb-1 text-sm text-gray-700">
+                • Số tiền còn lại sẽ thanh toán khi nhận xe
+              </p>
+              <p className="mt-2 text-sm font-semibold text-blue-600">
+                Đang chuyển đến trang thanh toán...
+              </p>
+            </div>
+          ),
+          placement: "topRight",
+          duration: 6,
+        });
+        
+        // Redirect đến trang checkout để thanh toán cọc ngay
+        setTimeout(() => {
+          if (orderId && orderId > 0) {
+            router.push(`/checkout?orderId=${orderId}&autoPay=true`);
+          } else {
+            router.push('/my-bookings');
+          }
+        }, 1500);
       } else {
         api.error({
           message: "Đặt xe thất bại",

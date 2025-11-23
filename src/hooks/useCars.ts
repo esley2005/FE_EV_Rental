@@ -245,7 +245,58 @@ export function useCars(): UseCarsResult {
         console.log('[useCars] ✅ Enrichment complete. Sample car:', carsWithLocation[0]);
         console.log('[useCars] Sample carRentalLocations:', carsWithLocation[0]?.carRentalLocations);
         
-        setCars(carsWithLocation as unknown as Car[]);
+        // ✅ Filter xe có quantity > 0 (ẩn xe hết hàng)
+        const carsWithQuantity = carsWithLocation.filter((car: any) => {
+          const carLocations = car.carRentalLocations;
+          if (!carLocations) {
+            // Nếu không có location, vẫn hiển thị (backward compatibility)
+            return true;
+          }
+
+          // Handle .NET format: có thể là array hoặc { $values: [...] }
+          const locationsList = Array.isArray(carLocations)
+            ? carLocations
+            : (carLocations as any)?.$values || [];
+
+          if (!Array.isArray(locationsList) || locationsList.length === 0) {
+            // Không có location nào, vẫn hiển thị (backward compatibility)
+            return true;
+          }
+
+          // Lấy location đầu tiên (1 xe = 1 location)
+          const firstLocation = locationsList[0];
+          if (!firstLocation) {
+            return true;
+          }
+
+          // Lấy quantity từ relation
+          const quantity = firstLocation?.quantity ?? 
+                          firstLocation?.Quantity ?? 
+                          firstLocation?.availableQuantity ?? 
+                          firstLocation?.AvailableQuantity ?? 
+                          firstLocation?.stock ?? 
+                          firstLocation?.Stock ?? 
+                          firstLocation?.carQuantity ?? 
+                          firstLocation?.CarQuantity ?? 
+                          null;
+
+          // Nếu quantity là null/undefined, vẫn hiển thị (backward compatibility)
+          if (quantity === null || quantity === undefined) {
+            return true;
+          }
+
+          // Chỉ hiển thị xe có quantity > 0
+          const quantityNum = Number(quantity);
+          if (Number.isNaN(quantityNum)) {
+            return true; // Nếu không parse được, vẫn hiển thị
+          }
+
+          return quantityNum > 0;
+        });
+        
+        console.log(`[useCars] After quantity filter (quantity > 0): ${carsWithQuantity.length} cars`);
+        
+        setCars(carsWithQuantity as unknown as Car[]);
         setError(null);
       } else {
         // Fallback to mock data
@@ -266,6 +317,20 @@ export function useCars(): UseCarsResult {
 
   useEffect(() => {
     fetchCars();
+    
+    // ✅ Listen to paymentSuccess event để refresh danh sách xe
+    const handlePaymentSuccess = () => {
+      console.log('[useCars] Payment success event received, refreshing cars list...');
+      fetchCars();
+    };
+    
+    if (typeof window !== 'undefined') {
+      window.addEventListener('paymentSuccess', handlePaymentSuccess);
+      
+      return () => {
+        window.removeEventListener('paymentSuccess', handlePaymentSuccess);
+      };
+    }
   }, []);
 
   return {
