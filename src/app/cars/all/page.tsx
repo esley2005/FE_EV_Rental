@@ -214,91 +214,112 @@ export default function AllCarsPage() {
         
         console.log('[All Cars Page] After filter - activeCars length:', activeCars.length);
         
-        // Nếu đang filter theo location, cần fetch chi tiết TẤT CẢ xe để lấy carRentalLocations
+        // ✅ Đồng bộ với admin: LUÔN fetch carRentalLocations cho TẤT CẢ xe để hiển thị location
         // vì API getAll() có thể không trả về relationships
-        if (selectedLocationId) {
-          console.log(`[All Cars Page] Filtering by location ${selectedLocationId}, fetching details for all cars to get carRentalLocations...`);
-          
-          // Fetch chi tiết cho TẤT CẢ xe để lấy carRentalLocations
-          const carsWithDetails = await Promise.all(
-            activeCars.map(async (car: any) => {
-              const carResult = { ...car };
-              try {
-                // Nếu đã có carRentalLocations dạng array hoặc $values, giữ nguyên
-                if (
-                  carResult.carRentalLocations &&
-                  (Array.isArray(carResult.carRentalLocations) ||
-                    (carResult.carRentalLocations as any)?.$values)
-                ) {
-                  console.log(`[Car ${car.id}] Đã có carRentalLocations, bỏ qua fetch detail`);
-                  return carResult;
+        console.log(`[All Cars Page] Fetching carRentalLocations for all cars to display location...`);
+        
+        // Fetch chi tiết cho TẤT CẢ xe để lấy carRentalLocations
+        const carsWithDetails = await Promise.all(
+          activeCars.map(async (car: any) => {
+            const carResult = { ...car };
+            try {
+              // Nếu đã có carRentalLocations dạng array hoặc $values, kiểm tra xem có đầy đủ không
+              const hasLocations = carResult.carRentalLocations &&
+                (Array.isArray(carResult.carRentalLocations) ||
+                  (carResult.carRentalLocations as any)?.$values);
+              
+              if (hasLocations) {
+                const locationsList = Array.isArray(carResult.carRentalLocations)
+                  ? carResult.carRentalLocations
+                  : (carResult.carRentalLocations as any)?.$values || [];
+                
+                if (locationsList.length > 0) {
+                  // Kiểm tra xem location đầu tiên có đầy đủ thông tin không
+                  const firstLocation = locationsList[0];
+                  const hasFullInfo = firstLocation?.rentalLocation || firstLocation?.RentalLocation;
+                  
+                  if (hasFullInfo) {
+                    // ✅ Chỉ lấy location đầu tiên (1 xe = 1 location) - đồng bộ với admin
+                    carResult.carRentalLocations = [firstLocation];
+                    console.log(`[Car ${car.id}] Đã có carRentalLocations đầy đủ, chỉ lấy location đầu tiên`);
+                    return carResult;
+                  }
+                }
+              }
+
+              console.log(`[Car ${car.id}] Fetching carRentalLocations via carRentalLocationApi...`);
+              const carLocationResponse = await carRentalLocationApi.getByCarId(Number(car.id));
+
+              if (carLocationResponse.success && carLocationResponse.data) {
+                const rawLocations = carLocationResponse.data as any;
+                let locationsData: CarRentalLocationData[] = [];
+
+                if (Array.isArray(rawLocations)) {
+                  locationsData = rawLocations;
+                } else if (Array.isArray(rawLocations.$values)) {
+                  locationsData = rawLocations.$values;
+                } else if (rawLocations.data && Array.isArray(rawLocations.data.$values)) {
+                  locationsData = rawLocations.data.$values;
+                } else if (rawLocations.data && Array.isArray(rawLocations.data)) {
+                  locationsData = rawLocations.data;
                 }
 
-                console.log(`[Car ${car.id}] Fetching carRentalLocations via carRentalLocationApi...`);
-                const carLocationResponse = await carRentalLocationApi.getByCarId(Number(car.id));
-
-                if (carLocationResponse.success && carLocationResponse.data) {
-                  const rawLocations = carLocationResponse.data as any;
-                  let locationsData: CarRentalLocationData[] = [];
-
-                  if (Array.isArray(rawLocations)) {
-                    locationsData = rawLocations;
-                  } else if (Array.isArray(rawLocations.$values)) {
-                    locationsData = rawLocations.$values;
-                  } else if (rawLocations.data && Array.isArray(rawLocations.data.$values)) {
-                    locationsData = rawLocations.data.$values;
-                  } else if (rawLocations.data && Array.isArray(rawLocations.data)) {
-                    locationsData = rawLocations.data;
-                  }
-
-                  carResult.carRentalLocations = locationsData;
-
-                  console.log(
-                    `[Car ${car.id}] carRentalLocationApi returned ${locationsData.length} records`
-                  );
-
-                  // Nếu vẫn chưa có dữ liệu, thử fallback lấy chi tiết xe
-                  if (!locationsData.length) {
-                    const detailResponse = await carsApi.getById(String(car.id));
-                    if (detailResponse.success && detailResponse.data) {
-                      const detailCar = detailResponse.data as any;
-                      return {
-                        ...detailCar,
-                        carRentalLocations:
-                          detailCar.carRentalLocations ||
-                          ([] as CarRentalLocationData[]),
-                      };
+                // ✅ Đồng bộ với admin: Chỉ lấy location đầu tiên (1 xe = 1 location)
+                if (locationsData.length > 0) {
+                  // Fetch rentalLocation đầy đủ cho location đầu tiên nếu chưa có
+                  const firstLocation = locationsData[0] as any;
+                  if (!firstLocation.rentalLocation && !firstLocation.RentalLocation) {
+                    const locationId = firstLocation.locationId ?? firstLocation.LocationId ?? 
+                                      firstLocation.rentalLocationId ?? firstLocation.RentalLocationId;
+                    if (locationId) {
+                      try {
+                        const locationDetailResponse = await rentalLocationApi.getById(locationId);
+                        if (locationDetailResponse.success && locationDetailResponse.data) {
+                          firstLocation.rentalLocation = locationDetailResponse.data;
+                        }
+                      } catch (err) {
+                        console.warn(`[Car ${car.id}] Failed to fetch location detail for ${locationId}:`, err);
+                      }
                     }
                   }
-
-                  return carResult;
+                  carResult.carRentalLocations = [firstLocation]; // Chỉ lấy location đầu tiên
+                } else {
+                  carResult.carRentalLocations = [];
                 }
 
-                console.warn(
-                  `[Car ${car.id}] carRentalLocationApi không trả về data, thử fallback getById`
+                console.log(
+                  `[Car ${car.id}] carRentalLocationApi returned ${locationsData.length} records, using first location only`
                 );
-                const detailResponse = await carsApi.getById(String(car.id));
-                if (detailResponse.success && detailResponse.data) {
-                  const detailCar = detailResponse.data as any;
-                  return {
-                    ...detailCar,
-                    carRentalLocations:
-                      detailCar.carRentalLocations ||
-                      ([] as CarRentalLocationData[]),
-                  };
-                }
-              } catch (error) {
-                console.error(`[All Cars Page] Error fetching locations for car ${car.id}:`, error);
+
+                return carResult;
               }
+
+              // Nếu carRentalLocationApi không trả về data, thử fallback lấy chi tiết xe
+              console.warn(
+                `[Car ${car.id}] carRentalLocationApi không trả về data, thử fallback getById`
+              );
+              const detailResponse = await carsApi.getById(String(car.id));
+              if (detailResponse.success && detailResponse.data) {
+                const detailCar = detailResponse.data as any;
+                const detailLocations = detailCar.carRentalLocations || 
+                  (detailCar.carRentalLocations as any)?.$values || [];
+                // ✅ Chỉ lấy location đầu tiên (1 xe = 1 location) - đồng bộ với admin
+                return {
+                  ...detailCar,
+                  carRentalLocations: detailLocations.length > 0 ? [detailLocations[0]] : [],
+                };
+              }
+            } catch (error) {
+              console.error(`[All Cars Page] Error fetching locations for car ${car.id}:`, error);
+            }
 
               return carResult;
             })
           );
           
-          // Cập nhật lại activeCars với dữ liệu chi tiết
-          activeCars = carsWithDetails;
-          console.log(`[All Cars Page] Fetched details for ${activeCars.length} cars`);
-        }
+        // Cập nhật lại activeCars với dữ liệu chi tiết
+        activeCars = carsWithDetails;
+        console.log(`[All Cars Page] Fetched details for ${activeCars.length} cars`);
         
         // ✅ Filter xe có quantity > 0 (ẩn xe hết hàng)
         activeCars = activeCars.filter((car: any) => {
