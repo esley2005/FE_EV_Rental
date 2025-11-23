@@ -13,11 +13,11 @@ import {
   DollarOutlined,
   FileTextOutlined
 } from "@ant-design/icons";
-import { Button, Card, Spin, message, Alert, Descriptions, Tag, Space } from "antd";
+import { Button, Card, Spin, message, Alert, Descriptions, Tag, Space, Radio, Modal } from "antd";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import MomoPaymentButton from "@/components/payment/MomoPaymentButton";
-import { rentalOrderApi, carsApi, rentalLocationApi, authApi, paymentApi } from "@/services/api";
+import { rentalOrderApi, carsApi, rentalLocationApi, authApi, paymentApi, PaymentGateway } from "@/services/api";
 import type { RentalOrderData, User } from "@/services/api";
 import type { Car } from "@/types/car";
 import { formatDateTime } from "@/utils/dateFormat";
@@ -44,8 +44,12 @@ export default function CheckoutPage() {
   const [user, setUser] = useState<User | null>(null);
   
   const orderId = searchParams.get("orderId");
-  const autoPay = searchParams.get("autoPay") === "true"; // Hiển thị thông báo nhưng không tự động thanh toán
+  const autoPay = searchParams.get("autoPay") === "true"; // Tự động chọn MoMo và thanh toán
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [selectedGateway, setSelectedGateway] = useState<PaymentGateway>(PaymentGateway.MoMo);
+  const [payOSQrCode, setPayOSQrCode] = useState<string | null>(null);
+  const [payOSCheckoutUrl, setPayOSCheckoutUrl] = useState<string | null>(null);
+  const [showPayOSModal, setShowPayOSModal] = useState(false);
 
   useEffect(() => {
     if (orderId) {
@@ -162,8 +166,10 @@ export default function CheckoutPage() {
       
       setOrder(orderWithDetails);
       
-      // Nếu autoPay = true, tự động gọi API thanh toán sau khi load xong
-      // Sẽ gọi trong useEffect sau khi order và user đã được set
+      // Nếu autoPay = true, tự động chọn MoMo và sẵn sàng thanh toán
+      if (autoPay) {
+        setSelectedGateway(PaymentGateway.MoMo);
+      }
     } catch (error) {
       console.error("Load order error:", error);
       const errorMessage = error instanceof Error ? error.message : "Không thể tải thông tin đơn hàng";
@@ -241,24 +247,50 @@ export default function CheckoutPage() {
     try {
       message.loading("Đang tạo yêu cầu thanh toán...", 1);
       
-      const response = await paymentApi.createMomoPayment(
+      const response = await paymentApi.createPaymentWithGateway(
         order.id,
         user.id,
-        amount
+        amount,
+        selectedGateway
       );
 
       if (response.success && response.data) {
-        const paymentUrl = response.data.momoPayUrl || response.data.payUrl;
+        const paymentData = response.data;
 
-        if (paymentUrl) {
-          message.success("Đang chuyển đến trang thanh toán MoMo...", 2);
-          
-          // Redirect đến MoMo payment page sau 1 giây
+        // Xử lý theo gateway
+        if (selectedGateway === PaymentGateway.MoMo) {
+          const paymentUrl = paymentData.momoPayUrl;
+          if (paymentUrl) {
+            message.success("Đang chuyển đến trang thanh toán MoMo...", 2);
+            setTimeout(() => {
+              window.location.href = paymentUrl;
+            }, 1000);
+          } else {
+            throw new Error("Không nhận được payment URL từ MoMo");
+          }
+        } else if (selectedGateway === PaymentGateway.PayOS) {
+          // Hiển thị QR code hoặc redirect
+          if (paymentData.payOSQrCode) {
+            setPayOSQrCode(paymentData.payOSQrCode);
+            setPayOSCheckoutUrl(paymentData.payOSCheckoutUrl || null);
+            setShowPayOSModal(true);
+            message.success("Quét mã QR để thanh toán", 3);
+          } else if (paymentData.payOSCheckoutUrl) {
+            message.success("Đang chuyển đến trang thanh toán PayOS...", 2);
+            setTimeout(() => {
+              window.location.href = paymentData.payOSCheckoutUrl!;
+            }, 1000);
+          } else {
+            throw new Error("Không nhận được thông tin thanh toán từ PayOS");
+          }
+        } else if (selectedGateway === PaymentGateway.Cash || selectedGateway === PaymentGateway.BankTransfer) {
+          // Cash/BankTransfer - chỉ cần hiển thị thông báo thành công
+          message.success("Đã tạo yêu cầu thanh toán. Vui lòng thanh toán trực tiếp khi nhận xe.", 5);
+          setIsProcessingPayment(false);
+          // Redirect về my-bookings sau 3 giây
           setTimeout(() => {
-            window.location.href = paymentUrl;
-          }, 1000);
-        } else {
-          throw new Error("Không nhận được payment URL từ MoMo");
+            router.push(`/my-bookings?orderId=${order.id}`);
+          }, 3000);
         }
       } else {
         throw new Error(response.error || "Không thể tạo payment request");
@@ -273,6 +305,18 @@ export default function CheckoutPage() {
       setIsProcessingPayment(false);
     }
   };
+
+  // Auto pay nếu autoPay = true và đã load xong order/user
+  useEffect(() => {
+    if (autoPay && order && user && selectedGateway === PaymentGateway.MoMo && !isProcessingPayment && !loading) {
+      // Tự động thanh toán sau 1 giây để đảm bảo UI đã render
+      const timer = setTimeout(() => {
+        handleConfirmPayment();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoPay, order, user, selectedGateway, loading]);
 
   const paymentAmount = getPaymentAmount();
 
@@ -497,6 +541,47 @@ export default function CheckoutPage() {
                         showIcon
                         className="mb-4"
                       />
+
+                      {/* Payment Gateway Selection */}
+                      <div className="mb-4">
+                        <label className="block text-sm font-semibold text-gray-700 mb-3">
+                          Chọn phương thức thanh toán:
+                        </label>
+                        <Radio.Group
+                          value={selectedGateway}
+                          onChange={(e) => setSelectedGateway(e.target.value)}
+                          className="w-full"
+                          disabled={isProcessingPayment}
+                        >
+                          <Space direction="vertical" className="w-full" size="middle">
+                            <Radio value={PaymentGateway.MoMo} className="w-full py-2">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold">MoMo</span>
+                                <Tag color="pink">Ví điện tử</Tag>
+                              </div>
+                            </Radio>
+                            <Radio value={PaymentGateway.PayOS} className="w-full py-2">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold">PayOS</span>
+                                <Tag color="blue">QR Code</Tag>
+                              </div>
+                            </Radio>
+                            <Radio value={PaymentGateway.BankTransfer} className="w-full py-2">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold">Chuyển khoản</span>
+                                <Tag color="green">Ngân hàng</Tag>
+                              </div>
+                            </Radio>
+                            <Radio value={PaymentGateway.Cash} className="w-full py-2">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold">Tiền mặt</span>
+                                <Tag color="orange">Trực tiếp</Tag>
+                              </div>
+                            </Radio>
+                          </Space>
+                        </Radio.Group>
+                      </div>
+
                       <Button
                         type="primary"
                         size="large"
@@ -522,11 +607,11 @@ export default function CheckoutPage() {
                   <div className="text-xs text-gray-500 mt-4 space-y-2">
                     <p>
                       <CheckCircleOutlined className="mr-1" />
-                      Thanh toán an toàn qua MoMo
+                      Thanh toán an toàn và bảo mật
                     </p>
                     <p>
                       <CheckCircleOutlined className="mr-1" />
-                      Hỗ trợ thẻ tín dụng/ghi nợ và ví MoMo
+                      Hỗ trợ nhiều phương thức thanh toán
                     </p>
                   </div>
 
@@ -541,6 +626,56 @@ export default function CheckoutPage() {
           </div>
         </div>
       </div>
+
+      {/* PayOS QR Code Modal */}
+      <Modal
+        title="Quét mã QR để thanh toán"
+        open={showPayOSModal}
+        onCancel={() => setShowPayOSModal(false)}
+        footer={[
+          <Button key="close" onClick={() => setShowPayOSModal(false)}>
+            Đóng
+          </Button>,
+          payOSCheckoutUrl && (
+            <Button
+              key="open"
+              type="primary"
+              onClick={() => {
+                if (payOSCheckoutUrl) {
+                  window.open(payOSCheckoutUrl, '_blank');
+                }
+              }}
+            >
+              Mở trang thanh toán
+            </Button>
+          ),
+        ]}
+        width={400}
+        centered
+      >
+        <div className="text-center py-4">
+          {payOSQrCode ? (
+            <>
+              <img
+                src={payOSQrCode}
+                alt="PayOS QR Code"
+                className="w-full max-w-xs mx-auto mb-4 border border-gray-200 rounded-lg p-2"
+              />
+              <p className="text-sm text-gray-600 mb-2">
+                Quét mã QR bằng ứng dụng ngân hàng của bạn để thanh toán
+              </p>
+              {payOSCheckoutUrl && (
+                <p className="text-xs text-gray-500">
+                  Hoặc nhấn &quot;Mở trang thanh toán&quot; để thanh toán trên trình duyệt
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-gray-600">Đang tải mã QR...</p>
+          )}
+        </div>
+      </Modal>
+
       <Footer />
     </>
   );

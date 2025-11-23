@@ -1502,6 +1502,14 @@ export const carDeliveryHistoryApi = {
 };
 
 
+// Payment Gateway Enum
+export enum PaymentGateway {
+  Cash = 0,
+  BankTransfer = 1,
+  MoMo = 2,
+  PayOS = 3
+}
+
 // MoMo Payment Response Interface
 export interface CreateMomoPaymentResponse {
   momoPayUrl?: string; // URL để redirect user đến MoMo
@@ -1510,6 +1518,20 @@ export interface CreateMomoPaymentResponse {
   momoRequestId?: string;
   requestId?: string; // Alias cho momoRequestId
   status?: string;
+}
+
+// Create Payment with Gateway Response Interface
+export interface CreatePaymentWithGatewayResponse {
+  gateway: PaymentGateway;
+  status: string;
+  // MoMo fields
+  momoPayUrl?: string;
+  momoOrderId?: string;
+  momoRequestId?: string;
+  // PayOS fields
+  payOSCheckoutUrl?: string;
+  payOSQrCode?: string;
+  payOSOrderCode?: number;
 }
 
 export const paymentApi = {
@@ -1579,6 +1601,28 @@ export const paymentApi = {
     return apiCall<{ success: boolean; message?: string }>(`/Payment/ConfirmDepositPayment?orderId=${orderId}`, {
       method: 'PUT',
     });
+  },
+
+  // Tạo payment với gateway được chọn (MoMo, PayOS, Cash, BankTransfer)
+  createPaymentWithGateway: async (
+    rentalOrderId: number,
+    userId: number,
+    amount: number,
+    gateway: PaymentGateway
+  ): Promise<ApiResponse<CreatePaymentWithGatewayResponse>> => {
+    const response = await apiCall<CreatePaymentWithGatewayResponse>(
+      '/Payment/CreatePaymentWithGateway',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          rentalOrderId,
+          userId,
+          amount,
+          gateway
+        }),
+      }
+    );
+    return response;
   },
 };
 
