@@ -257,6 +257,8 @@ export default function BookingPage() {
 
   const carId = params?.carId as string;
   const locationIdFromUrl = searchParams?.get('locationId');
+  const startDateFromUrl = searchParams?.get('startDate');
+  const endDateFromUrl = searchParams?.get('endDate');
 
   useEffect(() => {
     if (!carId) return;
@@ -273,6 +275,22 @@ export default function BookingPage() {
           message.error("Không tìm thấy xe!");
           router.push('/');
           return;
+        }
+
+        // Nếu có thời gian từ URL, set vào form
+        if (startDateFromUrl && endDateFromUrl) {
+          try {
+            const startDate = dayjs(startDateFromUrl);
+            const endDate = dayjs(endDateFromUrl);
+            if (startDate.isValid() && endDate.isValid()) {
+              form.setFieldsValue({
+                dateRange: [startDate, endDate],
+              });
+              setDateRangeValue([startDate, endDate]);
+            }
+          } catch (error) {
+            console.error('Error parsing dates from URL:', error);
+          }
         }
 
         // Load user
@@ -356,7 +374,7 @@ export default function BookingPage() {
     };
 
     loadData();
-  }, [carId, form, router, resolveCarLocation]);
+  }, [carId, form, router, resolveCarLocation, startDateFromUrl, endDateFromUrl]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
@@ -714,9 +732,9 @@ export default function BookingPage() {
             </div>
           )}
 
-          {/* Thông tin đặt xe */}
+    
           <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Thông tin đặt xe</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Thông tin người thuê</h2>
             <p className="text-sm text-gray-600 mb-4">
               Vui lòng để lại thông tin liên lạc. Chúng tôi sẽ liên hệ bạn sớm nhất.
             </p>
@@ -746,7 +764,7 @@ export default function BookingPage() {
             </div>
           </div>
 
-          {/* Thông tin đơn hàng */}
+       
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-6">Thông tin đơn hàng</h2>
 
@@ -776,33 +794,54 @@ export default function BookingPage() {
                     return current && current < dayjs().startOf('day');
                   }}
                   disabledTime={(value, type) => {
-                    if (type === 'start') {
-                      const now = dayjs();
+                    const now = dayjs();
+                    
+                    // Nếu chọn ngày hôm nay, chặn các giờ và phút trong quá khứ
+                    if (value && value.isSame(now, 'day')) {
+                      const currentHour = now.hour();
+                      const currentMinute = now.minute();
                       
-                      // Nếu chọn ngày hôm nay, chặn các giờ và phút trong quá khứ
-                      if (value && value.isSame(now, 'day')) {
-                        return {
-                          disabledHours: () => {
-                            const hours = [];
-                            for (let i = 0; i < now.hour(); i++) {
+                      return {
+                        disabledHours: () => {
+                          const hours = [];
+                          // Chặn giờ từ 0-4 (00:00 - 04:59)
+                          for (let i = 0; i < 5; i++) {
+                            hours.push(i);
+                          }
+                          // Chặn các giờ đã qua trong ngày hôm nay (từ 5 trở đi)
+                          if (currentHour >= 5) {
+                            for (let i = 5; i < currentHour; i++) {
                               hours.push(i);
                             }
-                            return hours;
-                          },
-                          disabledMinutes: (selectedHour: number) => {
-                            if (selectedHour === now.hour()) {
-                              const minutes = [];
-                              for (let i = 0; i <= now.minute(); i++) {
-                                minutes.push(i);
-                              }
-                              return minutes;
+                          }
+                          return hours;
+                        },
+                        disabledMinutes: (selectedHour: number) => {
+                          // Nếu chọn giờ hiện tại, chặn các phút đã qua
+                          if (selectedHour === currentHour) {
+                            const minutes = [];
+                            for (let i = 0; i <= currentMinute; i++) {
+                              minutes.push(i);
                             }
-                            return [];
-                          },
-                        };
-                      }
+                            return minutes;
+                          }
+                          return [];
+                        },
+                      };
                     }
-                    return {};
+                    
+                    // Nếu không phải ngày hôm nay, chỉ chặn giờ ngoài khoảng 05:00 - 23:00
+                    return {
+                      disabledHours: () => {
+                        // Chặn giờ từ 0-4 (00:00 - 04:59)
+                        const hours = [];
+                        for (let i = 0; i < 5; i++) {
+                          hours.push(i);
+                        }
+                        return hours;
+                      },
+                      disabledMinutes: () => [],
+                    };
                   }}
                 />
               </Form.Item>
