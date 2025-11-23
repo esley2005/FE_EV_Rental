@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
-import { Search, Zap, Users, XCircle, MapPin } from "lucide-react";
+import CarCard from "@/components/CarCard";
+import { Search, XCircle, MapPin } from "lucide-react";
 import { 
   Card,
   Input,
@@ -13,7 +14,6 @@ import {
   Empty,
   Spin,
   notification as antdNotification,
-  Tag,
   Alert
 } from "antd";
 import { carsApi, rentalLocationApi, carRentalLocationApi } from "@/services/api";
@@ -70,7 +70,7 @@ export default function AllCarsPage() {
 
   useEffect(() => {
     loadLocations();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
   }, []);
 
   useEffect(() => {
@@ -86,7 +86,7 @@ export default function AllCarsPage() {
   }, [selectedLocationId, locations]);
 
   useEffect(() => {
-    // Lấy params từ URL và cập nhật state
+   
     const page = searchParams.get('page');
     const search = searchParams.get('search');
     const locationId = searchParams.get('locationId');
@@ -106,7 +106,6 @@ export default function AllCarsPage() {
       setSearchInput("");
     }
 
-    // Load location info if locationId exists
     if (locationId) {
       const locId = parseInt(locationId);
       setSelectedLocationId(locId);
@@ -121,7 +120,7 @@ export default function AllCarsPage() {
     try {
       const response = await rentalLocationApi.getAll();
       if (response.success && response.data) {
-        // Xử lý nhiều format: trực tiếp array, { $values: [...] }, hoặc { data: { $values: [...] } }
+  // xử lý mảng response
         const raw = response.data as any;
         let locationsData: RentalLocationData[] = [];
         
@@ -165,7 +164,7 @@ export default function AllCarsPage() {
   useEffect(() => {
     // Tải lại danh sách xe khi pageIndex, keyword hoặc selectedLocationId thay đổi
     loadCars();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [pageIndex, keyword, selectedLocationId]);
 
   const loadCars = async () => {
@@ -174,16 +173,16 @@ export default function AllCarsPage() {
       const response = await carsApi.getAll();
 
       if (response.success && response.data) {
-        console.log('[All Cars Page] Response data:', response.data);
-        console.log('[All Cars Page] Response data type:', typeof response.data);
-        console.log('[All Cars Page] Is array:', Array.isArray(response.data));
-        console.log('[All Cars Page] Has $values:', !!(response.data as any)?.$values);
+        // console.log('[All Cars Page] Response data:', response.data);
+        // console.log('[All Cars Page] Response data type:', typeof response.data);
+        // console.log('[All Cars Page] Is array:', Array.isArray(response.data));
+        // console.log('[All Cars Page] Has $values:', !!(response.data as any)?.$values);
         
         // Backend C# có thể trả về { "$values": [...] } hoặc array trực tiếp
         const allCars = (response.data as any)?.$values || response.data || [];
         
-        console.log('[All Cars Page] All cars after processing:', allCars);
-        console.log('[All Cars Page] All cars length:', Array.isArray(allCars) ? allCars.length : 0);
+        // console.log('[All Cars Page] All cars after processing:', allCars);
+        // console.log('[All Cars Page] All cars length:', Array.isArray(allCars) ? allCars.length : 0);
         
         // Lọc xe active và chưa xóa
         let activeCars = Array.isArray(allCars) 
@@ -195,13 +194,9 @@ export default function AllCarsPage() {
             })
           : [];
         
-        console.log('[All Cars Page] After filter - activeCars length:', activeCars.length);
+
         
-        // ✅ Đồng bộ với admin: LUÔN fetch carRentalLocations cho TẤT CẢ xe để hiển thị location
-        // vì API getAll() có thể không trả về relationships
-        console.log(`[All Cars Page] Fetching carRentalLocations for all cars to display location...`);
-        
-        // Fetch chi tiết cho TẤT CẢ xe để lấy carRentalLocations
+
         const carsWithDetails = await Promise.all(
           activeCars.map(async (car: any) => {
             const carResult = { ...car };
@@ -222,15 +217,14 @@ export default function AllCarsPage() {
                   const hasFullInfo = firstLocation?.rentalLocation || firstLocation?.RentalLocation;
                   
                   if (hasFullInfo) {
-                    // ✅ Chỉ lấy location đầu tiên (1 xe = 1 location) - đồng bộ với admin
+                  
                     carResult.carRentalLocations = [firstLocation];
-                    console.log(`[Car ${car.id}] Đã có carRentalLocations đầy đủ, chỉ lấy location đầu tiên`);
+              
                     return carResult;
                   }
                 }
               }
 
-              console.log(`[Car ${car.id}] Fetching carRentalLocations via carRentalLocationApi...`);
               const carLocationResponse = await carRentalLocationApi.getByCarId(Number(car.id));
 
               if (carLocationResponse.success && carLocationResponse.data) {
@@ -247,7 +241,6 @@ export default function AllCarsPage() {
                   locationsData = rawLocations.data;
                 }
 
-                // ✅ Đồng bộ với admin: Chỉ lấy location đầu tiên (1 xe = 1 location)
                 if (locationsData.length > 0) {
                   // Fetch rentalLocation đầy đủ cho location đầu tiên nếu chưa có
                   const firstLocation = locationsData[0] as any;
@@ -286,7 +279,7 @@ export default function AllCarsPage() {
                 const detailCar = detailResponse.data as any;
                 const detailLocations = detailCar.carRentalLocations || 
                   (detailCar.carRentalLocations as any)?.$values || [];
-                // ✅ Chỉ lấy location đầu tiên (1 xe = 1 location) - đồng bộ với admin
+           
                 return {
                   ...detailCar,
                   carRentalLocations: detailLocations.length > 0 ? [detailLocations[0]] : [],
@@ -302,9 +295,9 @@ export default function AllCarsPage() {
           
         // Cập nhật lại activeCars với dữ liệu chi tiết
         activeCars = carsWithDetails;
-        console.log(`[All Cars Page] Fetched details for ${activeCars.length} cars`);
+        // console.log(`[All Cars Page] Fetched details for ${activeCars.length} cars`);
         
-        console.log('[All Cars Page] Active cars:', activeCars);
+        // console.log('[All Cars Page] Active cars:', activeCars);
 
         // Tìm kiếm theo keyword nếu có
         if (keyword && keyword.trim()) {
@@ -314,14 +307,14 @@ export default function AllCarsPage() {
             car.model?.toLowerCase().includes(searchTerm) ||
             car.sizeType?.toLowerCase().includes(searchTerm)
           );
-          console.log('[All Cars Page] After search filter:', activeCars.length);
+          // console.log('[All Cars Page] After search filter:', activeCars.length);
         }
 
         // Filter theo location nếu có (dựa trên CarRentalLocation)
         if (selectedLocationId) {
-          console.log('[All Cars Page] ========== FILTERING BY LOCATION ==========');
-          console.log('[All Cars Page] Filtering by locationId:', selectedLocationId, 'type:', typeof selectedLocationId);
-          console.log('[All Cars Page] Total cars before filter:', activeCars.length);
+          // console.log('[All Cars Page] ========== FILTERING BY LOCATION ==========');
+          // console.log('[All Cars Page] Filtering by locationId:', selectedLocationId, 'type:', typeof selectedLocationId);
+          // console.log('[All Cars Page] Total cars before filter:', activeCars.length);
           
           activeCars = activeCars.filter((car: Car) => {
             const carLocations = car.carRentalLocations;
@@ -334,7 +327,7 @@ export default function AllCarsPage() {
             
             // Nếu xe không có carRentalLocations, không hiển thị khi filter theo location
             if (!carLocations) {
-              console.log(`❌ [Car ${car.id}] Không có carRentalLocations - BỎ QUA`);
+              // console.log(`❌ [Car ${car.id}] Không có carRentalLocations - BỎ QUA`);
               return false;
             }
 
@@ -343,12 +336,12 @@ export default function AllCarsPage() {
               ? carLocations
               : (carLocations as any)?.$values || [];
 
-            console.log(`[Car ${car.id}] locationsList length:`, locationsList?.length);
-            console.log(`[Car ${car.id}] locationsList:`, JSON.stringify(locationsList, null, 2));
+            // console.log(`[Car ${car.id}] locationsList length:`, locationsList?.length);
+            // console.log(`[Car ${car.id}] locationsList:`, JSON.stringify(locationsList, null, 2));
 
             // Nếu danh sách location rỗng, không hiển thị
             if (!Array.isArray(locationsList) || locationsList.length === 0) {
-              console.log(`❌ [Car ${car.id}] carRentalLocations rỗng hoặc không phải array - BỎ QUA`);
+              // console.log(`❌ [Car ${car.id}] carRentalLocations rỗng hoặc không phải array - BỎ QUA`);
               return false;
             }
 
@@ -356,12 +349,12 @@ export default function AllCarsPage() {
             // CarRentalLocation là bảng trung gian: có carId và rentalLocationId
             // Logic: Tìm CarRentalLocation có rentalLocationId = selectedLocationId và carId = car.id
             const hasMatchingLocation = locationsList.some((loc: any) => {
-              console.log(`[Car ${car.id}] Checking CarRentalLocation object:`, JSON.stringify(loc, null, 2));
+              // console.log(`[Car ${car.id}] Checking CarRentalLocation object:`, JSON.stringify(loc, null, 2));
               
               // Log tất cả keys để debug
               const allKeys = Object.keys(loc || {});
-              console.log(`[Car ${car.id}] CarRentalLocation keys:`, allKeys);
-              console.log(`[Car ${car.id}] CarRentalLocation full object:`, loc);
+              // console.log(`[Car ${car.id}] CarRentalLocation keys:`, allKeys);
+              // console.log(`[Car ${car.id}] CarRentalLocation full object:`, loc);
               
               // CarRentalLocation có 2 field chính:
               // - carId hoặc CarId: ID của xe
@@ -609,20 +602,6 @@ export default function AllCarsPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('vi-VN', { 
-      style: 'currency', 
-      currency: 'VND' 
-    }).format(amount);
-  };
-
-  const getStatusTag = (status: number) => {
-    return status === 1 ? (
-      <Tag color="blue">Sẵn sàng</Tag>
-    ) : (
-      <Tag color="red">Hết xe</Tag>
-    );
-  };
 
   return (
     <>
@@ -754,75 +733,11 @@ export default function AllCarsPage() {
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {cars.map((car) => (
-                  <Card
-                    key={car.id}
-                    hoverable
-                    className="shadow-md overflow-hidden"
-                    cover={
-                      <div className="h-48 bg-gray-100 relative">
-                        <img
-                          src={car.imageUrl || '/logo_ev.png'}
-                          alt={car.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = '/logo_ev.png';
-                          }}
-                        />
-                        <div className="absolute top-2 right-2">
-                          {getStatusTag(car.status)}
-                        </div>
-                      </div>
-                    }
-                    onClick={() => {
-                      const params = new URLSearchParams();
-                      if (selectedLocationId) {
-                        params.set('locationId', String(selectedLocationId));
-                      }
-                      const queryString = params.toString();
-                      router.push(`/cars/${car.id}${queryString ? `?${queryString}` : ''}`);
-                    }}
-                  >
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-800 mb-1">
-                        {car.name}
-                      </h3>
-                      <p className="text-sm text-gray-600 mb-3">{car.model}</p>
-
-                      <div className="space-y-2 mb-3">
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Users className="text-blue-600" />
-                          <span>{car.seats} chỗ</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Zap className="text-yellow-600" />
-                          <span>{car.batteryDuration} km</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                            {car.sizeType}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="pt-3 border-t border-gray-200">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-xs text-gray-500">Giá thuê/ngày</div>
-                            <div className="text-lg font-bold text-blue-600">
-                              {formatCurrency(car.rentPricePerDay)}
-                            </div>
-                          </div>
-                          <Button 
-                            type="primary" 
-                            size="small"
-                            className="bg-blue-600"
-                          >
-                            Xem chi tiết
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
+                  <CarCard 
+                    key={car.id} 
+                    car={car} 
+                    showFullInfo={true}
+                  />
                 ))}
               </div>
 

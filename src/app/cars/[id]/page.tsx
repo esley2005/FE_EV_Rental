@@ -1180,10 +1180,10 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
                   {/* Badges */}
                   <div className="flex items-center gap-3 flex-wrap">
-                    <div className="flex items-center gap-2 bg-blue-500 text-white px-3 py-1.5 rounded-full text-sm">
+                    {/* <div className="flex items-center gap-2 bg-blue-500 text-white px-3 py-1.5 rounded-full text-sm">
                       <Shield className="text-white" />
                       <span>Miễn thế chấp</span>
-                    </div>
+                    </div> */}
                   </div>
                 </div>
 
