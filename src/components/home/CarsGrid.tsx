@@ -4,6 +4,7 @@ import { useState } from 'react';
 import CarCard from '@/components/CarCard';
 import { Car } from '@/types/car';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 interface CarsGridProps {
   cars: Car[];
@@ -25,71 +26,80 @@ export default function CarsGrid({ cars, className = '' }: CarsGridProps) {
   const handlePrevious = () => {
     setDirection('right');
     setCurrentIndex((prev) => (prev === 0 ? cars.length - 1 : prev - 1));
-    setTimeout(() => setDirection(null), 1000);
   };
 
   const handleNext = () => {
     setDirection('left');
     setCurrentIndex((prev) => (prev === cars.length - 1 ? 0 : prev + 1));
-    setTimeout(() => setDirection(null), 1000);
   };
 
   const handleDotClick = (index: number) => {
     if (index === currentIndex) return;
     setDirection(index > currentIndex ? 'left' : 'right');
     setCurrentIndex(index);
-    setTimeout(() => setDirection(null), 1000);
   };
 
   const getPreviousIndex = () => (currentIndex === 0 ? cars.length - 1 : currentIndex - 1);
   const getNextIndex = () => (currentIndex === cars.length - 1 ? 0 : currentIndex + 1);
 
+  // Animation transition mượt mà
+  const transition = {
+    type: "spring",
+    stiffness: 400,
+    damping: 35,
+    mass: 0.8,
+  };
+
   return (
     <div className={`relative py-8 ${className}`}>
       {/* Carousel Container */}
-      <div className="relative overflow-hidden px-20">
+      <div className="relative overflow-visible px-20">
         <div className="flex items-center justify-center gap-4 relative">
           {/* Previous Card (Left) - Peek */}
           {cars.length > 1 && (
-            <div className="flex-shrink-0 w-[280px] opacity-100 scale-90 transition-all duration-300 ease-out overflow-hidden">
-              <div 
-                key={`prev-${getPreviousIndex()}-${currentIndex}`}
-                className={`transition-all duration-400 ease-out ${
-                  direction === 'right' ? 'animate-slide-in-left' : 
-                  direction === 'left' ? 'animate-slide-out-left' : ''
-                }`}
-              >
-                <CarCard car={cars[getPreviousIndex()]} />
-              </div>
-            </div>
+            <motion.div 
+              className="flex-shrink-0 w-[280px]"
+              layout
+              layoutId={`car-${getPreviousIndex()}`}
+              animate={{
+                scale: 0.9,
+                opacity: 0.7,
+              }}
+              transition={transition}
+            >
+              <CarCard car={cars[getPreviousIndex()]} />
+            </motion.div>
           )}
 
           {/* Current Card (Center) - Main */}
-          <div className="flex-shrink-0 w-[380px] opacity-100 scale-100 z-10 transition-all duration-300 ease-out overflow-hidden">
-            <div 
-              key={`current-${currentIndex}`}
-              className={`transition-all duration-400 ease-out hover:-translate-y-1 ${
-                direction === 'left' ? 'animate-slide-in-right' : 
-                direction === 'right' ? 'animate-slide-in-left' : ''
-              }`}
-            >
-              <CarCard car={cars[currentIndex]} />
-            </div>
-          </div>
+          <motion.div 
+            className="flex-shrink-0 w-[380px] z-10"
+            layout
+            layoutId={`car-${currentIndex}`}
+            animate={{
+              scale: 1,
+              opacity: 1,
+            }}
+            transition={transition}
+            onAnimationComplete={() => setDirection(null)}
+          >
+            <CarCard car={cars[currentIndex]} />
+          </motion.div>
 
           {/* Next Card (Right) - Peek */}
           {cars.length > 1 && (
-            <div className="flex-shrink-0 w-[280px] opacity-100 scale-90 transition-all duration-300 ease-out overflow-hidden">
-              <div 
-                key={`next-${getNextIndex()}-${currentIndex}`}
-                className={`transition-all duration-400 ease-out ${
-                  direction === 'left' ? 'animate-slide-in-right' : 
-                  direction === 'right' ? 'animate-slide-out-right' : ''
-                }`}
-              >
-                <CarCard car={cars[getNextIndex()]} />
-              </div>
-            </div>
+            <motion.div 
+              className="flex-shrink-0 w-[280px]"
+              layout
+              layoutId={`car-${getNextIndex()}`}
+              animate={{
+                scale: 0.9,
+                opacity: 0.7,
+              }}
+              transition={transition}
+            >
+              <CarCard car={cars[getNextIndex()]} />
+            </motion.div>
           )}
 
           {/* Navigation Buttons - Outside cards */}

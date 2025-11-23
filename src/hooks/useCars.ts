@@ -235,8 +235,16 @@ export function useCars(): UseCarsResult {
         // Normalize C# format: { $values: [...] } -> array
         const rawList = toArray<any>(response.data);
         
-        // Filter active cars
-        const activeCars = rawList.filter((car: Car) => car.isActive && !car.isDeleted);
+        // Filter active cars và normalize status
+        const activeCars = rawList
+          .filter((car: Car) => car.isActive && !car.isDeleted)
+          .map((car: any) => ({
+            ...car,
+            // Normalize status: đảm bảo là number (0 hoặc 1)
+            status: typeof car.status === 'number' 
+              ? car.status 
+              : (car.status === 1 || car.status === '1' ? 1 : 0),
+          }));
         
         // ✅ Làm giàu dữ liệu từng xe để có location data đầy đủ
         console.log('[useCars] Starting to enrich cars with location data...', activeCars.length, 'cars');

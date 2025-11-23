@@ -11,6 +11,11 @@ interface CarCardProps {
 export default function CarCard({ car }: CarCardProps) {
   const router = useRouter();
 
+  // Normalize status: đảm bảo là number (0 hoặc 1)
+  const normalizedStatus = typeof car.status === 'number' 
+    ? car.status 
+    : (car.status === 1 || car.status === '1' ? 1 : 0);
+
   // Lấy giá từ data thực tế
   const pricePerDay = car.rentPricePerDay || 0;
   const pricePerHour = car.rentPricePerHour || 0;
@@ -110,13 +115,59 @@ export default function CarCard({ car }: CarCardProps) {
 
   return (
     <motion.div 
-      className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-200 cursor-pointer group"
-      whileHover={{ scale: 1.02 }}
+      className="bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 overflow-hidden border-2 border-gray-100 hover:border-transparent cursor-pointer group relative"
+      whileHover={{ scale: 1.05, y: -8, rotateY: 2 }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
+      style={{
+        background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)'
+      }}
     >
+      {/* Animated gradient border khi hover - chỉ xanh dương */}
+      <motion.div
+        className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100"
+        style={{
+          background: 'linear-gradient(135deg, #3b82f6, #2563eb, #0ea5e9)',
+          padding: '2px',
+          WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+          WebkitMaskComposite: 'xor',
+          maskComposite: 'exclude',
+        }}
+        animate={{
+          background: [
+            'linear-gradient(135deg, #3b82f6, #2563eb, #0ea5e9)',
+            'linear-gradient(225deg, #2563eb, #0ea5e9, #3b82f6)',
+            'linear-gradient(315deg, #0ea5e9, #3b82f6, #2563eb)',
+            'linear-gradient(135deg, #3b82f6, #2563eb, #0ea5e9)',
+          ],
+        }}
+        transition={{
+          duration: 3,
+          repeat: Infinity,
+          ease: "linear"
+        }}
+      />
+      
+      {/* Gradient overlay khi hover - chỉ xanh dương */}
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-50/0 via-sky-50/0 to-blue-50/0 group-hover:from-blue-50/60 group-hover:via-sky-50/60 group-hover:to-blue-50/60 transition-all duration-300 pointer-events-none z-0"></div>
+      
+      {/* Sparkle effects */}
+      <motion.div
+        className="absolute top-4 right-4 w-2 h-2 bg-yellow-400 rounded-full opacity-0 group-hover:opacity-100"
+        animate={{
+          scale: [0, 1.5, 0],
+          rotate: [0, 180, 360],
+        }}
+        transition={{
+          duration: 2,
+          repeat: Infinity,
+          delay: 0.5
+        }}
+      />
+      
+      <div className="relative z-10">
       {/* Ảnh xe với badges */}
       <div className="relative" onClick={() => router.push(`/cars/${car.id}`)}>
-        <div className="relative h-48 overflow-hidden bg-gray-100">
+        <div className="relative h-48 overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200">
           <motion.img
             src={car.imageUrl || '/logo_ev.png'}
             alt={car.name}
@@ -129,48 +180,94 @@ export default function CarCard({ car }: CarCardProps) {
           />
 
           {/* Badge icon tia sét (góc trên trái) */}
-          <div className="absolute top-2 left-2">
-            <div className="bg-gray-800 bg-opacity-70 rounded-lg p-1.5">
-              <Zap className="text-yellow-400 fill-yellow-400" size={16} />
+          <motion.div 
+            className="absolute top-3 left-3 z-20"
+            whileHover={{ scale: 1.2, rotate: [0, -10, 10, 0] }}
+            transition={{ duration: 0.3 }}
+          >
+            <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl p-2 shadow-xl border-2 border-yellow-400/50">
+              <motion.div
+                animate={{
+                  scale: [1, 1.2, 1],
+                }}
+                transition={{
+                  duration: 2,
+                  repeat: Infinity,
+                  ease: "easeInOut"
+                }}
+              >
+                <Zap className="text-yellow-400 fill-yellow-400" size={18} />
+              </motion.div>
             </div>
-          </div>
+          </motion.div>
           {/* Badge giảm giá (góc dưới phải) - chỉ hiển thị nếu có trong data */}
           {/* Có thể thêm logic kiểm tra giảm giá từ backend sau */}
 
           {/* Badge trạng thái (góc trên phải) */}
-          <div className="absolute top-2 right-2">
-            <span
-              className={`px-2 py-1 text-[10px] font-semibold rounded-lg shadow-md ${car.status === 1
-                  ? "bg-blue-600 text-white"
-                  : "bg-red-500 text-white"
-                }`}
+          <motion.div 
+            className="absolute top-3 right-3 z-20"
+            whileHover={{ scale: 1.1 }}
+          >
+            <motion.span
+              className={`px-3 py-1.5 text-xs font-bold rounded-xl shadow-lg border-2 ${
+                normalizedStatus === 1
+                  ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white border-blue-300"
+                  : "bg-gradient-to-r from-red-500 to-red-600 text-white border-red-300"
+              }`}
+              animate={normalizedStatus === 1 ? {
+                boxShadow: [
+                  '0 4px 14px 0 rgba(59, 130, 246, 0.5)',
+                  '0 4px 20px 0 rgba(59, 130, 246, 0.7)',
+                  '0 4px 14px 0 rgba(59, 130, 246, 0.5)',
+                ],
+              } : {}}
+              transition={{
+                duration: 2,
+                repeat: Infinity,
+                ease: "easeInOut"
+              }}
             >
-              {car.status === 1 ? "Sẵn sàng" : "Hết xe"}
-            </span>
-          </div>
+              {normalizedStatus === 1 ? "✓ Sẵn sàng" : "✗ Hết xe"}
+            </motion.span>
+          </motion.div>
         </div>
       </div>
 
       {/* Thông tin xe */}
-      <div className="p-4" onClick={() => router.push(`/cars/${car.id}`)}>
+      <div className="p-5" onClick={() => router.push(`/cars/${car.id}`)}>
         {/* Badge "Miễn thế chấp" */}
-        <div className="mb-2">
-          <div className="inline-flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-lg px-2 py-1">
-            <div className="w-4 h-4 bg-green-600 rounded-full flex items-center justify-center">
-              <CarIcon className="text-white" size={10} />
-            </div>
-            <span className="text-green-700 font-medium text-xs">Miễn thế chấp</span>
-          </div>
+        <div className="mb-4">
+          <motion.div 
+            className="inline-flex items-center gap-2 bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 border-2 border-green-400 rounded-xl px-4 py-2 shadow-lg"
+            whileHover={{ scale: 1.08, y: -2 }}
+            transition={{ type: "spring", stiffness: 400 }}
+          >
+            <motion.div 
+              className="w-6 h-6 bg-gradient-to-br from-green-500 via-emerald-500 to-teal-600 rounded-full flex items-center justify-center shadow-lg"
+              animate={{
+                rotate: [0, 10, -10, 0],
+              }}
+              transition={{
+                duration: 2,
+                repeat: Infinity,
+                ease: "easeInOut"
+              }}
+            >
+              <CarIcon className="text-white" size={14} />
+            </motion.div>
+            <span className="text-green-700 font-bold text-xs">✨ Miễn thế chấp</span>
+          </motion.div>
         </div>
 
         {/* Tên xe */}
         <motion.h2 
-          className="text-lg font-bold text-gray-900 mb-2 uppercase line-clamp-2"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
+          className="text-2xl font-extrabold bg-gradient-to-r from-gray-900 via-blue-600 to-sky-600 bg-clip-text text-transparent mb-4 uppercase line-clamp-2 group-hover:from-blue-600 group-hover:via-blue-700 group-hover:to-sky-600 transition-all duration-500"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
+          whileHover={{ scale: 1.05 }}
         >
-          {car.name || car.model}
+          🚗 {car.name || car.model}
         </motion.h2>
 
         {/* Thông số kỹ thuật chính */}
@@ -233,14 +330,14 @@ export default function CarCard({ car }: CarCardProps) {
 
         {/* Giá thuê */}
         <motion.div 
-          className="border-t pt-3"
+          className="border-t-2 border-gray-100 pt-4 mt-4 bg-gradient-to-r from-blue-50/50 to-sky-50/50 -mx-4 px-4 pb-4 -mb-4 rounded-b-xl"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6 }}
         >
-          <div>
+          <div className="flex items-baseline gap-2">
             <motion.span 
-              className="text-blue-600 font-bold text-xl"
+              className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-sky-600 font-bold text-2xl"
               initial={{ scale: 0.8 }}
               animate={{ scale: 1 }}
               transition={{ 
@@ -250,12 +347,13 @@ export default function CarCard({ car }: CarCardProps) {
                 delay: 0.7 
               }}
             >
-              {formatPrice(pricePerDay)}₫/ngày
+              {formatPrice(pricePerDay)}₫
             </motion.span>
+            <span className="text-gray-500 text-sm font-medium">/ngày</span>
           </div>
           {pricePerHour > 0 && (
             <motion.p 
-              className="text-gray-500 text-[10px] mt-0.5"
+              className="text-gray-600 text-xs mt-1 font-medium"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.8 }}
@@ -264,6 +362,7 @@ export default function CarCard({ car }: CarCardProps) {
             </motion.p>
           )}
         </motion.div>
+      </div>
       </div>
     </motion.div>
   );
