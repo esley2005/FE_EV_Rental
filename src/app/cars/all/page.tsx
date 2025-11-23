@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
-import { Search, Zap, Users, XCircle, MapPin } from "lucide-react";
+import { Search, XCircle, MapPin } from "lucide-react";
 import { 
   Card,
   Input,
@@ -13,12 +13,12 @@ import {
   Empty,
   Spin,
   notification as antdNotification,
-  Tag,
   Alert
 } from "antd";
 import { carsApi, rentalLocationApi, carRentalLocationApi } from "@/services/api";
 import type { Car } from "@/types/car";
 import type { RentalLocationData, CarRentalLocationData } from "@/services/api";
+import CarCard from "@/components/CarCard";
 
 export default function AllCarsPage() {
   const router = useRouter();
@@ -189,9 +189,10 @@ export default function AllCarsPage() {
 
   useEffect(() => {
     // Tải lại danh sách xe khi pageIndex, keyword, selectedLocationId, selectedCarType, minPrice, maxPrice thay đổi
+    // Hoặc khi locations đã được load (để có thể sử dụng trong loadCars)
     loadCars();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageIndex, keyword, selectedLocationId, selectedCarType, minPrice, maxPrice]);
+  }, [pageIndex, keyword, selectedLocationId, selectedCarType, minPrice, maxPrice, locations]);
 
   // ✅ Listen to paymentSuccess event để refresh danh sách xe
   useEffect(() => {
@@ -297,13 +298,30 @@ export default function AllCarsPage() {
                     const locationId = firstLocation.locationId ?? firstLocation.LocationId ?? 
                                       firstLocation.rentalLocationId ?? firstLocation.RentalLocationId;
                     if (locationId) {
-                      try {
-                        const locationDetailResponse = await rentalLocationApi.getById(locationId);
-                        if (locationDetailResponse.success && locationDetailResponse.data) {
-                          firstLocation.rentalLocation = locationDetailResponse.data;
+                      // Thử lấy từ danh sách locations đã có sẵn (từ getAll) thay vì gọi getById
+                      // để tránh lỗi 401 nếu endpoint getById yêu cầu authentication
+                      const existingLocation = locations.find(loc => Number(loc.id) === Number(locationId));
+                      if (existingLocation) {
+                        firstLocation.rentalLocation = {
+                          id: existingLocation.id,
+                          name: existingLocation.name,
+                          address: existingLocation.address,
+                          coordinates: existingLocation.coordinates,
+                          isActive: existingLocation.isActive,
+                        };
+                      } else {
+                        // Nếu không tìm thấy trong danh sách, thử gọi API (nhưng bỏ qua lỗi 401)
+                        try {
+                          const locationDetailResponse = await rentalLocationApi.getById(locationId);
+                          if (locationDetailResponse.success && locationDetailResponse.data) {
+                            firstLocation.rentalLocation = locationDetailResponse.data;
+                          }
+                        } catch (err: any) {
+                          // Bỏ qua lỗi 401 hoặc các lỗi khác, không log warning để tránh spam console
+                          if (err?.status !== 401) {
+                            console.warn(`[Car ${car.id}] Failed to fetch location detail for ${locationId}:`, err);
+                          }
                         }
-                      } catch (err) {
-                        console.warn(`[Car ${car.id}] Failed to fetch location detail for ${locationId}:`, err);
                       }
                     }
                   }
@@ -834,20 +852,6 @@ export default function AllCarsPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('vi-VN', { 
-      style: 'currency', 
-      currency: 'VND' 
-    }).format(amount);
-  };
-
-  const getStatusTag = (status: number) => {
-    return status === 1 ? (
-      <Tag color="blue">Sẵn sàng</Tag>
-    ) : (
-      <Tag color="red">Hết xe</Tag>
-    );
-  };
 
   return (
     <>
@@ -1030,75 +1034,7 @@ export default function AllCarsPage() {
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {cars.map((car) => (
-                  <Card
-                    key={car.id}
-                    hoverable
-                    className="shadow-md overflow-hidden"
-                    cover={
-                      <div className="h-48 bg-gray-100 relative">
-                        <img
-                          src={car.imageUrl || '/logo_ev.png'}
-                          alt={car.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = '/logo_ev.png';
-                          }}
-                        />
-                        <div className="absolute top-2 right-2">
-                          {getStatusTag(car.status)}
-                        </div>
-                      </div>
-                    }
-                    onClick={() => {
-                      const params = new URLSearchParams();
-                      if (selectedLocationId) {
-                        params.set('locationId', String(selectedLocationId));
-                      }
-                      const queryString = params.toString();
-                      router.push(`/cars/${car.id}${queryString ? `?${queryString}` : ''}`);
-                    }}
-                  >
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-800 mb-1">
-                        {car.name}
-                      </h3>
-                      <p className="text-sm text-gray-600 mb-3">{car.model}</p>
-
-                      <div className="space-y-2 mb-3">
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Users className="text-blue-600" />
-                          <span>{car.seats} chỗ</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Zap className="text-yellow-600" />
-                          <span>{car.batteryDuration} km</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                            {car.sizeType}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="pt-3 border-t border-gray-200">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-xs text-gray-500">Giá thuê/ngày</div>
-                            <div className="text-lg font-bold text-blue-600">
-                              {formatCurrency(car.rentPricePerDay)}
-                            </div>
-                          </div>
-                          <Button 
-                            type="primary" 
-                            size="small"
-                            className="bg-blue-600"
-                          >
-                            Xem chi tiết
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
+                  <CarCard key={car.id} car={car} />
                 ))}
               </div>
 
