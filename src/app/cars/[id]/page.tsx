@@ -1575,15 +1575,12 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               {/* Booking Button */}
               <button
                 onClick={handleBookingClick}
-<<<<<<< HEAD
-                disabled={car.status !== 1}
+
+
+                disabled={car.isActive !== true }
                 className={`w-full py-4 px-6 rounded-lg font-bold text-lg transition-colors mb-5 flex items-center justify-center gap-2 ${
-                  car.status === 1
-=======
-                disabled={car.isActive !== true || !dateRangeValue}
-                className={`w-full py-4 px-6 rounded-lg font-bold text-lg transition-colors mb-5 flex items-center justify-center gap-2 ${
-                  car.isActive === true && dateRangeValue
->>>>>>> tiger_fix_v6
+                  car.isActive === true 
+
                     ? 'bg-blue-500 text-white hover:bg-blue-600'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}

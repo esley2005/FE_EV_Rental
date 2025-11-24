@@ -238,11 +238,13 @@ export default function AllCarsPage() {
             })
           : [];
         
-        console.log('[All Cars Page] After filter - activeCars length:', activeCars.length);
+        // console.log('[All Cars Page] After filter - activeCars length:', activeCars.length);
         
-        // ✅ Tối ưu: Batch load tất cả locations một lần để tránh N+1 queries và lỗi 401
-        console.log(`[All Cars Page] Loading all locations to cache...`);
+        // Khởi tạo cache cho locations
         let locationsCache = new Map<number, any>();
+        
+        // Lấy tất cả locations và cache lại
+        if (locationsCache.size === 0) {
         try {
           const locationsResponse = await rentalLocationApi.getAll();
           if (locationsResponse.success && locationsResponse.data) {
@@ -257,28 +259,6 @@ export default function AllCarsPage() {
           }
         } catch (err) {
           console.warn('[All Cars Page] Failed to load locations cache:', err);
-        }
-        
-        // ✅ Sử dụng Car/GetByLocationId thay vì CarRentalLocation/GetByCarId
-        // Logic: Với mỗi car, lấy tất cả locations, rồi check xem location nào có car này
-        console.log(`[All Cars Page] Fetching locations for all cars using Car/GetByLocationId...`);
-        
-        // Lấy tất cả locations nếu chưa có trong cache
-        if (locationsCache.size === 0) {
-          try {
-            const locationsResponse = await rentalLocationApi.getAll();
-            if (locationsResponse.success && locationsResponse.data) {
-              const locationsList = Array.isArray(locationsResponse.data)
-                ? locationsResponse.data
-                : (locationsResponse.data as any)?.$values || [];
-              locationsList.forEach((loc: any) => {
-                const id = loc.id || loc.Id;
-                if (id) locationsCache.set(Number(id), loc);
-              });
-              console.log(`[All Cars Page] ✅ Loaded ${locationsCache.size} locations into cache`);
-            }
-          } catch (err) {
-            console.warn('[All Cars Page] Failed to load locations cache:', err);
           }
         }
         
@@ -346,8 +326,8 @@ export default function AllCarsPage() {
                       return !Number.isNaN(cId) && cId === carId;
                     });
 
+                    // Nếu tìm thấy car tại location này, thêm vào danh sách
                     if (hasCar) {
-                      // Location này có car, thêm vào danh sách
                       carLocations.push({
                         locationId: locationId,
                         rentalLocation: {
@@ -358,7 +338,8 @@ export default function AllCarsPage() {
                           isActive: locationData.isActive ?? locationData.IsActive,
                         },
                       });
-                      console.log(`[Car ${car.id}] ✅ Found at location ${locationId} (${locationData.name || locationData.Name})`);
+                      // Chỉ lấy location đầu tiên (1 xe = 1 location)
+                      break;
                     }
                   }
                 } catch (error) {
@@ -371,19 +352,19 @@ export default function AllCarsPage() {
               if (carLocations.length > 0) {
                 carResult.carRentalLocations = [carLocations[0]];
                 console.log(`[Car ${car.id}] ✅ Found ${carLocations.length} locations, using first location only`);
-              } else {
-                carResult.carRentalLocations = [];
+                } else {
+                  carResult.carRentalLocations = [];
                 console.log(`[Car ${car.id}] ⚠️ No locations found`);
-              }
+                }
 
-              return carResult;
+                return carResult;
             } catch (error) {
               console.error(`[All Cars Page] Error fetching locations for car ${car.id}:`, error);
               carResult.carRentalLocations = [];
               return carResult;
             }
-          })
-        );
+            })
+          );
           
         // Cập nhật lại activeCars với dữ liệu chi tiết
         activeCars = carsWithDetails;
@@ -394,7 +375,6 @@ export default function AllCarsPage() {
           new Set(activeCars.map((car: Car) => car.sizeType).filter(Boolean))
         ) as string[];
         setAvailableCarTypes(uniqueCarTypes.sort());
-        
       
         activeCars = activeCars.filter((car: any) => {
           const carLocations = car.carRentalLocations;
@@ -408,278 +388,82 @@ export default function AllCarsPage() {
             ? carLocations
             : (carLocations as any)?.$values || [];
 
-          if (!Array.isArray(locationsList) || locationsList.length === 0) {
-            // Không có location nào, vẫn hiển thị (backward compatibility)
+          if (locationsList.length === 0) {
+            // Nếu không có location, vẫn hiển thị (backward compatibility)
             return true;
           }
 
-          // Lấy location đầu tiên (1 xe = 1 location)
+          // Lấy location đầu tiên
           const firstLocation = locationsList[0];
-          if (!firstLocation) {
+          const rentalLocation = firstLocation?.rentalLocation || firstLocation?.RentalLocation;
+          
+          if (!rentalLocation) {
+            // Nếu không có rentalLocation, vẫn hiển thị (backward compatibility)
             return true;
           }
 
-          // Lấy quantity từ relation
-          const quantity = firstLocation?.quantity ?? 
-                          firstLocation?.Quantity ?? 
-                          firstLocation?.availableQuantity ?? 
-                          firstLocation?.AvailableQuantity ?? 
-                          firstLocation?.stock ?? 
-                          firstLocation?.Stock ?? 
-                          firstLocation?.carQuantity ?? 
-                          firstLocation?.CarQuantity ?? 
-                          null;
-
-          // Nếu quantity là null/undefined, vẫn hiển thị (backward compatibility)
-          if (quantity === null || quantity === undefined) {
-            return true;
+          // Filter theo location nếu có selectedLocationId
+          if (selectedLocationId !== null) {
+            const locationId = rentalLocation.id || rentalLocation.Id;
+            return Number(locationId) === Number(selectedLocationId);
           }
 
-          // Chỉ hiển thị xe có quantity > 0
-          const quantityNum = Number(quantity);
-          if (Number.isNaN(quantityNum)) {
-            return true; // Nếu không parse được, vẫn hiển thị
-          }
-
-          return quantityNum > 0;
+          return true;
         });
-        console.log(`[All Cars Page] After quantity filter (quantity > 0): ${activeCars.length} cars`);
-        
-        console.log('[All Cars Page] Active cars:', activeCars);
 
-        // Tìm kiếm theo keyword nếu có
-        if (keyword && keyword.trim()) {
-          const searchTerm = keyword.toLowerCase().trim();
-          activeCars = activeCars.filter((car: Car) => 
-            car.name?.toLowerCase().includes(searchTerm) ||
-            car.model?.toLowerCase().includes(searchTerm) ||
-            car.sizeType?.toLowerCase().includes(searchTerm)
-          );
-          console.log('[All Cars Page] After search filter:', activeCars.length);
-        }
-
-        // Filter theo loại xe nếu có
-        if (selectedCarType && selectedCarType.trim()) {
-          activeCars = activeCars.filter((car: Car) => 
-            car.sizeType === selectedCarType
-          );
-          console.log('[All Cars Page] After car type filter:', activeCars.length);
-        }
-
-        // Filter theo giá tiền nếu có
-        if (minPrice && minPrice.trim()) {
-          const minPriceNum = parseFloat(minPrice.replace(/[^\d]/g, ''));
-          if (!isNaN(minPriceNum)) {
-            activeCars = activeCars.filter((car: Car) => 
-              car.rentPricePerDay >= minPriceNum
-            );
-            console.log('[All Cars Page] After min price filter:', activeCars.length);
-          }
-        }
-
-        if (maxPrice && maxPrice.trim()) {
-          const maxPriceNum = parseFloat(maxPrice.replace(/[^\d]/g, ''));
-          if (!isNaN(maxPriceNum)) {
-            activeCars = activeCars.filter((car: Car) => 
-              car.rentPricePerDay <= maxPriceNum
-            );
-            console.log('[All Cars Page] After max price filter:', activeCars.length);
-          }
-        }
-
-        // Filter theo location nếu có (dựa trên CarRentalLocation)
-        if (selectedLocationId) {
-          console.log('[All Cars Page] ========== FILTERING BY LOCATION ==========');
-          console.log('[All Cars Page] Filtering by locationId:', selectedLocationId, 'type:', typeof selectedLocationId);
-          console.log('[All Cars Page] Total cars before filter:', activeCars.length);
-          
-          activeCars = activeCars.filter((car: Car) => {
-            const carLocations = car.carRentalLocations;
-            
-            // Debug: log cấu trúc carRentalLocations
-            console.log(`\n[Car ${car.id}] ========== CHECKING CAR ==========`);
-            console.log(`[Car ${car.id}] carRentalLocations type:`, typeof carLocations);
-            console.log(`[Car ${car.id}] carRentalLocations:`, carLocations);
-            console.log(`[Car ${car.id}] carRentalLocations is array:`, Array.isArray(carLocations));
-            
-            // Nếu xe không có carRentalLocations, không hiển thị khi filter theo location
-            if (!carLocations) {
-              console.log(`❌ [Car ${car.id}] Không có carRentalLocations - BỎ QUA`);
-              return false;
-            }
-
-            // Handle .NET format: có thể là array hoặc { $values: [...] }
-            const locationsList = Array.isArray(carLocations)
-              ? carLocations
-              : (carLocations as any)?.$values || [];
-
-            console.log(`[Car ${car.id}] locationsList length:`, locationsList?.length);
-            console.log(`[Car ${car.id}] locationsList:`, JSON.stringify(locationsList, null, 2));
-
-            // Nếu danh sách location rỗng, không hiển thị
-            if (!Array.isArray(locationsList) || locationsList.length === 0) {
-              console.log(`❌ [Car ${car.id}] carRentalLocations rỗng hoặc không phải array - BỎ QUA`);
-              return false;
-            }
-
-            // Kiểm tra xem có location nào trùng với selectedLocationId không
-            // CarRentalLocation là bảng trung gian: có carId và rentalLocationId
-            // Logic: Tìm CarRentalLocation có rentalLocationId = selectedLocationId và carId = car.id
-            const hasMatchingLocation = locationsList.some((loc: any) => {
-              console.log(`[Car ${car.id}] Checking CarRentalLocation object:`, JSON.stringify(loc, null, 2));
-              
-              // Log tất cả keys để debug
-              const allKeys = Object.keys(loc || {});
-              console.log(`[Car ${car.id}] CarRentalLocation keys:`, allKeys);
-              console.log(`[Car ${car.id}] CarRentalLocation full object:`, loc);
-              
-              // CarRentalLocation có 2 field chính:
-              // - carId hoặc CarId: ID của xe
-              // - rentalLocationId hoặc RentalLocationId: ID của địa điểm
-              
-              // Lấy rentalLocationId từ CarRentalLocation - thử TẤT CẢ các cách có thể
-              let rentalLocationId = undefined;
-              
-              // Thử các field name phổ biến
-              if (loc?.rentalLocationId !== undefined && loc?.rentalLocationId !== null) {
-                rentalLocationId = loc.rentalLocationId;
-              } else if (loc?.RentalLocationId !== undefined && loc?.RentalLocationId !== null) {
-                rentalLocationId = loc.RentalLocationId;
-              } else if (loc?.locationId !== undefined && loc?.locationId !== null) {
-                rentalLocationId = loc.locationId;
-              } else if (loc?.LocationId !== undefined && loc?.LocationId !== null) {
-                rentalLocationId = loc.LocationId;
-              } else if (loc?.rentalLocation?.id !== undefined && loc?.rentalLocation?.id !== null) {
-                rentalLocationId = loc.rentalLocation.id;
-              } else if (loc?.rentalLocation?.Id !== undefined && loc?.rentalLocation?.Id !== null) {
-                rentalLocationId = loc.rentalLocation.Id;
-              } else if (loc?.rentalLocation?.rentalLocationId !== undefined && loc?.rentalLocation?.rentalLocationId !== null) {
-                rentalLocationId = loc.rentalLocation.rentalLocationId;
-              } else if (loc?.rentalLocation?.RentalLocationId !== undefined && loc?.rentalLocation?.RentalLocationId !== null) {
-                rentalLocationId = loc.rentalLocation.RentalLocationId;
-              } else if (loc?.RentalLocation?.id !== undefined && loc?.RentalLocation?.id !== null) {
-                rentalLocationId = loc.RentalLocation.id;
-              } else if (loc?.RentalLocation?.Id !== undefined && loc?.RentalLocation?.Id !== null) {
-                rentalLocationId = loc.RentalLocation.Id;
-              } else if (loc?.RentalLocation?.rentalLocationId !== undefined && loc?.RentalLocation?.rentalLocationId !== null) {
-                rentalLocationId = loc.RentalLocation.rentalLocationId;
-              } else if (loc?.RentalLocation?.RentalLocationId !== undefined && loc?.RentalLocation?.RentalLocationId !== null) {
-                rentalLocationId = loc.RentalLocation.RentalLocationId;
-              }
-              
-              // Lấy carId từ CarRentalLocation (để verify)
-              const carIdFromLocation = loc?.carId ?? 
-                                        loc?.CarId ??
-                                        loc?.car?.id ??
-                                        loc?.Car?.Id;
-              
-              console.log(`[Car ${car.id}] CarRentalLocation - rentalLocationId:`, rentalLocationId, 'type:', typeof rentalLocationId);
-              console.log(`[Car ${car.id}] CarRentalLocation - carId:`, carIdFromLocation);
-              console.log(`[Car ${car.id}] Selected locationId:`, selectedLocationId, 'type:', typeof selectedLocationId);
-              
-              // Nếu không tìm thấy rentalLocationId, log toàn bộ object để debug
-              if (rentalLocationId === undefined || rentalLocationId === null) {
-                console.warn(`⚠️ [Car ${car.id}] Không tìm thấy rentalLocationId trong CarRentalLocation!`);
-                console.warn(`⚠️ [Car ${car.id}] Object keys:`, allKeys);
-                console.warn(`⚠️ [Car ${car.id}] Full object structure:`, JSON.stringify(loc, null, 2));
-                // Thử tìm bất kỳ field nào có chứa "location" hoặc "Location"
-                const locationFields = allKeys.filter(key => 
-                  key.toLowerCase().includes('location') || key.toLowerCase().includes('id')
-                );
-                console.warn(`⚠️ [Car ${car.id}] Fields with 'location' or 'id':`, locationFields);
-                locationFields.forEach(key => {
-                  console.warn(`⚠️ [Car ${car.id}] ${key}:`, loc[key]);
-                });
-              }
-              
-              // So sánh rentalLocationId với selectedLocationId
-              // CarRentalLocation.rentalLocationId === selectedLocationId nghĩa là xe này ở location đó
-              const rentalLocIdNum = rentalLocationId !== undefined && rentalLocationId !== null ? Number(rentalLocationId) : null;
-              const selectedIdNum = selectedLocationId !== null && selectedLocationId !== undefined ? Number(selectedLocationId) : null;
-              
-              // So sánh với nhiều cách để đảm bảo match
-              const matches = rentalLocationId !== undefined && 
-                            rentalLocationId !== null && 
-                            selectedLocationId !== null && 
-                            selectedLocationId !== undefined && (
-                rentalLocationId == selectedLocationId ||  // Loose equality để tự động convert type
-                rentalLocIdNum === selectedIdNum ||
-                rentalLocationId === selectedIdNum ||
-                rentalLocIdNum === selectedLocationId ||
-                String(rentalLocationId) === String(selectedLocationId) ||
-                Number(rentalLocationId) === Number(selectedLocationId)
-              );
-              
-              console.log(`[Car ${car.id}] Comparing: rentalLocationId=${rentalLocationId} (${typeof rentalLocationId}) vs selectedLocationId=${selectedLocationId} (${typeof selectedLocationId})`);
-              console.log(`[Car ${car.id}] As numbers: ${rentalLocIdNum} vs ${selectedIdNum}`);
-              console.log(`[Car ${car.id}] Match result: ${matches}`);
-              
-              if (matches) {
-                console.log(`✅ [Car ${car.id}] MATCH - CarRentalLocation có rentalLocationId=${rentalLocationId} match với selectedLocationId=${selectedLocationId}`);
-              } else {
-                console.log(`❌ [Car ${car.id}] NO MATCH - rentalLocationId: ${rentalLocationId} (${typeof rentalLocationId}), selectedLocationId: ${selectedLocationId} (${typeof selectedLocationId})`);
-              }
-              return !!matches;
-            });
-
-            if (hasMatchingLocation) {
-              console.log(`✅ [Car ${car.id}] GIỮ LẠI - có location match`);
-            } else {
-              console.log(`❌ [Car ${car.id}] BỎ QUA - không có location match`);
-            }
-
-            return hasMatchingLocation;
+        // Filter theo keyword (tên xe)
+        if (keyword) {
+          activeCars = activeCars.filter((car: any) => {
+            const carName = (car.name || car.Name || "").toLowerCase();
+            return carName.includes(keyword.toLowerCase());
           });
-          
-          console.log('[All Cars Page] ========== FILTER RESULT ==========');
-          console.log('[All Cars Page] After location filter:', activeCars.length, 'cars match location', selectedLocationId);
-          console.log('[All Cars Page] Cars that match:', activeCars.map(c => c.id));
-          
-          // Nếu không có xe nào match, có thể là do lỗi logic - hãy log thêm
-          if (activeCars.length === 0) {
-            console.warn('⚠️ WARNING: No cars match location filter!');
-            console.warn('⚠️ This could mean:');
-            console.warn('  1. No cars have CarRentalLocation with rentalLocationId =', selectedLocationId);
-            console.warn('  2. Logic comparison is incorrect');
-            console.warn('  3. Data structure is different than expected');
+        }
+
+        // Filter theo loại xe
+        if (selectedCarType) {
+          activeCars = activeCars.filter((car: any) => {
+            return car.sizeType === selectedCarType;
+          });
+        }
+
+        // Filter theo giá
+        if (minPrice) {
+          const min = parseFloat(minPrice);
+          if (!isNaN(min)) {
+            activeCars = activeCars.filter((car: any) => {
+              const price = parseFloat(car.pricePerDay || car.PricePerDay || 0);
+              return price >= min;
+            });
           }
         }
 
-        // Lưu tổng số xe (trước khi phân trang)
-        setTotalCount(activeCars.length);
-        console.log('[All Cars Page] ========== FINAL DATA ==========');
-        console.log('[All Cars Page] Total count:', activeCars.length);
-        console.log('[All Cars Page] Active cars IDs:', activeCars.map(c => c.id));
-        console.log('[All Cars Page] Page index:', pageIndex, 'Page size:', pageSize);
+        if (maxPrice) {
+          const max = parseFloat(maxPrice);
+          if (!isNaN(max)) {
+            activeCars = activeCars.filter((car: any) => {
+              const price = parseFloat(car.pricePerDay || car.PricePerDay || 0);
+              return price <= max;
+            });
+          }
+        }
 
-        // Phân trang phía client
+        // Tính tổng số xe sau khi filter
+        setTotalCount(activeCars.length);
+
+        // Phân trang
         const startIndex = pageIndex * pageSize;
         const endIndex = startIndex + pageSize;
         const paginatedCars = activeCars.slice(startIndex, endIndex);
         
-        console.log('[All Cars Page] Paginated cars:', paginatedCars.length, 'from', startIndex, 'to', endIndex);
-        console.log('[All Cars Page] Paginated cars IDs:', paginatedCars.map(c => c.id));
-        console.log('[All Cars Page] Paginated cars data:', paginatedCars);
-        
-        // Set state - đảm bảo đây là bước cuối cùng
-        console.log('[All Cars Page] Setting cars state with', paginatedCars.length, 'cars');
         setCars(paginatedCars);
-        console.log('[All Cars Page] State updated!');
-      } else {
-        api.error({
-          message: 'Lỗi tải dữ liệu',
-          description: response.error || 'Không thể tải danh sách xe!',
-          placement: 'topRight',
-          icon: <XCircle color="#ff4d4f" />, 
-        });
+        console.log(`[All Cars Page] Displaying ${paginatedCars.length} cars (page ${pageIndex + 1})`);
       }
     } catch (error) {
-      console.error('Load cars error:', error);
+      console.error('[All Cars Page] Load cars error:', error);
       api.error({
-        message: 'Có lỗi xảy ra',
-        description: 'Không thể kết nối đến máy chủ!',
+        message: 'Lỗi tải danh sách xe',
+        description: 'Không thể tải danh sách xe. Vui lòng thử lại sau.',
         placement: 'topRight',
-  icon: <XCircle color="#ff4d4f" />, 
       });
     } finally {
       setLoading(false);
@@ -731,117 +515,75 @@ export default function AllCarsPage() {
   const handlePriceBlur = (type: 'min' | 'max') => {
     const priceValue = type === 'min' ? minPrice : maxPrice;
     if (priceValue) {
-      updateURLParams({ 
-        minPrice: type === 'min' ? priceValue : minPrice,
-        maxPrice: type === 'max' ? priceValue : maxPrice
-      });
-    } else {
-      updateURLParams({ 
-        minPrice: type === 'min' ? '' : minPrice,
-        maxPrice: type === 'max' ? '' : maxPrice
-      });
+      updateURLParams({ [type === 'min' ? 'minPrice' : 'maxPrice']: priceValue });
     }
   };
 
-  const updateURLParams = (updates: {
+  const updateURLParams = (params: {
+    page?: number;
+    search?: string;
     locationId?: number | null;
     selectedLoc?: RentalLocationData | null;
     carType?: string | null;
     minPrice?: string;
     maxPrice?: string;
   }) => {
-    const params = new URLSearchParams(searchParams.toString());
-
-    // Location params
-    if (updates.locationId !== undefined) {
-      const newLocationId = updates.locationId;
-      if (newLocationId !== null && updates.selectedLoc) {
-        params.set('locationId', String(newLocationId));
-        params.set('location', updates.selectedLoc.name);
-        if (updates.selectedLoc.address) {
-          params.set('locationAddress', updates.selectedLoc.address);
-        } else {
-          params.delete('locationAddress');
+    const newParams = new URLSearchParams();
+    
+    if (params.page !== undefined && params.page !== null) {
+      newParams.set('page', String(params.page + 1));
+    } else if (pageIndex !== undefined) {
+      newParams.set('page', String(pageIndex + 1));
+    }
+    
+    if (params.search !== undefined) {
+      newParams.set('search', params.search);
+    } else if (keyword) {
+      newParams.set('search', keyword);
+    }
+    
+    if (params.locationId !== undefined) {
+      if (params.locationId !== null) {
+        newParams.set('locationId', String(params.locationId));
+        if (params.selectedLoc) {
+          newParams.set('location', params.selectedLoc.name || '');
         }
-      } else if (newLocationId !== null) {
-        params.set('locationId', String(newLocationId));
-        params.delete('location');
-        params.delete('locationAddress');
-      } else {
-        params.delete('locationId');
-        params.delete('location');
-        params.delete('locationAddress');
+      }
+    } else if (selectedLocationId !== null) {
+      newParams.set('locationId', String(selectedLocationId));
+      if (selectedLocation) {
+        newParams.set('location', selectedLocation.name || '');
       }
     }
-
-    // Car type params
-    if (updates.carType !== undefined) {
-      if (updates.carType && updates.carType.trim()) {
-        params.set('carType', updates.carType);
-      } else {
-        params.delete('carType');
+    
+    if (params.carType !== undefined) {
+      if (params.carType !== null) {
+        newParams.set('carType', params.carType);
       }
+    } else if (selectedCarType) {
+      newParams.set('carType', selectedCarType);
     }
-
-    // Price params
-    if (updates.minPrice !== undefined) {
-      if (updates.minPrice && updates.minPrice.trim()) {
-        params.set('minPrice', updates.minPrice);
-      } else {
-        params.delete('minPrice');
-      }
+    
+    if (params.minPrice !== undefined) {
+      newParams.set('minPrice', params.minPrice);
+    } else if (minPrice) {
+      newParams.set('minPrice', minPrice);
     }
-
-    if (updates.maxPrice !== undefined) {
-      if (updates.maxPrice && updates.maxPrice.trim()) {
-        params.set('maxPrice', updates.maxPrice);
-      } else {
-        params.delete('maxPrice');
-      }
+    
+    if (params.maxPrice !== undefined) {
+      newParams.set('maxPrice', params.maxPrice);
+    } else if (maxPrice) {
+      newParams.set('maxPrice', maxPrice);
     }
-
-    params.set('page', '1');
-
-    // Keep current search keyword in the URL if it exists
-    if (keyword && keyword.trim()) {
-      params.set('search', keyword.trim());
-    } else {
-      params.delete('search');
-    }
-
-    router.push(`/cars/all?${params.toString()}`);
+    
+    const newUrl = `${window.location.pathname}${newParams.toString() ? `?${newParams.toString()}` : ''}`;
+    router.push(newUrl, { scroll: false });
   };
 
   const handleSearch = () => {
-    const trimmedSearch = searchInput.trim();
-    setKeyword(trimmedSearch);
+    setKeyword(searchInput);
     setPageIndex(0);
-    
-    // Update URL
-    const params = new URLSearchParams();
-    if (trimmedSearch) {
-      params.set('search', trimmedSearch);
-    }
-    if (selectedLocationId !== null) {
-      params.set('locationId', String(selectedLocationId));
-      if (selectedLocation?.name) {
-        params.set('location', selectedLocation.name);
-      }
-      if (selectedLocation?.address) {
-        params.set('locationAddress', selectedLocation.address);
-      }
-    }
-    if (selectedCarType) {
-      params.set('carType', selectedCarType);
-    }
-    if (minPrice) {
-      params.set('minPrice', minPrice);
-    }
-    if (maxPrice) {
-      params.set('maxPrice', maxPrice);
-    }
-    params.set('page', '1');
-    router.push(`/cars/all?${params.toString()}`);
+    updateURLParams({ search: searchInput, page: 0 });
   };
 
   const handlePageChange = (page: number) => {
@@ -1082,5 +824,6 @@ export default function AllCarsPage() {
       </div>
     </>
   );
+  
 }
 
