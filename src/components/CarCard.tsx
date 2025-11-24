@@ -128,24 +128,21 @@ export default function CarCard({ car }: CarCardProps) {
             }}
           />
 
-          {/* Badge icon tia sét (góc trên trái) */}
+         
           <div className="absolute top-2 left-2">
             <div className="bg-gray-800 bg-opacity-70 rounded-lg p-1.5">
               <Zap className="text-yellow-400 fill-yellow-400" size={16} />
             </div>
           </div>
-          {/* Badge giảm giá (góc dưới phải) - chỉ hiển thị nếu có trong data */}
-          {/* Có thể thêm logic kiểm tra giảm giá từ backend sau */}
-
-          {/* Badge trạng thái (góc trên phải) */}
+        
           <div className="absolute top-2 right-2">
             <span
-              className={`px-2 py-1 text-[10px] font-semibold rounded-lg shadow-md ${car.status === 1
+              className={`px-2 py-1 text-[10px] font-semibold rounded-lg shadow-md ${car.isActive === true
                   ? "bg-blue-600 text-white"
                   : "bg-red-500 text-white"
                 }`}
             >
-              {car.status === 1 ? "Sẵn sàng" : "Hết xe"}
+              {car.isActive === true ? "Sẵn sàng" : "Hết xe"}
             </span>
           </div>
         </div>

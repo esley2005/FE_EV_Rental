@@ -1682,9 +1682,9 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               </div>
 
               {/* Status */}
-              <div className={`text-center p-3 rounded-lg mb-6 ${car.status === 1 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+              <div className={`text-center p-3 rounded-lg mb-6 ${car.isActive === true ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                 <span className="font-semibold">
-                  {car.status === 1 ? ' Xe đang có sẵn' : '✗ Hết xe'}
+                  {car.isActive === true ? ' Xe đang có sẵn' : '✗ Hết xe'}
                 </span>
               </div>
 
@@ -1768,15 +1768,15 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               {/* Booking Button */}
               <button
                 onClick={handleBookingClick}
-                disabled={car.status !== 1 || !dateRangeValue}
+                disabled={car.isActive !== true || !dateRangeValue}
                 className={`w-full py-4 px-6 rounded-lg font-bold text-lg transition-colors mb-5 flex items-center justify-center gap-2 ${
-                  car.status === 1 && dateRangeValue
+                  car.isActive === true && dateRangeValue
                     ? 'bg-blue-500 text-white hover:bg-blue-600'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
               >
                 <span></span>
-                {car.status === 1 ? 'CHỌN THUÊ' : 'Xe đã hết'}
+                {car.isActive === true ? 'CHỌN THUÊ' : 'Xe đã hết'}
               </button>
 
               {/* Quick Info */}
