@@ -498,6 +498,13 @@ export const carsApi = {
     apiCall(`/Car/${id}`, {
       method: 'DELETE',
     }),
+
+  // Lấy danh sách xe theo locationId
+  getByLocationId: (locationId: number) =>
+    apiCall<Car[]>(`/Car/GetByLocationId?locationId=${locationId}`, {
+      method: 'GET',
+      skipAuth: true, // Public endpoint
+    }),
 };
 
 // Booking API
