@@ -140,11 +140,8 @@ export default function CheckoutPage() {
         return;
       }
 
-      // Load car and location details
-      const [carsResponse, locationsResponse] = await Promise.all([
-        carsApi.getAll(),
-        rentalLocationApi.getAll()
-      ]);
+      // Load car details (location sẽ lấy từ car object)
+      const carsResponse = await carsApi.getAll();
 
       const cars: Car[] = carsResponse.success && carsResponse.data
         ? (Array.isArray(carsResponse.data)
@@ -154,25 +151,30 @@ export default function CheckoutPage() {
               : [])
         : [];
 
-      let locations: Array<{ id?: number; name?: string; address?: string }> = [];
-      if (locationsResponse.success && locationsResponse.data) {
-        const raw = locationsResponse.data as unknown;
-        if (Array.isArray(raw)) {
-          locations = raw;
-        } else if (raw && typeof raw === 'object' && '$values' in raw && Array.isArray((raw as { $values: unknown[] }).$values)) {
-          locations = (raw as { $values: Array<{ id?: number; name?: string; address?: string }> }).$values;
-        } else if (raw && typeof raw === 'object' && 'data' in raw) {
-          const data = (raw as { data: unknown }).data;
-          if (data && typeof data === 'object' && '$values' in data && Array.isArray((data as { $values: unknown[] }).$values)) {
-            locations = (data as { $values: Array<{ id?: number; name?: string; address?: string }> }).$values;
-          } else if (Array.isArray(data)) {
-            locations = data as Array<{ id?: number; name?: string; address?: string }>;
+      const car = cars.find((c) => c.id === orderData.carId);
+      
+      // Lấy location từ car.RentalLocationId qua API RentalLocation
+      let location: { id?: number; name?: string; address?: string } | undefined = undefined;
+      if (car) {
+        // Lấy RentalLocationId từ car object
+        const rentalLocationId = (car as any).rentalLocationId ?? (car as any).RentalLocationId;
+        
+        if (rentalLocationId) {
+          try {
+            const locationResponse = await rentalLocationApi.getById(rentalLocationId);
+            if (locationResponse.success && locationResponse.data) {
+              const loc = locationResponse.data as any;
+              location = {
+                id: loc.id ?? loc.Id,
+                name: loc.name ?? loc.Name,
+                address: loc.address ?? loc.Address
+              };
+            }
+          } catch (error) {
+            console.error("Error fetching location:", error);
           }
         }
       }
-
-      const car = cars.find((c) => c.id === orderData.carId);
-      const location = locations.find((l) => l.id === orderData.rentalLocationId);
 
       const orderWithDetails: OrderWithDetails = {
         ...orderData,

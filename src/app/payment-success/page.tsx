@@ -489,6 +489,7 @@ export default function PaymentSuccessPage() {
 
       if (orderResponse && orderResponse.success && orderResponse.data) {
         const orderData = orderResponse.data;
+<<<<<<< HEAD
         console.log('[Payment Success] Order data:', orderData);
 
         // Load car and location
@@ -524,6 +525,45 @@ export default function PaymentSuccessPage() {
         console.log('[Payment Success] Found car:', car);
         console.log('[Payment Success] Found location:', location);
 
+=======
+        
+        // Load car details (location sẽ lấy từ car object)
+        const carsResponse = await carsApi.getAll();
+        
+        const cars: Car[] = carsResponse.success && carsResponse.data
+          ? (Array.isArray(carsResponse.data) 
+              ? carsResponse.data 
+              : (carsResponse.data && typeof carsResponse.data === 'object' && '$values' in carsResponse.data && Array.isArray((carsResponse.data as { $values: unknown[] }).$values))
+                ? (carsResponse.data as { $values: Car[] }).$values
+                : [])
+          : [];
+        
+        const car = cars.find((c) => c.id === orderData.carId);
+        
+        // Lấy location từ car.RentalLocationId qua API RentalLocation
+        let location: { id?: number; name?: string; address?: string } | undefined = undefined;
+        if (car) {
+          // Lấy RentalLocationId từ car object
+          const rentalLocationId = (car as any).rentalLocationId ?? (car as any).RentalLocationId;
+          
+          if (rentalLocationId) {
+            try {
+              const locationResponse = await rentalLocationApi.getById(rentalLocationId);
+              if (locationResponse.success && locationResponse.data) {
+                const loc = locationResponse.data;
+                location = {
+                  id: loc.id ?? loc.Id,
+                  name: loc.name ?? loc.Name,
+                  address: loc.address ?? loc.Address
+                };
+              }
+            } catch (error) {
+              console.error("Error fetching location:", error);
+            }
+          }
+        }
+        
+>>>>>>> tiger_fix_v6
         setOrder({
           ...orderData,
           car,

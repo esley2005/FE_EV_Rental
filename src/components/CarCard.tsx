@@ -179,6 +179,7 @@ export default function CarCard({ car }: CarCardProps) {
             }}
           />
 
+<<<<<<< HEAD
           {/* Badge icon tia sét (góc trên trái) */}
           <motion.div 
             className="absolute top-3 left-3 z-20"
@@ -230,6 +231,25 @@ export default function CarCard({ car }: CarCardProps) {
               {normalizedStatus === 1 ? "Sẵn sàng" : "✗ Hết xe"}
             </motion.span>
           </motion.div>
+=======
+         
+          <div className="absolute top-2 left-2">
+            <div className="bg-gray-800 bg-opacity-70 rounded-lg p-1.5">
+              <Zap className="text-yellow-400 fill-yellow-400" size={16} />
+            </div>
+          </div>
+        
+          <div className="absolute top-2 right-2">
+            <span
+              className={`px-2 py-1 text-[10px] font-semibold rounded-lg shadow-md ${car.isActive === true
+                  ? "bg-blue-600 text-white"
+                  : "bg-red-500 text-white"
+                }`}
+            >
+              {car.isActive === true ? "Sẵn sàng" : "Hết xe"}
+            </span>
+          </div>
+>>>>>>> tiger_fix_v6
         </div>
       </div>
 

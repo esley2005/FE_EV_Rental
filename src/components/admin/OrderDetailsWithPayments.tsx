@@ -25,7 +25,7 @@ import {
   CalendarOutlined,
   EyeOutlined,
 } from "@ant-design/icons";
-import { rentalOrderApi, carsApi, authApi, rentalLocationApi } from "@/services/api";
+import { rentalOrderApi, carsApi, rentalLocationApi, authApi } from "@/services/api";
 import type { RentalOrderData, User, RentalLocationData } from "@/services/api";
 import type { Car } from "@/types/car";
 import dayjs from "dayjs";
@@ -60,7 +60,6 @@ export default function OrderDetailsWithPayments() {
   const [orders, setOrders] = useState<OrderWithDetails[]>([]);
   const [cars, setCars] = useState<Car[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [locations, setLocations] = useState<RentalLocationData[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   
@@ -75,14 +74,13 @@ export default function OrderDetailsWithPayments() {
   useEffect(() => {
     loadCars();
     loadUsers();
-    loadLocations();
   }, []);
 
   useEffect(() => {
     if (cars.length > 0 && users.length > 0) {
       loadOrders();
     }
-  }, [cars.length, users.length, locations.length]);
+  }, [cars.length, users.length]);
 
   const loadOrders = async () => {
     if (cars.length === 0 || users.length === 0) return; // Wait for cars and users to load
@@ -100,10 +98,35 @@ export default function OrderDetailsWithPayments() {
         ? ordersResponse.data
         : (ordersResponse.data as any)?.$values || [];
 
+      // Lấy tất cả locations từ cars (dựa vào RentalLocationId của mỗi car)
+      const uniqueLocationIds = new Set<number>();
+      ordersData.forEach((order: RentalOrderData) => {
+        const car = cars.find((c) => c.id === order.carId);
+        if (car) {
+          const rentalLocationId = (car as any).rentalLocationId ?? (car as any).RentalLocationId;
+          if (rentalLocationId) {
+            uniqueLocationIds.add(rentalLocationId);
+          }
+        }
+      });
+
+      // Fetch tất cả locations cùng lúc
+      const locationPromises = Array.from(uniqueLocationIds).map(id => 
+        rentalLocationApi.getById(id).then(res => res.success && res.data ? { id, location: res.data } : null)
+      );
+      const locationResults = await Promise.all(locationPromises);
+      const locationMap = new Map<number, RentalLocationData>();
+      locationResults.forEach(result => {
+        if (result && result.location) {
+          locationMap.set(result.id, result.location as RentalLocationData);
+        }
+      });
+
       const ordersWithDetails: OrderWithDetails[] = ordersData.map((order: RentalOrderData) => {
         const car = cars.find((c) => c.id === order.carId);
         const user = users.find((u) => u.id === order.userId);
-        const location = locations.find((l) => l.id === order.rentalLocationId);
+        const rentalLocationId = car ? ((car as any).rentalLocationId ?? (car as any).RentalLocationId) : undefined;
+        const location = rentalLocationId ? locationMap.get(rentalLocationId) : undefined;
 
         return {
           ...order,
@@ -156,19 +179,6 @@ export default function OrderDetailsWithPayments() {
     }
   };
 
-  const loadLocations = async () => {
-    try {
-      const response = await rentalLocationApi.getAll();
-      if (response.success && response.data) {
-        const locationsList = Array.isArray(response.data)
-          ? response.data
-          : (response.data as any)?.$values || [];
-        setLocations(locationsList);
-      }
-    } catch (error) {
-      console.error("Load locations error:", error);
-    }
-  };
 
   const handleViewDetails = async (orderId: number) => {
     setDetailModalVisible(true);
@@ -190,20 +200,35 @@ export default function OrderDetailsWithPayments() {
       setOrderData(data);
 
       // Fetch additional details
-      const [carResponse, userResponse, locationResponse] = await Promise.all([
+      const [carResponse, userResponse] = await Promise.all([
         carsApi.getById(data.carId.toString()),
         authApi.getProfileById(data.userId),
-        rentalLocationApi.getById(data.rentalLocationId),
       ]);
 
       if (carResponse.success && carResponse.data) {
-        setDetailCar(carResponse.data);
+        const car = carResponse.data;
+        setDetailCar(car);
+        
+        // Lấy location từ car.RentalLocationId qua API RentalLocation
+        const rentalLocationId = (car as any).rentalLocationId ?? (car as any).RentalLocationId;
+        if (rentalLocationId) {
+          try {
+            const locationResponse = await rentalLocationApi.getById(rentalLocationId);
+            if (locationResponse.success && locationResponse.data) {
+              const loc = locationResponse.data as any;
+              setDetailLocation({
+                id: loc.id ?? loc.Id,
+                name: loc.name ?? loc.Name,
+                address: loc.address ?? loc.Address
+              });
+            }
+          } catch (error) {
+            console.error("Error fetching location:", error);
+          }
+        }
       }
       if (userResponse.success && userResponse.data) {
         setDetailUser(userResponse.data);
-      }
-      if (locationResponse.success && locationResponse.data) {
-        setDetailLocation(locationResponse.data);
       }
     } catch (error) {
       console.error("Load order details error:", error);

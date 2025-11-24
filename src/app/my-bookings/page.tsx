@@ -185,10 +185,9 @@ export default function MyBookingsPage() {
         ? ordersResponse.data
         : (ordersResponse.data as any)?.$values || [];
 
-      // Load all cars, locations, licenses, and citizen IDs for mapping
-      const [carsResponse, locationsResponse, licensesResponse, citizenIdsResponse] = await Promise.all([
+      // Load all cars, licenses, and citizen IDs for mapping (location sẽ lấy từ car object)
+      const [carsResponse, licensesResponse, citizenIdsResponse] = await Promise.all([
         carsApi.getAll(),
-        rentalLocationApi.getAll(),
         driverLicenseApi.getAll(),
         citizenIdApi.getAll()
       ]);
@@ -196,21 +195,6 @@ export default function MyBookingsPage() {
       const cars: Car[] = carsResponse.success && carsResponse.data
         ? (Array.isArray(carsResponse.data) ? carsResponse.data : (carsResponse.data as any)?.$values || [])
         : [];
-      
-      // Xử lý nhiều format cho locations
-      let locations: RentalLocationData[] = [];
-      if (locationsResponse.success && locationsResponse.data) {
-        const raw = locationsResponse.data as any;
-        if (Array.isArray(raw)) {
-          locations = raw;
-        } else if (Array.isArray(raw.$values)) {
-          locations = raw.$values;
-        } else if (raw.data && Array.isArray(raw.data.$values)) {
-          locations = raw.data.$values;
-        } else if (raw.data && Array.isArray(raw.data)) {
-          locations = raw.data;
-        }
-      }
 
       // Xử lý licenses
       const licenses: DriverLicenseData[] = licensesResponse.success && licensesResponse.data
@@ -222,10 +206,35 @@ export default function MyBookingsPage() {
         ? (Array.isArray(citizenIdsResponse.data) ? citizenIdsResponse.data : (citizenIdsResponse.data as any)?.$values || [])
         : [];
 
+      // Lấy tất cả locations từ cars (dựa vào RentalLocationId của mỗi car)
+      const uniqueLocationIds = new Set<number>();
+      orders.forEach((order: RentalOrderData) => {
+        const car = cars.find((c) => c.id === order.carId);
+        if (car) {
+          const rentalLocationId = (car as any).rentalLocationId ?? (car as any).RentalLocationId;
+          if (rentalLocationId) {
+            uniqueLocationIds.add(rentalLocationId);
+          }
+        }
+      });
+
+      // Fetch tất cả locations cùng lúc
+      const locationPromises = Array.from(uniqueLocationIds).map(id => 
+        rentalLocationApi.getById(id).then(res => res.success && res.data ? { id, location: res.data } : null)
+      );
+      const locationResults = await Promise.all(locationPromises);
+      const locationMap = new Map<number, RentalLocationData>();
+      locationResults.forEach(result => {
+        if (result && result.location) {
+          locationMap.set(result.id, result.location as RentalLocationData);
+        }
+      });
+
       // Map orders with car, location, license, and citizen ID info
       const bookingsWithDetails: BookingWithDetails[] = orders.map((order: RentalOrderData) => {
         const car = cars.find((c) => c.id === order.carId);
-        const location = locations.find((l) => l.id === order.rentalLocationId);
+        const rentalLocationId = car ? ((car as any).rentalLocationId ?? (car as any).RentalLocationId) : undefined;
+        const location = rentalLocationId ? locationMap.get(rentalLocationId) : undefined;
         const license = licenses.find((l) => l.rentalOrderId === order.id);
         const citizenIdDoc = citizenIds.find((c) => c.rentalOrderId === order.id);
         

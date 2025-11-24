@@ -259,16 +259,43 @@ export default function AllCarsPage() {
           console.warn('[All Cars Page] Failed to load locations cache:', err);
         }
         
-        // ✅ Đồng bộ với admin: LUÔN fetch carRentalLocations cho TẤT CẢ xe để hiển thị location
-        // vì API getAll() có thể không trả về relationships
-        console.log(`[All Cars Page] Fetching carRentalLocations for all cars to display location...`);
+        // ✅ Sử dụng Car/GetByLocationId thay vì CarRentalLocation/GetByCarId
+        // Logic: Với mỗi car, lấy tất cả locations, rồi check xem location nào có car này
+        console.log(`[All Cars Page] Fetching locations for all cars using Car/GetByLocationId...`);
         
-        // Fetch chi tiết cho TẤT CẢ xe để lấy carRentalLocations
+        // Lấy tất cả locations nếu chưa có trong cache
+        if (locationsCache.size === 0) {
+          try {
+            const locationsResponse = await rentalLocationApi.getAll();
+            if (locationsResponse.success && locationsResponse.data) {
+              const locationsList = Array.isArray(locationsResponse.data)
+                ? locationsResponse.data
+                : (locationsResponse.data as any)?.$values || [];
+              locationsList.forEach((loc: any) => {
+                const id = loc.id || loc.Id;
+                if (id) locationsCache.set(Number(id), loc);
+              });
+              console.log(`[All Cars Page] ✅ Loaded ${locationsCache.size} locations into cache`);
+            }
+          } catch (err) {
+            console.warn('[All Cars Page] Failed to load locations cache:', err);
+          }
+        }
+        
+        // Fetch locations cho TẤT CẢ xe bằng cách dùng Car/GetByLocationId
         const carsWithDetails = await Promise.all(
           activeCars.map(async (car: any) => {
             const carResult = { ...car };
+            const carId = Number(car.id);
+            
+            if (Number.isNaN(carId)) {
+              console.warn(`[Car ${car.id}] Invalid car ID`);
+              carResult.carRentalLocations = [];
+              return carResult;
+            }
+
             try {
-              // Nếu đã có carRentalLocations dạng array hoặc $values, kiểm tra xem có đầy đủ không
+              // Nếu đã có carRentalLocations dạng array hoặc $values với đầy đủ thông tin, sử dụng luôn
               const hasLocations = carResult.carRentalLocations &&
                 (Array.isArray(carResult.carRentalLocations) ||
                   (carResult.carRentalLocations as any)?.$values);
@@ -279,12 +306,11 @@ export default function AllCarsPage() {
                   : (carResult.carRentalLocations as any)?.$values || [];
                 
                 if (locationsList.length > 0) {
-                  // Kiểm tra xem location đầu tiên có đầy đủ thông tin không
                   const firstLocation = locationsList[0];
                   const hasFullInfo = firstLocation?.rentalLocation || firstLocation?.RentalLocation;
                   
                   if (hasFullInfo) {
-                    // ✅ Chỉ lấy location đầu tiên (1 xe = 1 location) - đồng bộ với admin
+                    // ✅ Chỉ lấy location đầu tiên (1 xe = 1 location)
                     carResult.carRentalLocations = [firstLocation];
                     console.log(`[Car ${car.id}] Đã có carRentalLocations đầy đủ, chỉ lấy location đầu tiên`);
                     return carResult;
@@ -292,82 +318,72 @@ export default function AllCarsPage() {
                 }
               }
 
-              console.log(`[Car ${car.id}] Fetching carRentalLocations via carRentalLocationApi...`);
-              const carLocationResponse = await carRentalLocationApi.getByCarId(Number(car.id));
+              // ✅ Logic mới: Duyệt qua tất cả locations, check xem location nào có car này
+              console.log(`[Car ${car.id}] Finding locations using Car/GetByLocationId...`);
+              const carLocations: any[] = [];
 
-              if (carLocationResponse.success && carLocationResponse.data) {
-                const rawLocations = carLocationResponse.data as any;
-                let locationsData: CarRentalLocationData[] = [];
+              for (const [locationId, locationData] of locationsCache.entries()) {
+                try {
+                  // Gọi Car/GetByLocationId để lấy danh sách cars tại location này
+                  const carsResponse = await carsApi.getByLocationId(locationId);
+                  
+                  if (carsResponse.success && carsResponse.data) {
+                    // Parse danh sách cars từ response
+                    const carsData = carsResponse.data as any;
+                    const carsList = Array.isArray(carsData)
+                      ? carsData
+                      : Array.isArray(carsData?.$values)
+                      ? carsData.$values
+                      : Array.isArray(carsData?.data)
+                      ? carsData.data
+                      : Array.isArray(carsData?.data?.$values)
+                      ? carsData.data.$values
+                      : [];
 
-                if (Array.isArray(rawLocations)) {
-                  locationsData = rawLocations;
-                } else if (Array.isArray(rawLocations.$values)) {
-                  locationsData = rawLocations.$values;
-                } else if (rawLocations.data && Array.isArray(rawLocations.data.$values)) {
-                  locationsData = rawLocations.data.$values;
-                } else if (rawLocations.data && Array.isArray(rawLocations.data)) {
-                  locationsData = rawLocations.data;
-                }
+                    // Check xem car hiện tại có trong danh sách không
+                    const hasCar = carsList.some((c: any) => {
+                      const cId = Number(c?.id ?? c?.Id ?? c?.carId ?? c?.CarId);
+                      return !Number.isNaN(cId) && cId === carId;
+                    });
 
-                // ✅ Đồng bộ với admin: Chỉ lấy location đầu tiên (1 xe = 1 location)
-                if (locationsData.length > 0) {
-                  // ✅ Sử dụng cache thay vì gọi getById để tránh lỗi 401
-                  const firstLocation = locationsData[0] as any;
-                  if (!firstLocation.rentalLocation && !firstLocation.RentalLocation) {
-                    const locationId = firstLocation.locationId ?? firstLocation.LocationId ?? 
-                                      firstLocation.rentalLocationId ?? firstLocation.RentalLocationId;
-                    if (locationId) {
-                      // ✅ CHỈ sử dụng cache, KHÔNG gọi getById để tránh lỗi 401
-                      const cachedLocation = locationsCache.get(Number(locationId));
-                      if (cachedLocation) {
-                        firstLocation.rentalLocation = {
-                          id: cachedLocation.id || cachedLocation.Id,
-                          name: cachedLocation.name || cachedLocation.Name,
-                          address: cachedLocation.address || cachedLocation.Address,
-                          coordinates: cachedLocation.coordinates || cachedLocation.Coordinates,
-                          isActive: cachedLocation.isActive ?? cachedLocation.IsActive,
-                        };
-                        console.log(`[Car ${car.id}] ✅ Used cached location for ${locationId}`);
-                      } else {
-                        console.warn(`[Car ${car.id}] Location ${locationId} not found in cache, skipping getById to avoid 401`);
-                        // Không gọi getById để tránh lỗi 401
-                      }
+                    if (hasCar) {
+                      // Location này có car, thêm vào danh sách
+                      carLocations.push({
+                        locationId: locationId,
+                        rentalLocation: {
+                          id: locationData.id || locationData.Id,
+                          name: locationData.name || locationData.Name,
+                          address: locationData.address || locationData.Address,
+                          coordinates: locationData.coordinates || locationData.Coordinates,
+                          isActive: locationData.isActive ?? locationData.IsActive,
+                        },
+                      });
+                      console.log(`[Car ${car.id}] ✅ Found at location ${locationId} (${locationData.name || locationData.Name})`);
                     }
                   }
-                  carResult.carRentalLocations = [firstLocation]; // Chỉ lấy location đầu tiên
-                } else {
-                  carResult.carRentalLocations = [];
+                } catch (error) {
+                  console.warn(`[Car ${car.id}] Error checking location ${locationId}:`, error);
+                  // Tiếp tục với location tiếp theo
                 }
-
-                console.log(
-                  `[Car ${car.id}] carRentalLocationApi returned ${locationsData.length} records, using first location only`
-                );
-
-                return carResult;
               }
 
-              // Nếu carRentalLocationApi không trả về data, thử fallback lấy chi tiết xe
-              console.warn(
-                `[Car ${car.id}] carRentalLocationApi không trả về data, thử fallback getById`
-              );
-              const detailResponse = await carsApi.getById(String(car.id));
-              if (detailResponse.success && detailResponse.data) {
-                const detailCar = detailResponse.data as any;
-                const detailLocations = detailCar.carRentalLocations || 
-                  (detailCar.carRentalLocations as any)?.$values || [];
-                // ✅ Chỉ lấy location đầu tiên (1 xe = 1 location) - đồng bộ với admin
-                return {
-                  ...detailCar,
-                  carRentalLocations: detailLocations.length > 0 ? [detailLocations[0]] : [],
-                };
+              // ✅ Chỉ lấy location đầu tiên (1 xe = 1 location) - đồng bộ với admin
+              if (carLocations.length > 0) {
+                carResult.carRentalLocations = [carLocations[0]];
+                console.log(`[Car ${car.id}] ✅ Found ${carLocations.length} locations, using first location only`);
+              } else {
+                carResult.carRentalLocations = [];
+                console.log(`[Car ${car.id}] ⚠️ No locations found`);
               }
-            } catch (error) {
-              console.error(`[All Cars Page] Error fetching locations for car ${car.id}:`, error);
-            }
 
               return carResult;
-            })
-          );
+            } catch (error) {
+              console.error(`[All Cars Page] Error fetching locations for car ${car.id}:`, error);
+              carResult.carRentalLocations = [];
+              return carResult;
+            }
+          })
+        );
           
         // Cập nhật lại activeCars với dữ liệu chi tiết
         activeCars = carsWithDetails;

@@ -273,151 +273,88 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     setCarLocationsLoading(true);
 
     try {
-      let relations = extractCarRentalLocationList(carData);
-
-      if (!relations.length) {
-        console.log('[Car Detail] loadCarLocations: No carRentalLocations in car data, fetching via carRentalLocationApi...');
-        try {
-          const relationResponse = await carRentalLocationApi.getByCarId(Number(carData.id));
-          if (relationResponse.success && relationResponse.data) {
-            relations = extractCarRentalLocationList({ carRentalLocations: relationResponse.data });
-          }
-        } catch (error) {
-          console.warn('[Car Detail] loadCarLocations: Failed to load carRentalLocations via API', error);
-        }
-      }
-
-      if (!relations.length) {
-        console.log('[Car Detail] loadCarLocations: No relations found');
+      const carId = Number(carData.id);
+      if (Number.isNaN(carId)) {
+        console.warn('[Car Detail] loadCarLocations: Invalid car ID');
         setCarLocations([]);
         return;
       }
 
-      const locationIds = new Set<number>();
-      const relationsByLocation = new Map<number, any[]>();
-
-      relations.forEach((relation: any) => {
-        const locId = getLocationIdFromRelation(relation);
-        if (locId === null) {
-          return;
-        }
-
-        locationIds.add(locId);
-        if (!relationsByLocation.has(locId)) {
-          relationsByLocation.set(locId, []);
-        }
-        relationsByLocation.get(locId)?.push(relation);
-      });
-
-      if (!locationIds.size) {
-        console.log('[Car Detail] loadCarLocations: No location IDs resolved from relations');
+      console.log('[Car Detail] loadCarLocations: Loading locations for car', carId);
+      
+      // 1. Lấy tất cả RentalLocations
+      const locationsResponse = await rentalLocationApi.getAll();
+      if (!locationsResponse.success || !locationsResponse.data) {
+        console.warn('[Car Detail] loadCarLocations: Failed to fetch rental locations');
         setCarLocations([]);
         return;
       }
 
-      const locationInfoMap = new Map<number, { name: string | null; address: string | null }>();
+      const locationsList = normalizeRentalLocationsData(locationsResponse.data);
+      console.log('[Car Detail] loadCarLocations: Found', locationsList.length, 'locations');
 
-      relations.forEach((relation: any) => {
-        const locId = getLocationIdFromRelation(relation);
-        if (locId === null) return;
+      // 2. Với mỗi location, gọi Car/GetByLocationId để check xem có car này không
+      const finalDetails: CarLocationDisplay[] = [];
 
-        const infoSource = relation?.rentalLocation ?? relation?.RentalLocation ?? relation;
-        const name = getNameFromSource(infoSource);
-        const address = getAddressFromSource(infoSource);
+      for (const location of locationsList) {
+        const locationId = Number(
+          location?.id ??
+          location?.Id ??
+          location?.locationId ??
+          location?.LocationId ??
+          location?.rentalLocationId ??
+          location?.RentalLocationId
+        );
 
-        if ((name || address) && !locationInfoMap.has(locId)) {
-          locationInfoMap.set(locId, {
-            name: name ?? null,
-            address: address ?? null,
-          });
+        if (Number.isNaN(locationId)) {
+          continue;
         }
-      });
 
-      if (locationInfoMap.size < locationIds.size) {
-        console.log('[Car Detail] loadCarLocations: Fetching rental locations list for missing details...');
         try {
-          const locationsResponse = await rentalLocationApi.getAll();
-          if (locationsResponse.success && locationsResponse.data) {
-            const locationsList = normalizeRentalLocationsData(locationsResponse.data);
-            // CHỈ lấy thông tin cho các locationIds đã có trong relations (có xe này)
-            locationsList.forEach((location: any) => {
-              const locId = Number(
-                location?.id ??
-                  location?.Id ??
-                  location?.locationId ??
-                  location?.LocationId ??
-                  location?.rentalLocationId ??
-                  location?.RentalLocationId
-              );
+          // Gọi API Car/GetByLocationId để lấy danh sách cars tại location này
+          const carsResponse = await carsApi.getByLocationId(locationId);
+          
+          if (carsResponse.success && carsResponse.data) {
+            // Parse danh sách cars từ response
+            const carsData = carsResponse.data as any;
+            const carsList = Array.isArray(carsData)
+              ? carsData
+              : Array.isArray(carsData?.$values)
+              ? carsData.$values
+              : Array.isArray(carsData?.data)
+              ? carsData.data
+              : Array.isArray(carsData?.data?.$values)
+              ? carsData.data.$values
+              : [];
 
-              // CHỈ lấy thông tin nếu locationId có trong danh sách locations có xe này
-              if (!Number.isNaN(locId) && locationIds.has(locId)) {
-                locationInfoMap.set(locId, {
-                  name: getNameFromSource(location),
-                  address: getAddressFromSource(location),
-                });
-              }
+            // Check xem car hiện tại có trong danh sách không
+            const hasCar = carsList.some((car: any) => {
+              const carIdFromList = Number(car?.id ?? car?.Id ?? car?.carId ?? car?.CarId);
+              return !Number.isNaN(carIdFromList) && carIdFromList === carId;
             });
+
+            if (hasCar) {
+              // Location này có car, thêm vào danh sách
+              const locationName = getNameFromSource(location);
+              const locationAddress = getAddressFromSource(location);
+
+              finalDetails.push({
+                id: locationId,
+                name: locationName,
+                address: locationAddress,
+                quantity: null,
+              });
+
+              console.log(`[Car Detail] loadCarLocations: Car found at location ${locationId} (${locationName || locationAddress})`);
+            }
           }
         } catch (error) {
-          console.warn('[Car Detail] loadCarLocations: Unable to fetch rental locations list', error);
+          console.warn(`[Car Detail] loadCarLocations: Error checking location ${locationId}:`, error);
+          // Tiếp tục với location tiếp theo, không dừng lại
         }
       }
 
-      // ✅ Đồng bộ với admin: Lấy location đầu tiên TRƯỚC KHI sort/filter
-      // Lấy relation đầu tiên từ danh sách relations gốc
-      const firstRelation = relations[0];
-      if (!firstRelation) {
-        console.log('[Car Detail] loadCarLocations: No first relation found');
-        setCarLocations([]);
-        return;
-      }
-
-      const firstLocationId = getLocationIdFromRelation(firstRelation);
-      if (!firstLocationId) {
-        console.log('[Car Detail] loadCarLocations: Could not extract locationId from first relation');
-        setCarLocations([]);
-        return;
-      }
-
-      // Lấy thông tin location từ locationInfoMap hoặc fetch
-      let locationName: string | null = null;
-      let locationAddress: string | null = null;
-
-      const infoFromMap = locationInfoMap.get(firstLocationId);
-      if (infoFromMap) {
-        locationName = infoFromMap.name;
-        locationAddress = infoFromMap.address;
-      } else {
-        // Nếu chưa có trong map, lấy từ relation
-        const infoSource = firstRelation?.rentalLocation ?? firstRelation?.RentalLocation ?? firstRelation;
-        locationName = getNameFromSource(infoSource);
-        locationAddress = getAddressFromSource(infoSource);
-      }
-
-      // Nếu vẫn chưa có, fetch từ API
-      if ((!locationName && !locationAddress) && locationInfoMap.size < locationIds.size) {
-        try {
-          const locationResponse = await rentalLocationApi.getById(firstLocationId);
-          if (locationResponse.success && locationResponse.data) {
-            const loc = locationResponse.data as any;
-            locationName = loc.name ?? loc.Name ?? null;
-            locationAddress = loc.address ?? loc.Address ?? null;
-          }
-        } catch (error) {
-          console.warn('[Car Detail] loadCarLocations: Failed to fetch location detail', error);
-        }
-      }
-
-      // Tạo final details với chỉ location đầu tiên
-      const finalDetails: CarLocationDisplay[] = [{
-        id: firstLocationId,
-        name: locationName,
-        address: locationAddress,
-        quantity: null, // Không cần quantity cho display
-      }];
-
-      console.log('[Car Detail] loadCarLocations: Final details (first location only)', finalDetails);
+      console.log('[Car Detail] loadCarLocations: Final details (all locations with car)', finalDetails);
       setCarLocations(finalDetails);
     } catch (error) {
       console.error('[Car Detail] loadCarLocations error:', error);
@@ -1125,56 +1062,25 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                           {selectedLocationFromUrl.address}
                         </span>
                       </span>
+                    ) : carLocations.length > 0 ? (
+                      // Hiển thị địa chỉ từ carLocations (đã được load từ API)
+                      <span className="flex items-center gap-2">
+                        <MapPin className="text-blue-600" />
+                        <span>
+                          {carLocations[0].name && `${carLocations[0].name}${carLocations[0].address ? ' - ' : ''}`}
+                          {carLocations[0].address || carLocations[0].name || 'Đang tải địa chỉ...'}
+                        </span>
+                      </span>
                     ) : carAddress ? (
                       <span className="flex items-center gap-2">
                         <MapPin className="text-blue-600" />
                         <span>{carAddress}</span>
                       </span>
                     ) : (
-                      <>
-                        {(() => {
-                          // Thử lấy từ carRentalLocations trực tiếp
-                          const rl = car.carRentalLocations;
-                          if (rl) {
-                            const list = Array.isArray(rl) ? rl : rl.$values || [];
-                            if (list.length > 0) {
-                              const active = list.find((l: any) => (l?.isActive ?? l?.IsActive) && !(l?.isDeleted ?? l?.IsDeleted)) || list[0];
-                              
-                              // Lấy name và address
-                              const name = active?.name ?? active?.Name ?? active?.rentalLocation?.name ?? active?.rentalLocation?.Name;
-                              const addr = active?.address ?? active?.Address ?? active?.rentalLocation?.address ?? active?.rentalLocation?.Address;
-                              
-                              const nameStr = name && typeof name === 'string' && name.trim() ? name.trim() : null;
-                              const addrStr = addr && typeof addr === 'string' && addr.trim() ? addr.trim() : null;
-                              
-                              // Format: "Name - Address" hoặc chỉ Address
-                              if (nameStr && addrStr) {
-                                return (
-                                  <span className="flex items-center gap-2">
-                                    <MapPin className="text-blue-600" />
-                                    <span>{nameStr} - {addrStr}</span>
-                                  </span>
-                                );
-                              } else if (addrStr) {
-                                return (
-                                  <span className="flex items-center gap-2">
-                                    <MapPin className="text-blue-600" />
-                                    <span>{addrStr}</span>
-                                  </span>
-                                );
-                              } else if (nameStr) {
-                                return (
-                                  <span className="flex items-center gap-2">
-                                    <MapPin className="text-blue-600" />
-                                    <span>{nameStr}</span>
-                                  </span>
-                                );
-                              }
-                            }
-                          }
-               
-                        })()}
-                      </>
+                      <span className="flex items-center gap-2">
+                        <MapPin className="text-blue-600" />
+                        <span>Đang tải địa chỉ...</span>
+                      </span>
                     )}
                   </p>
 
@@ -1660,24 +1566,30 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               </div>
 
               {/* Status */}
-              <div className={`text-center p-3 rounded-lg mb-6 ${car.status === 1 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+              <div className={`text-center p-3 rounded-lg mb-6 ${car.isActive === true ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                 <span className="font-semibold">
-                  {car.status === 1 ? ' Xe đang có sẵn' : '✗ Hết xe'}
+                  {car.isActive === true ? ' Xe đang có sẵn' : '✗ Hết xe'}
                 </span>
               </div>
 
               {/* Booking Button */}
               <button
                 onClick={handleBookingClick}
+<<<<<<< HEAD
                 disabled={car.status !== 1}
                 className={`w-full py-4 px-6 rounded-lg font-bold text-lg transition-colors mb-5 flex items-center justify-center gap-2 ${
                   car.status === 1
+=======
+                disabled={car.isActive !== true || !dateRangeValue}
+                className={`w-full py-4 px-6 rounded-lg font-bold text-lg transition-colors mb-5 flex items-center justify-center gap-2 ${
+                  car.isActive === true && dateRangeValue
+>>>>>>> tiger_fix_v6
                     ? 'bg-blue-500 text-white hover:bg-blue-600'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
               >
                 <span></span>
-                {car.status === 1 ? 'CHỌN THUÊ' : 'Xe đã hết'}
+                {car.isActive === true ? 'CHỌN THUÊ' : 'Xe đã hết'}
               </button>
 
               {/* Quick Info */}
