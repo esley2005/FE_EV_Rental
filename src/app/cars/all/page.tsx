@@ -74,7 +74,7 @@ export default function AllCarsPage() {
 
   useEffect(() => {
     loadLocations();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, []);
 
   useEffect(() => {
@@ -146,7 +146,7 @@ export default function AllCarsPage() {
     try {
       const response = await rentalLocationApi.getAll();
       if (response.success && response.data) {
-        // Xử lý nhiều format: trực tiếp array, { $values: [...] }, hoặc { data: { $values: [...] } }
+
         const raw = response.data as any;
         let locationsData: RentalLocationData[] = [];
         
@@ -172,7 +172,7 @@ export default function AllCarsPage() {
         if (location) {
           setSelectedLocation(location);
         } else if (locationName) {
-          // Fallback: create a temporary location object
+         
           setSelectedLocation({
             id: locationId,
             name: locationName,
@@ -188,16 +188,14 @@ export default function AllCarsPage() {
   };
 
   useEffect(() => {
-    // Tải lại danh sách xe khi pageIndex, keyword, selectedLocationId, selectedCarType, minPrice, maxPrice thay đổi
-    // Hoặc khi locations đã được load (để có thể sử dụng trong loadCars)
+
     loadCars();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+ 
   }, [pageIndex, keyword, selectedLocationId, selectedCarType, minPrice, maxPrice, locations]);
 
-  // ✅ Listen to paymentSuccess event để refresh danh sách xe
+
   useEffect(() => {
     const handlePaymentSuccess = () => {
-      console.log('[All Cars Page] Payment success event received, refreshing cars list...');
       loadCars();
     };
     
@@ -217,16 +215,8 @@ export default function AllCarsPage() {
       const response = await carsApi.getAll();
 
       if (response.success && response.data) {
-        console.log('[All Cars Page] Response data:', response.data);
-        console.log('[All Cars Page] Response data type:', typeof response.data);
-        console.log('[All Cars Page] Is array:', Array.isArray(response.data));
-        console.log('[All Cars Page] Has $values:', !!(response.data as any)?.$values);
-        
         // Backend C# có thể trả về { "$values": [...] } hoặc array trực tiếp
         const allCars = (response.data as any)?.$values || response.data || [];
-        
-        console.log('[All Cars Page] All cars after processing:', allCars);
-        console.log('[All Cars Page] All cars length:', Array.isArray(allCars) ? allCars.length : 0);
         
         // Lọc xe active và chưa xóa
         let activeCars = Array.isArray(allCars) 
@@ -255,10 +245,8 @@ export default function AllCarsPage() {
               const id = loc.id || loc.Id;
               if (id) locationsCache.set(Number(id), loc);
             });
-            console.log(`[All Cars Page] ✅ Loaded ${locationsCache.size} locations into cache`);
           }
         } catch (err) {
-          console.warn('[All Cars Page] Failed to load locations cache:', err);
           }
         }
         
@@ -269,7 +257,6 @@ export default function AllCarsPage() {
             const carId = Number(car.id);
             
             if (Number.isNaN(carId)) {
-              console.warn(`[Car ${car.id}] Invalid car ID`);
               carResult.carRentalLocations = [];
               return carResult;
             }
@@ -292,14 +279,12 @@ export default function AllCarsPage() {
                   if (hasFullInfo) {
                     // ✅ Chỉ lấy location đầu tiên (1 xe = 1 location)
                     carResult.carRentalLocations = [firstLocation];
-                    console.log(`[Car ${car.id}] Đã có carRentalLocations đầy đủ, chỉ lấy location đầu tiên`);
                     return carResult;
                   }
                 }
               }
 
               // ✅ Logic mới: Duyệt qua tất cả locations, check xem location nào có car này
-              console.log(`[Car ${car.id}] Finding locations using Car/GetByLocationId...`);
               const carLocations: any[] = [];
 
               for (const [locationId, locationData] of locationsCache.entries()) {
@@ -343,7 +328,6 @@ export default function AllCarsPage() {
                     }
                   }
                 } catch (error) {
-                  console.warn(`[Car ${car.id}] Error checking location ${locationId}:`, error);
                   // Tiếp tục với location tiếp theo
                 }
               }
@@ -351,10 +335,8 @@ export default function AllCarsPage() {
               // ✅ Chỉ lấy location đầu tiên (1 xe = 1 location) - đồng bộ với admin
               if (carLocations.length > 0) {
                 carResult.carRentalLocations = [carLocations[0]];
-                console.log(`[Car ${car.id}] ✅ Found ${carLocations.length} locations, using first location only`);
                 } else {
                   carResult.carRentalLocations = [];
-                console.log(`[Car ${car.id}] ⚠️ No locations found`);
                 }
 
                 return carResult;
@@ -365,12 +347,9 @@ export default function AllCarsPage() {
             }
             })
           );
-          
-        // Cập nhật lại activeCars với dữ liệu chi tiết
+
         activeCars = carsWithDetails;
-        console.log(`[All Cars Page] Fetched details for ${activeCars.length} cars`);
-        
-        // Lấy danh sách loại xe có sẵn từ dữ liệu
+
         const uniqueCarTypes = Array.from(
           new Set(activeCars.map((car: Car) => car.sizeType).filter(Boolean))
         ) as string[];
@@ -379,17 +358,17 @@ export default function AllCarsPage() {
         activeCars = activeCars.filter((car: any) => {
           const carLocations = car.carRentalLocations;
           if (!carLocations) {
-            // Nếu không có location, vẫn hiển thị (backward compatibility)
+ 
             return true;
           }
 
-          // Handle .NET format: có thể là array hoặc { $values: [...] }
+    
           const locationsList = Array.isArray(carLocations)
             ? carLocations
             : (carLocations as any)?.$values || [];
 
           if (locationsList.length === 0) {
-            // Nếu không có location, vẫn hiển thị (backward compatibility)
+
             return true;
           }
 
@@ -398,7 +377,7 @@ export default function AllCarsPage() {
           const rentalLocation = firstLocation?.rentalLocation || firstLocation?.RentalLocation;
           
           if (!rentalLocation) {
-            // Nếu không có rentalLocation, vẫn hiển thị (backward compatibility)
+
             return true;
           }
 
@@ -411,7 +390,7 @@ export default function AllCarsPage() {
           return true;
         });
 
-        // Filter theo keyword (tên xe)
+
         if (keyword) {
           activeCars = activeCars.filter((car: any) => {
             const carName = (car.name || car.Name || "").toLowerCase();
@@ -419,14 +398,14 @@ export default function AllCarsPage() {
           });
         }
 
-        // Filter theo loại xe
+
         if (selectedCarType) {
           activeCars = activeCars.filter((car: any) => {
             return car.sizeType === selectedCarType;
           });
         }
 
-        // Filter theo giá
+
         if (minPrice) {
           const min = parseFloat(minPrice);
           if (!isNaN(min)) {
@@ -447,7 +426,7 @@ export default function AllCarsPage() {
           }
         }
 
-        // Tính tổng số xe sau khi filter
+     
         setTotalCount(activeCars.length);
 
         // Phân trang
@@ -456,7 +435,6 @@ export default function AllCarsPage() {
         const paginatedCars = activeCars.slice(startIndex, endIndex);
         
         setCars(paginatedCars);
-        console.log(`[All Cars Page] Displaying ${paginatedCars.length} cars (page ${pageIndex + 1})`);
       }
     } catch (error) {
       console.error('[All Cars Page] Load cars error:', error);

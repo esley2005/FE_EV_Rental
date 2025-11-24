@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { notFound, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Spin, message, notification, Modal, Button } from "antd";
+import { Spin, message, notification, Modal, Button, DatePicker } from "antd";
 // Removed @ant-design/icons to standardize on lucide-react icons
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -14,6 +14,7 @@ import type { Car } from "@/types/car";
 import type { User } from "@/services/api";
 import { authUtils } from "@/utils/auth";
 import { geocodeAddress } from "@/utils/geocode";
+import dayjs, { Dayjs } from "dayjs";
 import {
   MapPin,
   Bluetooth,
@@ -46,6 +47,8 @@ import {
 interface CarDetailPageProps {
   params: Promise<{ id: string }>;
 }
+
+const { RangePicker } = DatePicker;
 
 type CarLocationDisplay = {
   id: number;
@@ -254,15 +257,11 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     }
   }, [searchParams]);
 
-  // Debug: Log khi otherCars thay đổi
-  useEffect(() => {
-    console.log('[Car Detail] otherCars state updated:', otherCars);
-    console.log('[Car Detail] otherCars length:', otherCars.length);
-  }, [otherCars]);
   const [isFavorite, setIsFavorite] = useState(false);
   const [documentType, setDocumentType] = useState<'id' | 'passport'>('id');
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [dateRangeValue, setDateRangeValue] = useState<[Dayjs, Dayjs] | null>(null);
   const [documentWarningModal, setDocumentWarningModal] = useState<{
     visible: boolean;
     title: string;
@@ -275,23 +274,18 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     try {
       const carId = Number(carData.id);
       if (Number.isNaN(carId)) {
-        console.warn('[Car Detail] loadCarLocations: Invalid car ID');
         setCarLocations([]);
         return;
       }
 
-      console.log('[Car Detail] loadCarLocations: Loading locations for car', carId);
-      
       // 1. Lấy tất cả RentalLocations
       const locationsResponse = await rentalLocationApi.getAll();
       if (!locationsResponse.success || !locationsResponse.data) {
-        console.warn('[Car Detail] loadCarLocations: Failed to fetch rental locations');
         setCarLocations([]);
         return;
       }
 
       const locationsList = normalizeRentalLocationsData(locationsResponse.data);
-      console.log('[Car Detail] loadCarLocations: Found', locationsList.length, 'locations');
 
       // 2. Với mỗi location, gọi Car/GetByLocationId để check xem có car này không
       const finalDetails: CarLocationDisplay[] = [];
@@ -345,16 +339,14 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                 quantity: null,
               });
 
-              console.log(`[Car Detail] loadCarLocations: Car found at location ${locationId} (${locationName || locationAddress})`);
             }
           }
         } catch (error) {
-          console.warn(`[Car Detail] loadCarLocations: Error checking location ${locationId}:`, error);
+          // Continue with next location
           // Tiếp tục với location tiếp theo, không dừng lại
         }
       }
 
-      console.log('[Car Detail] loadCarLocations: Final details (all locations with car)', finalDetails);
       setCarLocations(finalDetails);
     } catch (error) {
       console.error('[Car Detail] loadCarLocations error:', error);
@@ -376,7 +368,6 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   useEffect(() => {
     if (carLocations.length > 0 && !carCoords && !carAddress && !carLocationsLoading) {
       const firstLocation = carLocations[0];
-      console.log('[Car Detail] Using first location from carLocations:', firstLocation);
       
       // Format address: name + address hoặc chỉ address/name
       let displayAddress = '';
@@ -390,20 +381,17 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
       
       if (displayAddress) {
         setCarAddress(displayAddress);
-        console.log('[Car Detail] ✅ Set carAddress from carLocations:', displayAddress);
       }
       
       // Nếu có address, thử geocode để lấy coordinates
       const addressToGeocode = firstLocation.address || firstLocation.name;
       if (addressToGeocode && !carCoords) {
-        console.log('[Car Detail] Geocoding address from carLocations:', addressToGeocode);
         geocodeAddress(addressToGeocode).then((coords) => {
           if (coords) {
             setCarCoords(coords);
-            console.log('[Car Detail] ✅ Set carCoords from geocoding:', coords);
           }
         }).catch((error) => {
-          console.error('[Car Detail] Geocoding error:', error);
+          // Ignore geocoding errors
         });
       }
     }
@@ -424,7 +412,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
         }
       }
     } catch (error) {
-      console.error('Parse coordinates error:', error);
+      // Ignore parse errors
     }
     return null;
   };
@@ -432,19 +420,15 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   // Helper: Lấy địa chỉ và tọa độ từ car
   const getCarLocation = async (carData: any): Promise<{ address: string | null; name: string | null; coords: { lat: number; lng: number } | null }> => {
     try {
-      console.log('[getCarLocation] Car data:', carData);
-      console.log('[getCarLocation] carRentalLocations:', carData?.carRentalLocations);
       
       // Lấy carRentalLocations
       const rl = carData?.carRentalLocations;
       if (!rl) {
-        console.warn('[getCarLocation] No carRentalLocations found in car data');
         
         // Fallback: Thử lấy rentalLocationId từ carRentalLocations hoặc từ nơi khác
         // Nếu có rentalLocationId, gọi API để lấy location
         const rentalLocationId = carData?.rentalLocationId ?? carData?.RentalLocationId;
         if (rentalLocationId) {
-          console.log('[getCarLocation] Found rentalLocationId, fetching from API:', rentalLocationId);
           try {
             const locationResponse = await rentalLocationApi.getById(rentalLocationId);
             if (locationResponse.success && locationResponse.data) {
@@ -472,23 +456,19 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               return { address: locationDisplay || addrStr, name: nameStr, coords: finalCoords };
             }
           } catch (apiError) {
-            console.error('[getCarLocation] Error fetching location from API:', apiError);
+            // Ignore API errors
           }
         }
         
         return { address: null, name: null, coords: null };
       }
 
-      // Xử lý dạng .NET { $values: [...] }
+
       const list = Array.isArray(rl) ? rl : rl.$values || [];
-      console.log('[getCarLocation] Processed list:', list);
       if (!Array.isArray(list) || list.length === 0) {
-        console.warn('[getCarLocation] List is empty or not an array');
-        
-        // Fallback: Thử lấy rentalLocationId từ car data và gọi API
+
         const rentalLocationId = carData?.rentalLocationId ?? carData?.RentalLocationId;
         if (rentalLocationId) {
-          console.log('[getCarLocation] Fallback: Found rentalLocationId, fetching from API:', rentalLocationId);
           try {
             const locationResponse = await rentalLocationApi.getById(rentalLocationId);
             if (locationResponse.success && locationResponse.data) {
@@ -514,24 +494,22 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               return { address: locationDisplay || addrStr, name: nameStr, coords: finalCoords };
             }
           } catch (apiError) {
-            console.error('[getCarLocation] Error fetching location from API:', apiError);
+            // Ignore API errors
           }
         }
         
         return { address: null, name: null, coords: null };
       }
 
-      // Ưu tiên location đang active, nếu không có thì lấy phần tử đầu tiên
+
       const active = list.find((l: any) => (l?.isActive ?? l?.IsActive) && !(l?.isDeleted ?? l?.IsDeleted)) || list[0];
-      console.log('[getCarLocation] Active location:', active);
       
-      // Lấy rentalLocationId từ active location để fallback nếu cần
+
       const rentalLocationId = active?.rentalLocationId ?? active?.RentalLocationId ?? 
                                active?.rentalLocation?.id ?? active?.rentalLocation?.Id ??
                                active?.id ?? active?.Id;
-      console.log('[getCarLocation] RentalLocationId from active:', rentalLocationId);
       
-      // Lấy name và address - thử nhiều cách
+  
       let nameStr: string | null = null;
       let addressStr: string | null = null;
       
@@ -540,41 +518,33 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
       
       const address = active?.address ?? active?.Address ?? active?.rentalLocation?.address ?? active?.rentalLocation?.Address;
       addressStr = typeof address === 'string' && address.trim() ? address.trim() : null;
-      console.log('[getCarLocation] Name found:', nameStr);
-      console.log('[getCarLocation] Address found:', addressStr);
       
-      // Nếu không có name hoặc address, thử gọi API bằng rentalLocationId
+
       if ((!nameStr || !addressStr) && rentalLocationId) {
-        console.log('[getCarLocation] Missing name or address, fetching from API with rentalLocationId:', rentalLocationId);
         try {
           const locationResponse = await rentalLocationApi.getById(rentalLocationId);
           if (locationResponse.success && locationResponse.data) {
             const loc = locationResponse.data;
             if (!nameStr) nameStr = loc.name || null;
             if (!addressStr) addressStr = loc.address || null;
-            console.log('[getCarLocation] Updated from API - name:', nameStr, 'address:', addressStr);
           }
         } catch (apiError) {
-          console.error('[getCarLocation] Error fetching location from API:', apiError);
+
         }
       }
 
-      // Lấy coordinates - thử nhiều cách
+
       let coords: { lat: number; lng: number } | null = null;
       
-      // Thử lấy từ coordinates string trước
+
       const coordsString = active?.coordinates ?? active?.Coordinates ?? active?.rentalLocation?.coordinates ?? active?.rentalLocation?.Coordinates;
-      console.log('[getCarLocation] Coordinates string:', coordsString);
       if (coordsString) {
         coords = parseCoordinates(coordsString);
-        console.log('[getCarLocation] Parsed coordinates:', coords);
       }
 
       // Nếu không có coordinates từ string, thử geocode từ address
       if (!coords && addressStr) {
-        console.log('[getCarLocation] Geocoding address:', addressStr);
         coords = await geocodeAddress(addressStr);
-        console.log('[getCarLocation] Geocoded coordinates:', coords);
       }
 
       // Format: "Name - Address" hoặc chỉ Address nếu không có Name
@@ -587,25 +557,18 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
         locationDisplay = nameStr;
       }
 
-      const result = { 
+      return { 
         address: locationDisplay || addressStr, 
         name: nameStr,
         coords 
       };
-      console.log('[getCarLocation] Final result:', result);
-      return result;
     } catch (error) {
       console.error('[getCarLocation] Error:', error);
       return { address: null, name: null, coords: null };
     }
   };
 
-  //3
-  //  → Gọi API /api/Car để lấy tất cả xe
-  // → Lọc ra những xe còn hoạt động (isActive && !isDeleted)
-  // → Tìm xe có ID đúng với URL
-  // → Nếu có → hiển thị
-  // → Nếu không → notFound() (404)
+
   useEffect(() => {
     const loadCar = async () => {
       try {
@@ -617,9 +580,6 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
         // Lấy tất cả xe để tìm xe hiện tại và xe khác
         const response = await carsApi.getAll();
-        
-        console.log('[Car Detail] API Response:', response);
-        console.log('[Car Detail] Response.data:', response.data);
 
         if (response.success && response.data) {
           // Xử lý nhiều định dạng response từ backend
@@ -634,16 +594,12 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             ? raw
             : [];
           
-          console.log('[Car Detail] carsData after processing:', carsData);
-          console.log('[Car Detail] carsData is array:', Array.isArray(carsData));
           
           // Lọc xe active và chưa xóa
           const activeCars = Array.isArray(carsData)
             ? carsData.filter((c: Car) => c && c.isActive && !c.isDeleted)
             : [];
           
-          console.log('[Car Detail] activeCars:', activeCars);
-          console.log('[Car Detail] activeCars length:', activeCars.length);
 
           // Tìm xe hiện tại
           const currentCar = activeCars.find((c: Car) => c.id === carId);
@@ -654,28 +610,20 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             return;
           }
 
-          console.log('[Car Detail] Current car found:', currentCar);
-          console.log('[Car Detail] Current car carRentalLocations:', currentCar.carRentalLocations);
           setCar(currentCar);
           
-          // Lấy tọa độ và địa chỉ từ xe
-          // Nếu không có carRentalLocations trong getAll, gọi getById để lấy đầy đủ
+
           let carWithLocation = currentCar;
           const hasCarRentalLocations = currentCar.carRentalLocations && 
             ((Array.isArray(currentCar.carRentalLocations) && currentCar.carRentalLocations.length > 0) ||
              (currentCar.carRentalLocations.$values && currentCar.carRentalLocations.$values.length > 0));
           
-          console.log('[Car Detail] Has carRentalLocations:', hasCarRentalLocations);
-          
           if (!hasCarRentalLocations) {
             // Gọi getById để lấy đầy đủ relationships
-            console.log('[Car Detail] Fetching car details by ID...');
             try {
               const detailResponse = await carsApi.getById(String(carId));
-              console.log('[Car Detail] getById response:', detailResponse);
               if (detailResponse.success && detailResponse.data) {
                 carWithLocation = detailResponse.data;
-                console.log('[Car Detail] Updated carWithLocation:', carWithLocation);
                 setCar(carWithLocation);
               }
             } catch (error) {
@@ -684,22 +632,14 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
           }
 
           // Lấy location từ car
-          console.log('[Car Detail] Getting location from carWithLocation...');
           const location = await getCarLocation(carWithLocation);
-          console.log('[Car Detail] Location data received:', location);
           
           if (location.address) {
             setCarAddress(location.address);
-            console.log('[Car Detail] ✅ Set carAddress:', location.address);
-          } else {
-            console.warn('[Car Detail] ⚠️ No address found');
           }
           
           if (location.coords) {
             setCarCoords(location.coords);
-            console.log('[Car Detail] ✅ Set carCoords:', location.coords);
-          } else {
-            console.warn('[Car Detail] ⚠️ No coordinates found for car');
           }
           
           // Lọc các xe khác (không phải xe hiện tại) và lấy 3 xe đầu tiên
@@ -707,12 +647,8 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             .filter((c: Car) => c && c.id !== carId)
             .slice(0, 3);
           
-          console.log('[Car Detail] otherCarsList:', otherCarsList);
-          console.log('[Car Detail] otherCarsList length:', otherCarsList.length);
-          
           setOtherCars(otherCarsList);
         } else {
-          console.error('[Car Detail] API failed or no data:', response);
           setOtherCars([]);
         }
       } catch (error) {
@@ -744,11 +680,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
         } catch (error: any) {
           // 405 hoặc các lỗi khác - chỉ log warning, không throw
           // Vì đã có user từ localStorage rồi
-          if (error?.error?.includes('405') || error?.includes('405')) {
-            console.warn('[Car Detail] getProfile returned 405 - endpoint may not exist, using localStorage user');
-          } else {
-            console.warn('[Car Detail] Load user profile error (non-critical):', error);
-          }
+          // Ignore non-critical errors
         }
       } else if (authUtils.isAuthenticated()) {
         // Có token nhưng chưa có user trong localStorage, gọi API
@@ -843,12 +775,44 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
   };
 
+  // Tính giá dựa trên ngày giờ đã chọn
+  const calculatePrice = (withDriver: boolean = false) => {
+    if (!car || !dateRangeValue || !dateRangeValue[0] || !dateRangeValue[1]) {
+      return null;
+    }
+
+    const [pickupTime, returnTime] = dateRangeValue;
+    const pricePerDay = withDriver ? car.rentPricePerDayWithDriver : car.rentPricePerDay;
+    const pricePerHour = withDriver ? car.rentPricePerHourWithDriver : car.rentPricePerHour;
+
+    const totalHours = returnTime.diff(pickupTime, 'hour', true);
+    if (totalHours <= 0) return null;
+
+    const fullDays = Math.floor(totalHours / 24);
+    const remainingHours = totalHours % 24;
+
+    // Nếu thuê >= 1 ngày, tính theo ngày
+    if (fullDays >= 1) {
+      const dayFee = fullDays * pricePerDay;
+      const partialDayFee = (remainingHours / 24) * pricePerDay;
+      return dayFee + partialDayFee;
+    }
+
+    // Nếu thuê < 1 ngày, tính theo giờ
+    return totalHours * pricePerHour;
+  };
+
   // Điều hướng đến trang booking
   const handleBookingClick = () => {
     const locationId = searchParams?.get('locationId');
     const params = new URLSearchParams();
     if (locationId) {
       params.set('locationId', locationId);
+    }
+    // Truyền ngày giờ đã chọn qua URL params
+    if (dateRangeValue && dateRangeValue[0] && dateRangeValue[1]) {
+      params.set('pickupTime', dateRangeValue[0].toISOString());
+      params.set('returnTime', dateRangeValue[1].toISOString());
     }
     const queryString = params.toString();
     router.push(`/booking/${car.id}${queryString ? `?${queryString}` : ''}`);
@@ -1502,6 +1466,72 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               <div className="mb-6">
                 <h3 className="text-lg font-bold text-gray-900 mb-4">Bảng giá thuê</h3>
                 
+                {/* Chọn ngày giờ nhận và trả xe */}
+                <div className="mb-4">
+                  <RangePicker
+                    showTime={{ format: 'HH:mm' }}
+                    format="DD/MM/YYYY HH:mm"
+                    size="large"
+                    className="w-full"
+                    placeholder={["Thời gian nhận xe", "Thời gian trả xe"]}
+                    onChange={(dates) => {
+                      if (dates && dates[0] && dates[1]) {
+                        setDateRangeValue([dates[0], dates[1]]);
+                      } else {
+                        setDateRangeValue(null);
+                      }
+                    }}
+                    disabledDate={(current) => {
+                      // Chặn các ngày trong quá khứ
+                      return current && current < dayjs().startOf('day');
+                    }}
+                    disabledTime={(value, type) => {
+                      const now = dayjs();
+                      const isToday = value && value.isSame(now, 'day');
+                      
+                      // Chặn các giờ ngoài khoảng 6h-22h (chỉ cho phép 6h đến 22h)
+                      const disabledHours = () => {
+                        const hours = [];
+                        // Chặn 0h-5h
+                        for (let i = 0; i < 6; i++) {
+                          hours.push(i);
+                        }
+                        // Chặn 23h
+                        hours.push(23);
+                        
+                        // Nếu là ngày hôm nay và là thời gian nhận xe (start), chặn thêm các giờ trong quá khứ
+                        if (isToday && type === 'start') {
+                          for (let i = 0; i < now.hour(); i++) {
+                            if (!hours.includes(i)) {
+                              hours.push(i);
+                            }
+                          }
+                        }
+                        
+                        return hours;
+                      };
+                      
+                      const disabledMinutes = (selectedHour: number) => {
+                        const minutes = [];
+                        
+                        // Nếu là ngày hôm nay, là thời gian nhận xe (start), và chọn giờ hiện tại, chặn các phút trong quá khứ
+                        if (isToday && type === 'start' && selectedHour === now.hour()) {
+                          for (let i = 0; i <= now.minute(); i++) {
+                            minutes.push(i);
+                          }
+                        }
+                        
+                        return minutes;
+                      };
+                      
+                      return {
+                        disabledHours,
+                        disabledMinutes,
+                      };
+                    }}
+                  />
+                </div>
+                
                {/* Box chung hiển thị toàn bộ giá thuê */}
 <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
   {/* Theo giờ - Tự lái */}
@@ -1526,9 +1556,16 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
         {/* <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span> */}
       </div>
     </div>
-    <p className="text-lg font-bold text-gray-900 text-right">
-      {formatCurrency(car.rentPricePerDay)}/ngày
-    </p>
+    <div className="text-right">
+      <p className="text-lg font-bold text-gray-900">
+        {formatCurrency(car.rentPricePerDay)}/ngày
+      </p>
+      {dateRangeValue && calculatePrice(false) && (
+        <p className="text-sm text-blue-600 font-semibold mt-1">
+          Tổng: {formatCurrency(Math.round(calculatePrice(false)!))}
+        </p>
+      )}
+    </div>
   </div>
 
   {/* Theo giờ - Có tài xế */}
@@ -1558,9 +1595,16 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
         {/* <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span> */}
       </div>
     </div>
-    <p className="text-lg font-bold text-gray-900 text-right">
-      {formatCurrency(car.rentPricePerDayWithDriver)}/ngày
-    </p>
+    <div className="text-right">
+      <p className="text-lg font-bold text-gray-900">
+        {formatCurrency(car.rentPricePerDayWithDriver)}/ngày
+      </p>
+      {dateRangeValue && calculatePrice(true) && (
+        <p className="text-sm text-blue-600 font-semibold mt-1">
+          Tổng: {formatCurrency(Math.round(calculatePrice(true)!))}
+        </p>
+      )}
+    </div>
   </div>
 </div>
               </div>

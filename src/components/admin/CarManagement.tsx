@@ -742,7 +742,7 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
       title: 'Trạng thái',
       dataIndex: 'isActive',
       key: 'status',
-<<<<<<< HEAD
+
       width: 150,
       render: (status: number, record: Car) => {
         if (staffMode) {
@@ -769,14 +769,7 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
           </Tag>
         );
       },
-=======
-      width: 120,
-      render: (isActive: boolean) => (
-        <Tag color={isActive === true ? 'green' : 'red'}>
-          {isActive === true ? 'Sẵn sàng' : 'Hết xe'}
-        </Tag>
-      ),
->>>>>>> tiger_fix_v6
+
     },
     {
       title: 'Kích hoạt',

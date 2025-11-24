@@ -134,7 +134,7 @@ export default function CarsSection() {
                 viewport={{ once: true }}
                 transition={{ duration: 0.6, delay: 0.5 }}
               >
-                ✨ Khám phá những mẫu xe điện hàng đầu
+                 Khám phá những mẫu xe điện hàng đầu
               </motion.p>
             </div>
           </div>

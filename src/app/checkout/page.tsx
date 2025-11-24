@@ -153,22 +153,57 @@ export default function CheckoutPage() {
 
       const car = cars.find((c) => c.id === orderData.carId);
       
-      // Lấy location từ car.RentalLocationId qua API RentalLocation
+      // ✅ Logic mới: Tìm location của car bằng Car/GetByLocationId
       let location: { id?: number; name?: string; address?: string } | undefined = undefined;
       if (car) {
-        // Lấy RentalLocationId từ car object
-        const rentalLocationId = (car as any).rentalLocationId ?? (car as any).RentalLocationId;
-        
-        if (rentalLocationId) {
+        const carId = Number(car.id);
+        if (!Number.isNaN(carId)) {
           try {
-            const locationResponse = await rentalLocationApi.getById(rentalLocationId);
-            if (locationResponse.success && locationResponse.data) {
-              const loc = locationResponse.data as any;
-              location = {
-                id: loc.id ?? loc.Id,
-                name: loc.name ?? loc.Name,
-                address: loc.address ?? loc.Address
-              };
+            // 1. Fetch tất cả locations
+            const allLocationsResponse = await rentalLocationApi.getAll();
+            if (allLocationsResponse.success && allLocationsResponse.data) {
+              const locationsData = allLocationsResponse.data as any;
+              const locationsList = Array.isArray(locationsData)
+                ? locationsData
+                : (locationsData?.$values || []);
+
+              // 2. Tìm location có car này
+              for (const loc of locationsList) {
+                const locationId = Number(loc?.id ?? loc?.Id);
+                if (Number.isNaN(locationId)) continue;
+
+                try {
+                  const carsResponse = await carsApi.getByLocationId(locationId);
+                  if (carsResponse.success && carsResponse.data) {
+                    const carsData = carsResponse.data as any;
+                    const carsList = Array.isArray(carsData)
+                      ? carsData
+                      : Array.isArray(carsData?.$values)
+                      ? carsData.$values
+                      : Array.isArray(carsData?.data)
+                      ? carsData.data
+                      : Array.isArray(carsData?.data?.$values)
+                      ? carsData.data.$values
+                      : [];
+
+                    const hasCar = carsList.some((c: any) => {
+                      const cId = Number(c?.id ?? c?.Id ?? c?.carId ?? c?.CarId);
+                      return !Number.isNaN(cId) && cId === carId;
+                    });
+
+                    if (hasCar) {
+                      location = {
+                        id: locationId,
+                        name: loc.name ?? loc.Name ?? '',
+                        address: loc.address ?? loc.Address ?? ''
+                      };
+                      break; // Chỉ lấy location đầu tiên (1 car = 1 location)
+                    }
+                  }
+                } catch (error) {
+                  // Continue with next location
+                }
+              }
             }
           } catch (error) {
             console.error("Error fetching location:", error);

@@ -68,14 +68,14 @@ export default function MyBookingsPage() {
   const [selectedBooking, setSelectedBooking] = useState<BookingWithDetails | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
-  const [currentTime, setCurrentTime] = useState(Date.now()); // Để update countdown mỗi giây
-  const cancelledBookingIds = useRef<Set<number>>(new Set()); // Track các đơn đã được hủy tự động
+  const [currentTime, setCurrentTime] = useState(Date.now()); 
+  const cancelledBookingIds = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     loadUserAndBookings();
   }, []);
 
-  // Auto-refresh bookings mỗi 30 giây để cập nhật trạng thái khi staff thay đổi
+ 
   useEffect(() => {
     if (!user?.id) return;
     
@@ -90,11 +90,11 @@ export default function MyBookingsPage() {
     };
   }, [user?.id]);
 
-  // Update currentTime mỗi giây để countdown chạy real-time
+
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(Date.now());
-    }, 1000); // Update mỗi giây
+    }, 1000); 
     
     return () => {
       clearInterval(timer);
@@ -108,7 +108,7 @@ export default function MyBookingsPage() {
   const loadUserAndBookings = async () => {
     setLoading(true);
     try {
-      // Kiểm tra đăng nhập
+
       const token = localStorage.getItem('token');
       if (!token) {
         api.warning({
@@ -121,13 +121,13 @@ export default function MyBookingsPage() {
         return;
       }
 
-      // Load user profile
+
       const userResponse = await authApi.getProfile();
       if (userResponse.success && userResponse.data) {
         setUser(userResponse.data);
         await loadBookings(userResponse.data.id);
       } else {
-        // Fallback: lấy từ localStorage
+
         const userStr = localStorage.getItem('user');
         if (userStr) {
           const userData = JSON.parse(userStr);
@@ -150,20 +150,17 @@ export default function MyBookingsPage() {
 
   const loadBookings = async (userId: number) => {
     try {
-      // Load orders
+
       const ordersResponse = await rentalOrderApi.getByUserId(userId);
       
-      // Xử lý trường hợp 403 (Forbidden) - user không có quyền
       if (!ordersResponse.success) {
-        // Nếu là lỗi permission (403), chỉ log warning và không hiển thị error cho user
         if (ordersResponse.error?.includes('không có quyền') || ordersResponse.error?.includes('403')) {
-          console.warn('[MyBookings] User may not have permission to view orders:', ordersResponse.error);
+      
           setBookings([]);
           setLoading(false);
           return;
         }
         
-        // Với các lỗi khác, hiển thị error message
         api.error({
           message: "Không thể tải danh sách đơn hàng",
           description: ordersResponse.error || "Vui lòng thử lại sau.",
@@ -206,35 +203,79 @@ export default function MyBookingsPage() {
         ? (Array.isArray(citizenIdsResponse.data) ? citizenIdsResponse.data : (citizenIdsResponse.data as any)?.$values || [])
         : [];
 
-      // Lấy tất cả locations từ cars (dựa vào RentalLocationId của mỗi car)
-      const uniqueLocationIds = new Set<number>();
+      // ✅ Logic mới: Lấy tất cả locations và tìm location của mỗi car bằng Car/GetByLocationId
+      // 1. Fetch tất cả locations
+      const allLocationsResponse = await rentalLocationApi.getAll();
+      const allLocations: RentalLocationData[] = [];
+      if (allLocationsResponse.success && allLocationsResponse.data) {
+        const locationsData = allLocationsResponse.data as any;
+        const locationsList = Array.isArray(locationsData)
+          ? locationsData
+          : (locationsData?.$values || []);
+        locationsList.forEach((loc: any) => {
+          allLocations.push({
+            id: loc.id || loc.Id,
+            name: loc.name || loc.Name || '',
+            address: loc.address || loc.Address || '',
+            coordinates: loc.coordinates || loc.Coordinates || '',
+            isActive: loc.isActive ?? loc.IsActive ?? true,
+          } as RentalLocationData);
+        });
+      }
+
+      // 2. Tạo map carId -> location bằng cách check Car/GetByLocationId
+      const carLocationMap = new Map<number, RentalLocationData>();
+      
+      // Với mỗi car trong orders, tìm location của nó
+      const uniqueCarIds = new Set<number>();
       orders.forEach((order: RentalOrderData) => {
-        const car = cars.find((c) => c.id === order.carId);
-        if (car) {
-          const rentalLocationId = (car as any).rentalLocationId ?? (car as any).RentalLocationId;
-          if (rentalLocationId) {
-            uniqueLocationIds.add(rentalLocationId);
-          }
+        const carId = Number(order.carId);
+        if (!Number.isNaN(carId)) {
+          uniqueCarIds.add(carId);
         }
       });
 
-      // Fetch tất cả locations cùng lúc
-      const locationPromises = Array.from(uniqueLocationIds).map(id => 
-        rentalLocationApi.getById(id).then(res => res.success && res.data ? { id, location: res.data } : null)
-      );
-      const locationResults = await Promise.all(locationPromises);
-      const locationMap = new Map<number, RentalLocationData>();
-      locationResults.forEach(result => {
-        if (result && result.location) {
-          locationMap.set(result.id, result.location as RentalLocationData);
+      // Tìm location cho mỗi car
+      for (const carId of uniqueCarIds) {
+        for (const location of allLocations) {
+          const locationId = Number(location.id);
+          if (Number.isNaN(locationId)) continue;
+
+          try {
+            const carsResponse = await carsApi.getByLocationId(locationId);
+            if (carsResponse.success && carsResponse.data) {
+              const carsData = carsResponse.data as any;
+              const carsList = Array.isArray(carsData)
+                ? carsData
+                : Array.isArray(carsData?.$values)
+                ? carsData.$values
+                : Array.isArray(carsData?.data)
+                ? carsData.data
+                : Array.isArray(carsData?.data?.$values)
+                ? carsData.data.$values
+                : [];
+
+              const hasCar = carsList.some((c: any) => {
+                const cId = Number(c?.id ?? c?.Id ?? c?.carId ?? c?.CarId);
+                return !Number.isNaN(cId) && cId === carId;
+              });
+
+              if (hasCar) {
+                carLocationMap.set(carId, location);
+                break; // Chỉ lấy location đầu tiên (1 car = 1 location)
+              }
+            }
+          } catch (error) {
+            // Continue with next location
+          }
         }
-      });
+      }
 
       // Map orders with car, location, license, and citizen ID info
       const bookingsWithDetails: BookingWithDetails[] = orders.map((order: RentalOrderData) => {
         const car = cars.find((c) => c.id === order.carId);
-        const rentalLocationId = car ? ((car as any).rentalLocationId ?? (car as any).RentalLocationId) : undefined;
-        const location = rentalLocationId ? locationMap.get(rentalLocationId) : undefined;
+        const carId = car ? Number(car.id) : null;
+        const location = carId && !Number.isNaN(carId) ? carLocationMap.get(carId) : undefined;
         const license = licenses.find((l) => l.rentalOrderId === order.id);
         const citizenIdDoc = citizenIds.find((c) => c.rentalOrderId === order.id);
         

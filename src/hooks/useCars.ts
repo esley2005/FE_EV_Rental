@@ -73,49 +73,106 @@ async function enrichCarWithCoordsOptimized(car: any, locationsCache: Map<number
     let enriched = car;
     let locationInfo = getLocationInfoFromCar(car);
 
-    // ✅ Fetch carRentalLocations cho xe này
-    if (car?.id != null) {
-      try {
-        const locationResponse = await carRentalLocationApi.getByCarId(Number(car.id));
+    // ✅ Nếu đã có carRentalLocations đầy đủ, sử dụng luôn
+    const hasLocations = enriched.carRentalLocations &&
+      (Array.isArray(enriched.carRentalLocations) ||
+        (enriched.carRentalLocations as any)?.$values);
+    
+    if (hasLocations) {
+      const locationsList = Array.isArray(enriched.carRentalLocations)
+        ? enriched.carRentalLocations
+        : (enriched.carRentalLocations as any)?.$values || [];
+      
+      if (locationsList.length > 0) {
+        const firstLocation = locationsList[0];
+        const hasFullInfo = firstLocation?.rentalLocation || firstLocation?.RentalLocation;
         
-        if (locationResponse.success && locationResponse.data) {
-          const locationsData = Array.isArray(locationResponse.data)
-            ? locationResponse.data
-            : (locationResponse.data as any)?.$values || [];
-          
-          // ✅ Sử dụng cached locations thay vì fetch lại từng cái
-          const enrichedLocations = locationsData.map((rel: any) => {
-            const locationId = rel?.locationId ?? rel?.LocationId ?? rel?.rentalLocationId ?? rel?.RentalLocationId;
-            
-            if (!locationId) return rel;
-            
-            // Nếu đã có rentalLocation đầy đủ, giữ nguyên
-            const existingRentalLocation = rel?.rentalLocation ?? rel?.RentalLocation;
-            if (existingRentalLocation?.name || existingRentalLocation?.Name) {
-              return rel;
-            }
-            
-            // ✅ Sử dụng cache thay vì fetch lại
-            const cachedLocation = locationsCache.get(locationId);
-            if (cachedLocation) {
-              return { ...rel, rentalLocation: cachedLocation };
-            }
-            
-            // Nếu không có trong cache, giữ nguyên relation (sẽ có location info từ carRentalLocation)
-            return rel;
-          });
-          
-          const firstLocation = enrichedLocations.length > 0 ? enrichedLocations[0] : null;
-          
+        if (hasFullInfo) {
+          // ✅ Chỉ lấy location đầu tiên (1 xe = 1 location)
           enriched = {
             ...enriched,
-            carRentalLocations: firstLocation ? [firstLocation] : []
+            carRentalLocations: [firstLocation]
           };
-          
+          locationInfo = getLocationInfoFromCar(enriched);
+          return { 
+            ...enriched, 
+            primaryAddress: locationInfo.address,
+            primaryLocationName: locationInfo.name
+          };
+        }
+      }
+    }
+
+    // ✅ Fetch carRentalLocations cho xe này bằng cách dùng Car/GetByLocationId
+    if (car?.id != null) {
+      try {
+        const carId = Number(car.id);
+        if (Number.isNaN(carId)) {
+          return { 
+            ...enriched, 
+            primaryAddress: locationInfo.address,
+            primaryLocationName: locationInfo.name
+          };
+        }
+
+        // ✅ Logic mới: Duyệt qua tất cả locations, check xem location nào có car này
+        const carLocations: any[] = [];
+
+        for (const [locationId, locationData] of locationsCache.entries()) {
+          try {
+            // Gọi Car/GetByLocationId để lấy danh sách cars tại location này
+            const carsResponse = await carsApi.getByLocationId(locationId);
+            
+            if (carsResponse.success && carsResponse.data) {
+              // Parse danh sách cars từ response
+              const carsData = carsResponse.data as any;
+              const carsList = Array.isArray(carsData)
+                ? carsData
+                : Array.isArray(carsData?.$values)
+                ? carsData.$values
+                : Array.isArray(carsData?.data)
+                ? carsData.data
+                : Array.isArray(carsData?.data?.$values)
+                ? carsData.data.$values
+                : [];
+
+              // Check xem car hiện tại có trong danh sách không
+              const hasCar = carsList.some((c: any) => {
+                const cId = Number(c?.id ?? c?.Id ?? c?.carId ?? c?.CarId);
+                return !Number.isNaN(cId) && cId === carId;
+              });
+
+              // Nếu tìm thấy car tại location này, thêm vào danh sách
+              if (hasCar) {
+                carLocations.push({
+                  locationId: locationId,
+                  rentalLocation: {
+                    id: locationData.id || locationData.Id,
+                    name: locationData.name || locationData.Name,
+                    address: locationData.address || locationData.Address,
+                    coordinates: locationData.coordinates || locationData.Coordinates,
+                    isActive: locationData.isActive ?? locationData.IsActive,
+                  },
+                });
+                // Chỉ lấy location đầu tiên (1 xe = 1 location)
+                break;
+              }
+            }
+          } catch (error) {
+            // Tiếp tục với location tiếp theo
+          }
+        }
+
+        // ✅ Chỉ lấy location đầu tiên (1 xe = 1 location)
+        if (carLocations.length > 0) {
+          enriched = {
+            ...enriched,
+            carRentalLocations: [carLocations[0]]
+          };
           locationInfo = getLocationInfoFromCar(enriched);
         }
       } catch (err) {
-        console.warn(`[enrichCarWithCoordsOptimized] Car ${car.id} - Error:`, err);
+        // Ignore errors
       }
     }
 
@@ -147,65 +204,43 @@ async function enrichCarWithCoordsOptimized(car: any, locationsCache: Map<number
 // Helper: làm giàu 1 car với location data đầy đủ (original version - giữ lại để backward compatibility)
 async function enrichCarWithCoords(car: any) {
   try {
-    console.log(`[enrichCarWithCoords] 🚗 Processing car ${car?.id} - ${car?.name}`);
     let enriched = car;
     let locationInfo = getLocationInfoFromCar(car);
-    console.log(`[enrichCarWithCoords] Initial locationInfo:`, locationInfo);
 
     // ✅ Fetch và enrich location data
     if (car?.id != null) {
       try {
-        console.log(`[enrichCarWithCoords] 🚗 Car ${car.id} - Starting enrichment...`);
         const locationResponse = await carRentalLocationApi.getByCarId(Number(car.id));
-        console.log(`[enrichCarWithCoords] Car ${car.id} - carRentalLocationApi response:`, locationResponse);
         
         if (locationResponse.success && locationResponse.data) {
           const locationsData = Array.isArray(locationResponse.data)
             ? locationResponse.data
             : (locationResponse.data as any)?.$values || [];
           
-          console.log(`[enrichCarWithCoords] Car ${car.id} - Found ${locationsData.length} locationsData:`, locationsData);
-          
           // ✅ LUÔN fetch rentalLocation cho mỗi relation (để đồng bộ với admin)
           const enrichedLocations = await Promise.all(
             locationsData.map(async (rel: any) => {
               // Lấy locationId từ relation
               const locationId = rel?.locationId ?? rel?.LocationId ?? rel?.rentalLocationId ?? rel?.RentalLocationId;
-              console.log(`[enrichCarWithCoords] Car ${car.id} - Relation:`, rel, `locationId:`, locationId);
               
               if (!locationId) {
-                console.warn(`[enrichCarWithCoords] Car ${car.id} - No locationId in relation`);
                 return rel;
               }
 
               // Nếu đã có rentalLocation đầy đủ, giữ nguyên
               const existingRentalLocation = rel?.rentalLocation ?? rel?.RentalLocation;
               if (existingRentalLocation?.name || existingRentalLocation?.Name) {
-                console.log(`[enrichCarWithCoords] Car ${car.id} - Already has rentalLocation`);
                 return rel;
               }
 
               // LUÔN fetch lại để đảm bảo có data mới nhất từ admin
-              console.log(`[enrichCarWithCoords] Car ${car.id} - Fetching locationId ${locationId}...`);
               try {
                 const response = await rentalLocationApi.getById(locationId);
-                console.log(`[enrichCarWithCoords] Car ${car.id} - rentalLocationApi response:`, response);
-                console.log(`[enrichCarWithCoords] Car ${car.id} - response.success:`, response.success);
-                console.log(`[enrichCarWithCoords] Car ${car.id} - response.data:`, response.data);
                 
                 if (response.success && response.data) {
-                  console.log(`[enrichCarWithCoords] ✅ Car ${car.id} - Got rentalLocation:`, response.data);
-                  const enriched = { ...rel, rentalLocation: response.data };
-                  console.log(`[enrichCarWithCoords] Car ${car.id} - Enriched relation:`, enriched);
-                  console.log(`[enrichCarWithCoords] Car ${car.id} - Enriched relation.rentalLocation:`, enriched.rentalLocation);
-                  return enriched;
-                } else {
-                  console.warn(`[enrichCarWithCoords] ❌ Car ${car.id} - Failed to fetch:`, response);
-                  console.warn(`[enrichCarWithCoords] Car ${car.id} - response.success:`, response.success);
-                  console.warn(`[enrichCarWithCoords] Car ${car.id} - response.data:`, response.data);
+                  return { ...rel, rentalLocation: response.data };
                 }
               } catch (err) {
-                console.warn(`[enrichCarWithCoords] ❌ Car ${car.id} - Error:`, err);
                 // Nếu fail, thử với auth
                 try {
                   const { apiCall } = await import('@/services/api');
@@ -213,20 +248,16 @@ async function enrichCarWithCoords(car: any) {
                     method: 'GET',
                     skipAuth: false,
                   });
-                  console.log(`[enrichCarWithCoords] Car ${car.id} - authResponse:`, authResponse);
                   if (authResponse.success && authResponse.data) {
-                    console.log(`[enrichCarWithCoords] ✅ Car ${car.id} - Got rentalLocation with auth:`, authResponse.data);
                     return { ...rel, rentalLocation: authResponse.data };
                   }
                 } catch (authErr) {
-                  console.warn(`[enrichCarWithCoords] ❌ Car ${car.id} - Auth fetch also failed:`, authErr);
+                  // Ignore
                 }
               }
               return rel;
             })
           );
-          
-          console.log(`[enrichCarWithCoords] Car ${car.id} - Enriched locations:`, enrichedLocations);
           
           // ✅ Chỉ lấy location đầu tiên (1 xe = 1 location)
           const firstLocation = enrichedLocations.length > 0 ? enrichedLocations[0] : null;
@@ -257,9 +288,6 @@ async function enrichCarWithCoords(car: any) {
           };
           
           locationInfo = getLocationInfoFromCar(enriched);
-          console.log(`[enrichCarWithCoords] Car ${car.id} - Final locationInfo:`, locationInfo);
-        } else {
-          console.warn(`[enrichCarWithCoords] Car ${car.id} - Failed to fetch carRentalLocations:`, locationResponse);
         }
       } catch (err) {
         console.error(`[enrichCarWithCoords] Car ${car.id} - Exception:`, err);
@@ -324,8 +352,6 @@ export function useCars(): UseCarsResult {
           }));
         
         // ✅ Tối ưu: Batch fetch tất cả locations một lần thay vì fetch từng xe
-        console.log('[useCars] Starting to enrich cars with location data...', activeCars.length, 'cars');
-        
         // Fetch tất cả locations một lần để tránh N+1 queries
         let allLocationsMap = new Map<number, any>();
         try {
@@ -338,10 +364,9 @@ export function useCars(): UseCarsResult {
               const id = loc.id || loc.Id;
               if (id) allLocationsMap.set(id, loc);
             });
-            console.log('[useCars] ✅ Loaded all locations:', allLocationsMap.size);
           }
         } catch (err) {
-          console.warn('[useCars] Failed to batch load locations, will fetch individually:', err);
+          console.warn('[useCars] Failed to batch load locations:', err);
         }
         
         // Enrich cars với location data đã cache (sử dụng optimized version)
@@ -357,9 +382,6 @@ export function useCars(): UseCarsResult {
             }
           })
         );
-        
-        console.log('[useCars] ✅ Enrichment complete. Sample car:', carsWithLocation[0]);
-        console.log('[useCars] Sample carRentalLocations:', carsWithLocation[0]?.carRentalLocations);
         
         // ✅ Filter xe có quantity > 0 (ẩn xe hết hàng)
         const carsWithQuantity = carsWithLocation.filter((car: any) => {
@@ -410,8 +432,6 @@ export function useCars(): UseCarsResult {
           return quantityNum > 0;
         });
         
-        console.log(`[useCars] After quantity filter (quantity > 0): ${carsWithQuantity.length} cars`);
-        
         setCars(carsWithQuantity as unknown as Car[]);
         setError(null);
       } else {
@@ -436,7 +456,6 @@ export function useCars(): UseCarsResult {
     
     // ✅ Listen to paymentSuccess event để refresh danh sách xe
     const handlePaymentSuccess = () => {
-      console.log('[useCars] Payment success event received, refreshing cars list...');
       fetchCars();
     };
     

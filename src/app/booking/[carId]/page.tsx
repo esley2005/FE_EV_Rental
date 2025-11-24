@@ -130,133 +130,108 @@ export default function BookingPage() {
 
   const resolveCarLocation = useCallback(async (carData: Car) => {
     if (!carData) {
-      console.warn("resolveCarLocation: carData is null");
       return;
     }
 
-    console.log("resolveCarLocation: carData", carData);
-
-    // Extract carRentalLocations list
-    let relations = extractCarRentalLocationList(carData);
-    console.log("resolveCarLocation: relations from carData", relations);
-
-    // Nếu không có trong carData, thử fetch từ API
-    if (!relations.length) {
-      try {
-        const relationResponse = await carRentalLocationApi.getByCarId(Number(carData.id));
-        if (relationResponse.success && relationResponse.data) {
-          relations = extractCarRentalLocationList({ carRentalLocations: relationResponse.data });
-          console.log("resolveCarLocation: relations from API", relations);
-        }
-      } catch (error) {
-        console.warn("resolveCarLocation: Failed to load carRentalLocations via API", error);
-      }
-    }
-
-    if (!relations.length) {
-      console.warn("resolveCarLocation: No relations found");
+    const carId = Number(carData.id);
+    if (Number.isNaN(carId)) {
       setSelectedLocation(null);
       form.setFieldsValue({ rentalLocationId: undefined });
       return;
     }
 
-    // ✅ Đồng bộ với admin: Chỉ lấy location đầu tiên (1 xe = 1 location)
-    const primaryRelation = relations[0];
-
-    console.log("resolveCarLocation: primaryRelation", primaryRelation);
-
-    // Lấy locationId từ relation
-    const locationId = getLocationIdFromRelation(primaryRelation);
-    console.log("resolveCarLocation: locationId", locationId);
-
-    if (!locationId) {
-      console.warn("resolveCarLocation: Could not extract locationId");
-      setSelectedLocation(null);
-      form.setFieldsValue({ rentalLocationId: undefined });
-      return;
-    }
-
-    // Thử lấy name và address từ relation trước
-    const infoSource = primaryRelation?.rentalLocation ?? primaryRelation?.RentalLocation ?? primaryRelation;
-    const name = getNameFromSource(infoSource);
-    const address = getAddressFromSource(infoSource);
-
-    console.log("resolveCarLocation: name from relation", name);
-    console.log("resolveCarLocation: address from relation", address);
-
-    // Nếu đã có đủ thông tin từ relation (có name hoặc address)
-    if (name || address) {
-      const location: RentalLocationData = {
-        id: locationId,
-        name: name ?? "",
-        address: address ?? "",
-        coordinates: infoSource?.coordinates ?? infoSource?.Coordinates ?? "",
-        isActive: infoSource?.isActive ?? infoSource?.IsActive ?? true,
-      };
-      console.log("resolveCarLocation: Found location from relation", location);
-      setSelectedLocation(location);
-      form.setFieldsValue({ rentalLocationId: location.id });
-      return;
-    }
-
-    // Nếu chưa đủ thông tin, thử fetch từ getAll() trước (public endpoint)
+    // ✅ Logic mới: Tìm location của car bằng Car/GetByLocationId
     try {
-      console.log("resolveCarLocation: Fetching all locations from API to find id:", locationId);
-      const allLocationsResponse = await rentalLocationApi.getAll();
-      console.log("resolveCarLocation: getAll API response", allLocationsResponse);
+      // 1. Kiểm tra xem carData đã có carRentalLocations đầy đủ chưa
+      const relations = extractCarRentalLocationList(carData);
+      if (relations.length > 0) {
+        const primaryRelation = relations[0];
+        const locationId = getLocationIdFromRelation(primaryRelation);
+        
+        if (locationId) {
+          const infoSource = primaryRelation?.rentalLocation ?? primaryRelation?.RentalLocation ?? primaryRelation;
+          const name = getNameFromSource(infoSource);
+          const address = getAddressFromSource(infoSource);
+          
+          // Nếu đã có đủ thông tin từ relation
+          if (name || address) {
+            const location: RentalLocationData = {
+              id: locationId,
+              name: name ?? "",
+              address: address ?? "",
+              coordinates: infoSource?.coordinates ?? infoSource?.Coordinates ?? "",
+              isActive: infoSource?.isActive ?? infoSource?.IsActive ?? true,
+            };
+            setSelectedLocation(location);
+            form.setFieldsValue({ rentalLocationId: location.id });
+            return;
+          }
+        }
+      }
 
+      // 2. Nếu chưa có đủ thông tin, fetch tất cả locations và tìm location có car này
+      const allLocationsResponse = await rentalLocationApi.getAll();
       if (allLocationsResponse.success && allLocationsResponse.data) {
         const locationsData = allLocationsResponse.data as any;
         const locationsList = Array.isArray(locationsData)
           ? locationsData
           : (locationsData?.$values && Array.isArray(locationsData.$values) ? locationsData.$values : []);
 
-        const foundLocation = locationsList.find((loc: any) => {
-          const locId = loc?.id ?? loc?.Id ?? loc?.locationId ?? loc?.LocationId;
-          return Number(locId) === Number(locationId);
-        });
+        // Tìm location có car này
+        for (const loc of locationsList) {
+          const locationId = Number(loc?.id ?? loc?.Id);
+          if (Number.isNaN(locationId)) continue;
 
-        if (foundLocation) {
-          const locationData: RentalLocationData = {
-            id: foundLocation.id ?? foundLocation.Id ?? locationId,
-            name: foundLocation.name ?? foundLocation.Name ?? "",
-            address: foundLocation.address ?? foundLocation.Address ?? "",
-            coordinates: foundLocation.coordinates ?? foundLocation.Coordinates ?? "",
-            isActive: foundLocation.isActive ?? foundLocation.IsActive ?? true,
-          };
-          console.log("resolveCarLocation: Found location from getAll", locationData);
-          setSelectedLocation(locationData);
-          form.setFieldsValue({ rentalLocationId: locationData.id });
-          return;
+          try {
+            const carsResponse = await carsApi.getByLocationId(locationId);
+            if (carsResponse.success && carsResponse.data) {
+              const carsData = carsResponse.data as any;
+              const carsList = Array.isArray(carsData)
+                ? carsData
+                : Array.isArray(carsData?.$values)
+                ? carsData.$values
+                : Array.isArray(carsData?.data)
+                ? carsData.data
+                : Array.isArray(carsData?.data?.$values)
+                ? carsData.data.$values
+                : [];
+
+              const hasCar = carsList.some((c: any) => {
+                const cId = Number(c?.id ?? c?.Id ?? c?.carId ?? c?.CarId);
+                return !Number.isNaN(cId) && cId === carId;
+              });
+
+              if (hasCar) {
+                const locationData: RentalLocationData = {
+                  id: locationId,
+                  name: loc.name ?? loc.Name ?? "",
+                  address: loc.address ?? loc.Address ?? "",
+                  coordinates: loc.coordinates ?? loc.Coordinates ?? "",
+                  isActive: loc.isActive ?? loc.IsActive ?? true,
+                };
+                setSelectedLocation(locationData);
+                form.setFieldsValue({ rentalLocationId: locationData.id });
+                return;
+              }
+            }
+          } catch (error) {
+            // Continue with next location
+          }
         }
       }
     } catch (error) {
-      console.warn("resolveCarLocation: getAll API error", error);
-    }
-
-    // Fallback: Nếu vẫn không tìm thấy, tạo location object với id (ít nhất có id để submit form)
-    if (locationId) {
-      const location: RentalLocationData = {
-        id: locationId,
-        name: `Địa điểm #${locationId}`,
-        address: "",
-        coordinates: "",
-        isActive: true,
-      };
-      console.log("resolveCarLocation: Created fallback location with id only", location);
-      setSelectedLocation(location);
-      form.setFieldsValue({ rentalLocationId: location.id });
-      return;
+      // Ignore errors
     }
 
     // Không tìm thấy location
-    console.warn("resolveCarLocation: Could not find location for car", carData.id);
     setSelectedLocation(null);
     form.setFieldsValue({ rentalLocationId: undefined });
   }, [form]);
 
   const carId = params?.carId as string;
   const locationIdFromUrl = searchParams?.get('locationId');
+  const pickupTimeFromUrl = searchParams?.get('pickupTime');
+  const returnTimeFromUrl = searchParams?.get('returnTime');
 
   useEffect(() => {
     if (!carId) return;
@@ -338,8 +313,21 @@ export default function BookingPage() {
             if (locationFromUrl) {
               setSelectedLocation(locationFromUrl);
               form.setFieldsValue({ rentalLocationId: locationFromUrl.id });
-              return; // Không cần resolve car location nữa vì đã chọn từ URL
             }
+          }
+        }
+
+        // Nếu có ngày giờ từ URL, tự động set vào form
+        if (pickupTimeFromUrl && returnTimeFromUrl) {
+          try {
+            const pickupTime = dayjs(pickupTimeFromUrl);
+            const returnTime = dayjs(returnTimeFromUrl);
+            if (pickupTime.isValid() && returnTime.isValid() && returnTime.isAfter(pickupTime)) {
+              form.setFieldsValue({ dateRange: [pickupTime, returnTime] });
+              setDateRangeValue([pickupTime, returnTime]);
+            }
+          } catch (error) {
+            // Ignore invalid dates
           }
         }
 
@@ -356,7 +344,7 @@ export default function BookingPage() {
     };
 
     loadData();
-  }, [carId, form, router, resolveCarLocation]);
+  }, [carId, form, router, resolveCarLocation, locationIdFromUrl, pickupTimeFromUrl, returnTimeFromUrl]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
@@ -776,33 +764,48 @@ export default function BookingPage() {
                     return current && current < dayjs().startOf('day');
                   }}
                   disabledTime={(value, type) => {
-                    if (type === 'start') {
-                      const now = dayjs();
-                      
-                      // Nếu chọn ngày hôm nay, chặn các giờ và phút trong quá khứ
-                      if (value && value.isSame(now, 'day')) {
-                        return {
-                          disabledHours: () => {
-                            const hours = [];
-                            for (let i = 0; i < now.hour(); i++) {
-                              hours.push(i);
-                            }
-                            return hours;
-                          },
-                          disabledMinutes: (selectedHour: number) => {
-                            if (selectedHour === now.hour()) {
-                              const minutes = [];
-                              for (let i = 0; i <= now.minute(); i++) {
-                                minutes.push(i);
-                              }
-                              return minutes;
-                            }
-                            return [];
-                          },
-                        };
+                    const now = dayjs();
+                    const isToday = value && value.isSame(now, 'day');
+                    
+                    // Chặn các giờ ngoài khoảng 6h-22h (chỉ cho phép 6h đến 22h)
+                    const disabledHours = () => {
+                      const hours = [];
+                      // Chặn 0h-5h
+                      for (let i = 0; i < 6; i++) {
+                        hours.push(i);
                       }
-                    }
-                    return {};
+                      // Chặn 23h
+                      hours.push(23);
+                      
+                      // Nếu là ngày hôm nay và là thời gian nhận xe (start), chặn thêm các giờ trong quá khứ
+                      if (isToday && type === 'start') {
+                        for (let i = 0; i < now.hour(); i++) {
+                          if (!hours.includes(i)) {
+                            hours.push(i);
+                          }
+                        }
+                      }
+                      
+                      return hours;
+                    };
+                    
+                    const disabledMinutes = (selectedHour: number) => {
+                      const minutes = [];
+                      
+                      // Nếu là ngày hôm nay, là thời gian nhận xe (start), và chọn giờ hiện tại, chặn các phút trong quá khứ
+                      if (isToday && type === 'start' && selectedHour === now.hour()) {
+                        for (let i = 0; i <= now.minute(); i++) {
+                          minutes.push(i);
+                        }
+                      }
+                      
+                      return minutes;
+                    };
+                    
+                    return {
+                      disabledHours,
+                      disabledMinutes,
+                    };
                   }}
                 />
               </Form.Item>
