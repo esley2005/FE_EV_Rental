@@ -20,10 +20,11 @@ import {
   UserOutlined,
   CloseCircleOutlined,
 } from "@ant-design/icons";
-import { carsApi, rentalOrderApi, authApi } from "@/services/api";
+import { carsApi, rentalOrderApi, authApi, rentalLocationApi, carRentalLocationApi } from "@/services/api";
 import type { Car } from "@/types/car";
-import type { RentalOrderData } from "@/services/api";
+import type { RentalOrderData, RentalLocationData, CarRentalLocationData } from "@/services/api";
 import dayjs from "dayjs";
+import { MapPin } from "lucide-react";
 
 interface CarWithStatus extends Car {
   status: "available" | "booked" | "renting" | "maintenance";
@@ -38,6 +39,7 @@ export default function CarStatusManagement() {
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [activeTab, setActiveTab] = useState<string>("all");
+  const [rentalLocations, setRentalLocations] = useState<RentalLocationData[]>([]);
 
   useEffect(() => {
     loadData();
@@ -46,6 +48,15 @@ export default function CarStatusManagement() {
   const loadData = async () => {
     setLoading(true);
     try {
+      // Load rental locations
+      const locationsRes = await rentalLocationApi.getAll();
+      if (locationsRes.success && locationsRes.data) {
+        const locationsData = Array.isArray(locationsRes.data)
+          ? locationsRes.data
+          : (locationsRes.data as any)?.$values || [];
+        setRentalLocations(locationsData.filter((loc: RentalLocationData) => loc.isActive !== false));
+      }
+
       // Load tất cả xe
       const carsRes = await carsApi.getAll();
       if (!carsRes.success || !carsRes.data) {
@@ -70,9 +81,31 @@ export default function CarStatusManagement() {
       const users = usersRes.success && usersRes.data ? usersRes.data : [];
       const userMap = new Map(users.map((u: any) => [u.id || u.userId, u]));
 
+      // Load car rental locations cho tất cả xe
+      const carsWithLocations = await Promise.all(
+        carsList
+          .filter((car: Car) => !car.isDeleted)
+          .map(async (car: Car) => {
+            try {
+              const locationResponse = await carRentalLocationApi.getByCarId(car.id);
+              if (locationResponse.success && locationResponse.data) {
+                const locationsData = Array.isArray(locationResponse.data)
+                  ? locationResponse.data
+                  : (locationResponse.data as any)?.$values || [];
+                return {
+                  ...car,
+                  carRentalLocations: locationsData
+                };
+              }
+            } catch (error) {
+              // 404 là bình thường nếu xe chưa có location
+            }
+            return car;
+          })
+      );
+
       // Xác định trạng thái của từng xe dựa trên đơn hàng
-      const carsWithStatus: CarWithStatus[] = carsList
-        .filter((car: Car) => !car.isDeleted)
+      const carsWithStatus: CarWithStatus[] = carsWithLocations
         .map((car: Car) => {
           // Tìm đơn hàng liên quan đến xe này
           const relatedOrders = orders.filter(
@@ -320,6 +353,77 @@ export default function CarStatusManagement() {
           );
         }
         return <span className="text-gray-400">Chưa cập nhật</span>;
+      },
+    },
+    {
+      title: "Địa điểm",
+      key: "location",
+      width: 250,
+      render: (_: any, record: CarWithStatus) => {
+        const carLocations = (record as unknown as { carRentalLocations?: unknown })?.carRentalLocations;
+        if (!carLocations) {
+          return (
+            <Tag color="default" className="text-xs">
+              <span className="text-gray-400">Chưa gán</span>
+            </Tag>
+          );
+        }
+
+        const locationsList = Array.isArray(carLocations)
+          ? carLocations
+          : (carLocations as any)?.$values || [];
+        
+        if (locationsList.length === 0) {
+          return (
+            <Tag color="default" className="text-xs">
+              <span className="text-gray-400">Chưa gán</span>
+            </Tag>
+          );
+        }
+
+        // Lấy location đầu tiên
+        const firstLocation = locationsList[0] as any;
+        const locationInfo = firstLocation.rentalLocation ?? firstLocation.RentalLocation;
+        
+        let locationName = '';
+        let locationAddress = '';
+        
+        if (locationInfo) {
+          locationName = locationInfo.name ?? locationInfo.Name ?? '';
+          locationAddress = locationInfo.address ?? locationInfo.Address ?? '';
+        } else {
+          // Nếu không có locationInfo, tìm trong rentalLocations state
+          const locationId = firstLocation.rentalLocationId ?? firstLocation.RentalLocationId ?? firstLocation.locationId ?? firstLocation.LocationId;
+          if (locationId) {
+            const foundLocation = rentalLocations.find(l => l.id === locationId || l.id === Number(locationId));
+            if (foundLocation) {
+              locationName = foundLocation.name || '';
+              locationAddress = foundLocation.address || '';
+            }
+          }
+        }
+
+        if (!locationName && !locationAddress) {
+          return (
+            <Tag color="default" className="text-xs">
+              <span className="text-gray-400">Chưa gán</span>
+            </Tag>
+          );
+        }
+
+        return (
+          <div className="flex items-center gap-1">
+            <MapPin size={12} className="text-gray-400 flex-shrink-0" />
+            <div className="flex flex-col min-w-0">
+              {locationName && (
+                <div className="text-xs font-medium text-gray-800 leading-tight truncate">{locationName}</div>
+              )}
+              {locationAddress && (
+                <div className="text-xs text-gray-600 leading-tight truncate">{locationAddress}</div>
+              )}
+            </div>
+          </div>
+        );
       },
     },
   ];

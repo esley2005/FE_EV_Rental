@@ -114,10 +114,8 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
 
   useEffect(() => {
     loadCars();
-    // Chỉ load rental locations nếu không phải staff mode
-    if (!staffMode) {
-      loadRentalLocations();
-    }
+    // Luôn load rental locations để admin có thể set location
+    loadRentalLocations();
   }, [staffMode]);
 
   const loadCars = async () => {
@@ -145,20 +143,97 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
 
                 if (!hasLocations) {
                   // Fetch carRentalLocations từ API
-                  const locationResponse = await carRentalLocationApi.getByCarId(car.id);
-                  if (locationResponse.success && locationResponse.data) {
-                    const locationsData = Array.isArray(locationResponse.data)
-                      ? locationResponse.data
-                      : (locationResponse.data as any)?.$values || [];
+                  try {
+                    const locationResponse = await carRentalLocationApi.getByCarId(car.id);
+                    if (locationResponse.success && locationResponse.data) {
+                      const locationsData = Array.isArray(locationResponse.data)
+                        ? locationResponse.data
+                        : (locationResponse.data as any)?.$values || [];
+                      
+                      // Enrich với thông tin rentalLocation nếu chưa có
+                      const enrichedLocations = await Promise.all(
+                        locationsData.map(async (loc: any) => {
+                          // Nếu đã có rentalLocation, giữ nguyên
+                          if (loc.rentalLocation || loc.RentalLocation) {
+                            return loc;
+                          }
+                          
+                          // Nếu chỉ có locationId, fetch thông tin location
+                          const locationId = loc.rentalLocationId ?? loc.RentalLocationId ?? loc.locationId ?? loc.LocationId;
+                          if (locationId) {
+                            try {
+                              const rentalLocRes = await rentalLocationApi.getById(locationId);
+                              if (rentalLocRes.success && rentalLocRes.data) {
+                                return {
+                                  ...loc,
+                                  rentalLocation: rentalLocRes.data
+                                };
+                              }
+                            } catch (err) {
+                              // Nếu không fetch được, vẫn trả về location với locationId
+                              console.warn(`Failed to fetch rental location ${locationId}:`, err);
+                            }
+                          }
+                          return loc;
+                        })
+                      );
+                      
+                      return {
+                        ...car,
+                        carRentalLocations: enrichedLocations
+                      };
+                    }
+                  } catch (locationError: any) {
+                    // 404 là bình thường nếu xe chưa có location, không cần log
+                    if (locationError?.response?.status !== 404) {
+                      console.warn(`Failed to fetch locations for car ${car.id}:`, locationError);
+                    }
+                  }
+                } else {
+                  // Nếu đã có locations nhưng chưa có rentalLocation object, enrich chúng
+                  const carLocations = normalizeDotNetList<RawCarRentalLocation>(car.carRentalLocations);
+                  const needsEnrichment = carLocations.some(
+                    (loc) => !loc.rentalLocation && !loc.RentalLocation && (loc.rentalLocationId || loc.RentalLocationId || loc.locationId || loc.LocationId)
+                  );
+                  
+                  if (needsEnrichment) {
+                    const enrichedLocations = await Promise.all(
+                      carLocations.map(async (loc: RawCarRentalLocation) => {
+                        if (loc.rentalLocation || loc.RentalLocation) {
+                          return loc;
+                        }
+                        
+                        const locationId = loc.rentalLocationId ?? loc.RentalLocationId ?? loc.locationId ?? loc.LocationId;
+                        if (locationId) {
+                          try {
+                            const rentalLocRes = await rentalLocationApi.getById(locationId);
+                            if (rentalLocRes.success && rentalLocRes.data) {
+                              return {
+                                ...loc,
+                                rentalLocation: rentalLocRes.data
+                              };
+                            }
+                          } catch (err) {
+                            console.warn(`Failed to fetch rental location ${locationId}:`, err);
+                          }
+                        }
+                        return loc;
+                      })
+                    );
+                    
                     return {
                       ...car,
-                      carRentalLocations: locationsData
+                      carRentalLocations: enrichedLocations
                     };
                   }
                 }
                 return car;
               } catch (error) {
-                console.warn(`Failed to fetch locations for car ${car.id}:`, error);
+                // Chỉ log nếu không phải lỗi 404
+                const errorStatus = (error as any)?.response?.status;
+                if (errorStatus !== 404) {
+                  console.warn(`Failed to fetch locations for car ${car.id}:`, error);
+                }
                 return car;
               }
             })
@@ -226,6 +301,10 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
 
   const handleEdit = (car: Car) => {
     setEditingCar(car);
+    
+    // Extract location từ car object (đã được load trong loadCars)
+    const locationId = extractRentalLocationId(car);
+    
     form.setFieldsValue({
       name: car.name ?? "",
       model: car.model ?? "",
@@ -243,7 +322,7 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
       imageUrl2: car.imageUrl2 ?? undefined,
       imageUrl3: car.imageUrl3 ?? undefined,
       isActive: car.isActive,
-      rentalLocationId: extractRentalLocationId(car),
+      rentalLocationId: locationId,
     });
     setModalOpen(true);
   };
@@ -517,7 +596,7 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
         const carId = editingCar ? editingCar.id : extractIdFromData(response.data);
         const selectedLocationId: number | undefined = values.rentalLocationId;
 
-        // Chỉ xử lý location nếu không phải staff mode
+        // Xử lý location cho admin (không phải staff mode)
         if (!staffMode && carId) {
           // Lấy danh sách location hiện tại của xe
           let existingCarRentalLocations: CarRentalLocationData[] = [];
@@ -731,14 +810,17 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
         let locationName = '';
         let locationAddress = '';
         
+        // Ưu tiên lấy từ locationInfo object
         if (locationInfo) {
           locationName = locationInfo.name ?? locationInfo.Name ?? '';
           locationAddress = locationInfo.address ?? locationInfo.Address ?? '';
-        } else {
-          // Nếu không có locationInfo, tìm trong rentalLocations state
+        }
+        
+        // Nếu chưa có, thử lấy từ rentalLocations state
+        if (!locationName && !locationAddress) {
           const locationId = firstLocation.rentalLocationId ?? firstLocation.RentalLocationId ?? firstLocation.locationId ?? firstLocation.LocationId;
           if (locationId) {
-            const foundLocation = rentalLocations.find(l => l.id === locationId);
+            const foundLocation = rentalLocations.find(l => l.id === locationId || l.id === Number(locationId));
             if (foundLocation) {
               locationName = foundLocation.name || '';
               locationAddress = foundLocation.address || '';
@@ -996,7 +1078,7 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
             <Form.Item
               label="Địa điểm cho thuê"
               name="rentalLocationId"
-              rules={staffMode ? [] : [{ required: true, message: 'Vui lòng chọn địa điểm!' }]}
+              rules={staffMode ? [] : [{ required: false, message: 'Vui lòng chọn địa điểm!' }]}
             >
               <Select
                 placeholder="Chọn địa điểm cho thuê xe"

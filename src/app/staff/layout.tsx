@@ -2,14 +2,17 @@
 
 import React, { useEffect, useState } from "react";
 import {
-  PieChartOutlined,
-  DesktopOutlined,
-  UserOutlined,
   TeamOutlined,
+  DollarOutlined,
+  EnvironmentOutlined,
   FileOutlined,
   DownOutlined,
   LogoutOutlined,
+  PieChartOutlined,
+  DesktopOutlined,
+  UserOutlined,
 } from "@ant-design/icons";
+import { Hand } from "lucide-react";
 import {
   Layout,
   Menu,
@@ -29,7 +32,6 @@ import {
 import CarStatusList from "@/components/CarStatusList";
 import DeliveryForm from "@/components/DeliveryForm";
 import ReturnForm from "@/components/ReturnForm";
-import DocumentVerification from "@/components/DocumentVerification";
 import CarManagement from "@/components/admin/CarManagement";
 import CarStatusManagement from "@/components/staff/CarStatusManagement";
 import RentalOrderManagement from "@/components/staff/RentalOrderManagement";
@@ -44,10 +46,10 @@ const { Header, Sider, Content, Footer } = Layout;
  🧱 PHẦN 1: MENU CHÍNH (HEADER MENU)
  ========================================================= */
 const mainMenu = [
-  { key: "tasks", label: "Giao / Nhận xe", icon: <PieChartOutlined /> },
-  { key: "customers", label: "Xác thực khách hàng", icon: <UserOutlined /> },
-  { key: "payments", label: "Thanh toán tại điểm", icon: <DesktopOutlined /> },
-  { key: "vehicles", label: "Xe tại điểm", icon: <TeamOutlined /> },
+  { key: "tasks", label: "Giao / Nhận xe", icon: <Hand size={16} /> },
+  { key: "customers", label: "Xác thực khách hàng", icon: <TeamOutlined /> },
+  { key: "payments", label: "Thanh toán tại điểm", icon: <DollarOutlined /> },
+  { key: "vehicles", label: "Xe tại điểm", icon: <EnvironmentOutlined /> },
 ];
 
 /* =========================================================
@@ -62,7 +64,6 @@ const subMenus: Record<string, { key: string; label: string; icon: React.ReactNo
   ],
 
   customers: [
-    { key: "1", label: "Kiểm tra giấy tờ", icon: <UserOutlined /> },
     { key: "2", label: "Đối chiếu hồ sơ hệ thống", icon: <TeamOutlined /> },
   ],
 
@@ -278,14 +279,17 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         width={230}
         style={{ background: "#fff", borderRight: "1px solid #e8e8e8" }}
       >
-        <div className="p-4 text-center font-bold text-blue-600 text-lg">{collapsed ? "EV" : "EV STAFF"}</div>
+        <div className="p-4 text-center font-bold text-gray-800 text-lg">{collapsed ? "EV" : "EV STAFF"}</div>
 
         <Menu
           mode="inline"
           theme="light"
-          items={subMenus[selectedModule]}
-          selectedKeys={[selectedSubMenu]}
-          onClick={(e) => setSelectedSubMenu(e.key)}
+          items={mainMenu}
+          selectedKeys={[selectedModule]}
+          onClick={(e) => {
+            setSelectedModule(e.key);
+            setSelectedSubMenu(subMenus[e.key]?.[0]?.key || "1");
+          }}
         />
       </Sider>
 
@@ -294,27 +298,17 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         {/* 🔷 HEADER */}
         <Header
           style={{
-            background: "#1447E6",
-            color: "white",
+            background: "#fff",
+            color: "#333",
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
+            justifyContent: "flex-end",
             padding: "0 16px",
             gap: 12,
+            borderBottom: "1px solid #e8e8e8",
+            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
           }}
         >
-          <Menu
-            theme="dark"
-            mode="horizontal"
-            selectedKeys={[selectedModule]}
-            items={mainMenu}
-            onClick={(e) => {
-              setSelectedModule(e.key);
-              setSelectedSubMenu(subMenus[e.key]?.[0]?.key || "1");
-            }}
-            style={{ flex: 1, background: "transparent" }}
-          />
-
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <Input.Search placeholder="Tìm kiếm nhanh" allowClear style={{ width: 260 }} />
             <Badge count={3} size="small">
@@ -324,7 +318,8 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
                   width: 36,
                   height: 36,
                   borderRadius: 18,
-                  background: "rgba(255,255,255,0.2)",
+                  background: "#f0f0f0",
+                  cursor: "pointer",
                 }}
               />
             </Badge>
@@ -348,8 +343,8 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               },
             }}
           >
-            <Space style={{ color: "white", cursor: "pointer" }}>
-              <Avatar size="small" style={{ backgroundColor: "#fff", color: "#1447E6" }}>
+            <Space style={{ color: "#333", cursor: "pointer" }}>
+              <Avatar size="small" style={{ backgroundColor: "#1447E6", color: "#fff" }}>
                 S
               </Avatar>
               <span>Staff</span>
@@ -373,7 +368,16 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           {/* ElaAdmin-like top summary cards */}
           <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
             <Col xs={24} sm={12} md={6}>
-              <Card bordered hoverable loading={metricsLoading}>
+              <Card 
+                bordered 
+                hoverable 
+                loading={metricsLoading}
+                onClick={() => {
+                  setSelectedModule("payments");
+                  setSelectedSubMenu(subMenus["payments"]?.[0]?.key || "1");
+                }}
+                style={{ cursor: "pointer" }}
+              >
                 <Statistic title="Doanh thu" prefix={<span>₫</span>} value={metrics.revenue} precision={0} />
               </Card>
             </Col>
@@ -402,7 +406,16 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               </Card>
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <Card bordered hoverable loading={metricsLoading}>
+              <Card 
+                bordered 
+                hoverable 
+                loading={metricsLoading}
+                onClick={() => {
+                  setSelectedModule("customers");
+                  setSelectedSubMenu(subMenus["customers"]?.[0]?.key || "2");
+                }}
+                style={{ cursor: "pointer" }}
+              >
                 <Statistic title="Số khách hàng" value={metrics.clients} suffix="người" />
               </Card>
             </Col>
@@ -429,11 +442,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
                 />
               ) : null
             ) : selectedModule === "customers" ? (
-              selectedSubMenu === "1" ? (
-                <DocumentVerification mode="check-documents" />
-              ) : (
-                <CustomerList />
-              )
+              <CustomerList />
             ) : selectedModule === "payments" ? (
               <RentalOrderManagement />
             ) : selectedModule === "vehicles" ? (

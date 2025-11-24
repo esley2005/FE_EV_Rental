@@ -2,13 +2,14 @@
 import '@/lib/antd-setup';
 
 import "./globals.css";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import Header from "@/components/Header";
 import { AntdRegistry } from '@ant-design/nextjs-registry';
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin", "vietnamese"],
+  display: "swap",
 });
 
 export const metadata = {
@@ -19,7 +20,7 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi">
-      <body className={`${geistSans.variable} antialiased`}>
+      <body className={`${inter.variable} antialiased`}>
         <AntdRegistry>
           {children}
         </AntdRegistry>

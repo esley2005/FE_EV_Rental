@@ -33,8 +33,8 @@ import {
   DollarOutlined,
   EditOutlined
 } from "@ant-design/icons";
-import { rentalOrderApi, carsApi, authApi, driverLicenseApi, citizenIdApi, paymentApi, carDeliveryHistoryApi, carReturnHistoryApi } from "@/services/api";
-import type { RentalOrderData, User, DriverLicenseData, CitizenIdData } from "@/services/api";
+import { rentalOrderApi, carsApi, authApi, driverLicenseApi, citizenIdApi, paymentApi, carDeliveryHistoryApi, carReturnHistoryApi, rentalLocationApi, carRentalLocationApi } from "@/services/api";
+import type { RentalOrderData, User, DriverLicenseData, CitizenIdData, RentalLocationData } from "@/services/api";
 import type { Car } from "@/types/car";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -141,11 +141,12 @@ export default function RentalOrderManagement() {
         ? ordersResponse.data
         : (ordersResponse.data as any)?.$values || [];
 
-      const [carsResponse, usersResponse, licensesResponse, citizenIdsResponse] = await Promise.all([
+      const [carsResponse, usersResponse, licensesResponse, citizenIdsResponse, locationsResponse] = await Promise.all([
         carsApi.getAll(),
         authApi.getAllUsers(),
         driverLicenseApi.getAll(),
-        citizenIdApi.getAll()
+        citizenIdApi.getAll(),
+        rentalLocationApi.getAll()
       ]);
 
       const cars: Car[] = carsResponse.success && carsResponse.data
@@ -172,8 +173,35 @@ export default function RentalOrderManagement() {
         ? (Array.isArray(citizenIdsResponse.data) ? citizenIdsResponse.data : (citizenIdsResponse.data as any)?.$values || [])
         : [];
 
+      const locationsData: RentalLocationData[] = locationsResponse.success && locationsResponse.data
+        ? (Array.isArray(locationsResponse.data) ? locationsResponse.data : (locationsResponse.data as any)?.$values || [])
+        : [];
+      
+      setRentalLocations(locationsData);
+
+      // Load car rental locations cho tất cả xe
+      const carsWithLocations = await Promise.all(
+        cars.map(async (car) => {
+          try {
+            const locationResponse = await carRentalLocationApi.getByCarId(car.id);
+            if (locationResponse.success && locationResponse.data) {
+              const locationsData = Array.isArray(locationResponse.data)
+                ? locationResponse.data
+                : (locationResponse.data as any)?.$values || [];
+              return {
+                ...car,
+                carRentalLocations: locationsData
+              };
+            }
+          } catch (error) {
+            // 404 là bình thường nếu xe chưa có location
+          }
+          return car;
+        })
+      );
+
       const ordersWithDetails: OrderWithDetails[] = ordersData.map((order: RentalOrderData) => {
-        const car = cars.find((c) => c.id === order.carId);
+        const car = carsWithLocations.find((c) => c.id === order.carId);
         const user = users.find((u) => u.id === order.userId);
         // Tìm giấy tờ với logic rõ ràng hơn, xử lý cả null và undefined
         const license = licenses.find((l) => l.rentalOrderId != null && l.rentalOrderId === order.id);
@@ -801,14 +829,7 @@ export default function RentalOrderManagement() {
 
   const columns = [
     {
-      title: "Mã đơn",
-      dataIndex: "id",
-      key: "id",
-      width: 100,
-      render: (id: number) => `#${id}`,
-    },
-    {
-      title: "Xe đã order",
+      title: "Xe",
       key: "car",
       width: 200,
       render: (_: any, record: OrderWithDetails) => {
@@ -842,194 +863,52 @@ export default function RentalOrderManagement() {
           <div>
             <div className="font-medium text-sm">{record.user.fullName || record.user.email}</div>
             <div className="text-xs text-gray-500">{record.user.email}</div>
+            {record.user.phone && (
+              <div className="text-xs text-gray-500">{record.user.phone}</div>
+            )}
           </div>
         );
       },
     },
     {
-      title: "Giấy tờ",
-      key: "documents",
-      width: 200,
-      render: (_: any, record: OrderWithDetails) => {
-        // Ẩn trạng thái giấy tờ nếu thuê xe có tài xế
-        if (record.withDriver) {
-          return <Tag color="blue">Có tài xế</Tag>;
-        }
-        
-        // Kiểm tra có giấy tờ được upload chưa (có id hoặc imageUrl)
-        const hasDriverLicense = record.driverLicense && (record.driverLicense.id || record.driverLicense.imageUrl);
-        const hasCitizenId = record.citizenIdDoc && (record.citizenIdDoc.id || record.citizenIdDoc.imageUrl);
-        const hasDocuments = hasDriverLicense || hasCitizenId;
-        
-        // Kiểm tra có giấy tờ đang chờ xác thực (status là 0, '0', 'Pending', null, undefined, hoặc không phải approved/rejected)
-        const isLicensePending = hasDriverLicense && (() => {
-          const status = record.driverLicense!.status;
-          if (!status) return true; // null/undefined -> pending
-          const statusStr = status.toString().toLowerCase();
-          return statusStr === '0' || statusStr === 'pending' || 
-                 (statusStr !== '1' && statusStr !== 'approved' && statusStr !== '2' && statusStr !== 'rejected');
-        })();
-        
-        const isCitizenIdPending = hasCitizenId && (() => {
-          const status = record.citizenIdDoc!.status;
-          if (!status) return true; // null/undefined -> pending
-          const statusStr = status.toString().toLowerCase();
-          return statusStr === '0' || statusStr === 'pending' || 
-                 (statusStr !== '1' && statusStr !== 'approved' && statusStr !== '2' && statusStr !== 'rejected');
-        })();
-        
-        const hasPendingDocs = isLicensePending || isCitizenIdPending;
-        
-        return (
-          <Space direction="vertical" size="small" style={{ width: '100%' }}>
-            {hasDriverLicense && (
-              <div>
-                <IdcardOutlined className="mr-1" />
-                <span className="text-xs">GPLX:</span> {getDocumentStatusTag(record.driverLicense?.status)}
-              </div>
-            )}
-            {hasCitizenId && (
-              <div>
-                <IdcardOutlined className="mr-1" />
-                <span className="text-xs">CCCD:</span> {getDocumentStatusTag(record.citizenIdDoc?.status)}
-              </div>
-            )}
-            {hasDocuments && (
-              <Button 
-                type={hasPendingDocs ? "primary" : "default"}
-                size="small" 
-                icon={<IdcardOutlined />}
-                onClick={() => showDocumentVerificationModal(record)}
-                block
-                className={hasPendingDocs ? "bg-orange-500 hover:bg-orange-600 border-orange-500" : ""}
-              >
-                {hasPendingDocs ? "Xác thực giấy tờ" : "Xem giấy tờ"}
-              </Button>
-            )}
-            {!hasDocuments && (
-              <Tag color="default" className="text-xs">Chưa nộp giấy tờ</Tag>
-            )}
-          </Space>
-        );
-      },
-    },
-    {
-      title: "Trạng thái đơn",
-      key: "orderStatus",
-      width: 250,
-      render: (_: any, record: OrderWithDetails) => {
-        const currentStatus = getStatusNumber(record.status);
-        const availableStatuses = getAvailableStatuses(currentStatus);
-        
-        return (
-          <Space direction="vertical" size="small" style={{ width: '100%' }}>
-            {getOrderStatusTag(record)}
-            
-            {currentStatus === RentalOrderStatus.DepositPending && (
-              <Popconfirm
-                title="Xác nhận thanh toán đặt cọc?"
-                onConfirm={() => handleConfirmDeposit(record.id)}
-                okText="Xác nhận"
-                cancelText="Hủy"
-              >
-                <Button size="small" type="primary" block>
-                  Xác nhận tiền cọc
-                </Button>
-              </Popconfirm>
-            )}
-            
-            {currentStatus === RentalOrderStatus.Returned && (
-              <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                <Button 
-                  size="small" 
-                  type="primary" 
-                  block
-                  icon={<EditOutlined />}
-                  onClick={() => {
-                    setSelectedOrder(record);
-                    form.setFieldsValue({
-                      extraFee: record.extraFee || 0,
-                      damageFee: record.damageFee || 0,
-                      damageNotes: record.damageNotes || '',
-                    });
-                    setUpdateTotalModalVisible(true);
-                  }}
-                >
-                  Cập nhật tiền
-                </Button>
-                {(record.extraFee || record.damageFee) && (
-                  <Popconfirm
-                    title="Xác nhận tổng tiền (tạo payment record)?"
-                    description="Sau khi xác nhận, đơn hàng sẽ chuyển sang trạng thái 'Chờ thanh toán'"
-                    onConfirm={() => handleConfirmTotal(record.id)}
-                    okText="Xác nhận"
-                    cancelText="Hủy"
-                  >
-                    <Button size="small" type="default" block>
-                      Xác nhận tổng tiền
-                    </Button>
-                  </Popconfirm>
-                )}
-              </Space>
-            )}
-            {currentStatus === RentalOrderStatus.PaymentPending && (
-              <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                {/* <Popconfirm
-                  title="Xác nhận tổng tiền (tạo payment record)?"
-                  onConfirm={() => handleConfirmTotal(record.id)}
-                  okText="Xác nhận"
-                  cancelText="Hủy"
-                >
-                  <Button size="small" type="default" block>
-                    Xác nhận tổng tiền
-                  </Button>
-                </Popconfirm> */}
-                <Popconfirm
-                  title="Xác nhận thanh toán đã hoàn thành?"
-                  onConfirm={() => handleConfirmPayment(record.id)}
-                  okText="Xác nhận"
-                  cancelText="Hủy"
-                >
-                  <Button size="small" type="primary" block>
-                    Xác nhận thanh toán
-                  </Button>
-                </Popconfirm>
-              </Space>
-            )}{availableStatuses.length > 0 && (
-              <Select
-                style={{ width: '100%' }}
-                size="small"
-                placeholder="Chọn hành động"
-                options={availableStatuses}
-                onChange={(value) => handleStatusChange(record.id, value)}
-              />
-            )}
-          </Space>
-        );
-      },
-    },
-    {
-      title: "Ngày nhận",
-      key: "pickupTime",
+      title: "Tiền Giữ Chỗ Order",
+      key: "bookingFee",
       width: 150,
-      render: (_: any, record: OrderWithDetails) =>
-        formatVietnamTime(record.pickupTime),
+      render: (_: any, record: OrderWithDetails) => {
+        // Tiền giữ chỗ có thể là deposit ban đầu hoặc booking fee
+        const bookingFee = record.deposit || 0;
+        return (
+          <span className="font-semibold text-blue-600">
+            {bookingFee.toLocaleString("vi-VN")} ₫
+          </span>
+        );
+      },
     },
     {
-      title: "Thao tác",
-      key: "action",
-      width: 100,
-      render: (_: any, record: OrderWithDetails) => (
-        <Button
-          icon={<EyeOutlined />}
-          onClick={() => {
-            setSelectedOrder(record);
-            setDetailModalVisible(true);
-          }}
-        >
-          Chi tiết
-        </Button>
-      ),
+      title: "Tiền Cọc",
+      key: "deposit",
+      width: 150,
+      render: (_: any, record: OrderWithDetails) => {
+        const deposit = record.deposit || 0;
+        return (
+          <span className="font-semibold text-orange-600">
+            {deposit.toLocaleString("vi-VN")} ₫
+          </span>
+        );
+      },
+    },
+    {
+      title: "Tiền Thuê",
+      key: "total",
+      width: 150,
+      render: (_: any, record: OrderWithDetails) => {
+        const total = record.total || record.subTotal || 0;
+        return (
+          <span className="font-semibold text-green-600">
+            {total.toLocaleString("vi-VN")} ₫
+          </span>
+        );
+      },
     },
   ];
 
