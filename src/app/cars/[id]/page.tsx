@@ -3,13 +3,15 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { notFound, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Spin, message, notification, Modal, Button } from "antd";
+import { Spin, message, notification, Modal, Button, Form, Input, DatePicker, Upload } from "antd";
+import { ExclamationCircleOutlined, UploadOutlined, CameraOutlined } from "@ant-design/icons";
+import type { UploadFile } from "antd";
 // Removed @ant-design/icons to standardize on lucide-react icons
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import BookingModal from "@/components/BookingModal";
 import CarMap from "@/components/CarMap";
-import { carsApi, authApi, rentalLocationApi, carRentalLocationApi, rentalOrderApi } from "@/services/api";
+import { carsApi, authApi, rentalLocationApi, carRentalLocationApi, rentalOrderApi, driverLicenseApi, citizenIdApi } from "@/services/api";
 import type { Car } from "@/types/car";
 import type { User } from "@/services/api";
 import { authUtils } from "@/utils/auth";
@@ -215,6 +217,13 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   const [userOrderIdForCar, setUserOrderIdForCar] = useState<number | null>(null);
   const [checkingReviewEligibility, setCheckingReviewEligibility] = useState(false);
   const [selectedLocationFromUrl, setSelectedLocationFromUrl] = useState<{ id: number; name: string; address: string } | null>(null);
+  const [hasDocuments, setHasDocuments] = useState<boolean | null>(null);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [showLicenseForm, setShowLicenseForm] = useState(false);
+  const [licenseForm] = Form.useForm();
+  const [licenseImageUrl, setLicenseImageUrl] = useState<string>("");
+  const [licenseImageUrl2, setLicenseImageUrl2] = useState<string>("");
+  const [uploadingLicense, setUploadingLicense] = useState(false);
 
   // Load location from URL if locationId exists
   useEffect(() => {
@@ -791,16 +800,20 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   // Load user profile để kiểm tra status
   useEffect(() => {
     const loadUserProfile = async () => {
+      let currentUser: User | null = null;
+      
       // Nếu đã có user trong localStorage, sử dụng luôn
       const localUser = authUtils.getCurrentUser();
       if (localUser) {
         setUser(localUser);
+        currentUser = localUser;
         // Vẫn gọi API để lấy thông tin mới nhất (bao gồm status)
         // Nếu API fail (ví dụ 405), vẫn giữ user từ localStorage
         try {
           const response = await authApi.getProfile();
           if (response.success && response.data) {
             setUser(response.data);
+            currentUser = response.data;
             // Cập nhật lại localStorage
             localStorage.setItem('user', JSON.stringify(response.data));
           }
@@ -819,10 +832,36 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
           const response = await authApi.getProfile();
           if (response.success && response.data) {
             setUser(response.data);
+            currentUser = response.data;
             localStorage.setItem('user', JSON.stringify(response.data));
           }
         } catch (error) {
           console.error('Load user profile error:', error);
+        }
+      }
+
+      // Check documents nếu có user
+      if (currentUser) {
+        try {
+          const [licenseRes, citizenIdRes] = await Promise.all([
+            driverLicenseApi.getAll(),
+            citizenIdApi.getAll()
+          ]);
+          
+          const licenseData = licenseRes.data as any;
+          const hasLicense = licenseRes.success && licenseData && 
+            (Array.isArray(licenseData) ? licenseData.length > 0 : 
+             (licenseData?.$values && Array.isArray(licenseData.$values) ? licenseData.$values.length > 0 : false));
+          
+          const citizenIdData = citizenIdRes.data as any;
+          const hasCitizenId = citizenIdRes.success && citizenIdData && 
+            (Array.isArray(citizenIdData) ? citizenIdData.length > 0 : 
+             (citizenIdData?.$values && Array.isArray(citizenIdData.$values) ? citizenIdData.$values.length > 0 : false));
+          
+          setHasDocuments(hasLicense && hasCitizenId);
+        } catch (error) {
+          console.error("Check documents error:", error);
+          setHasDocuments(false);
         }
       }
     };
@@ -890,10 +929,200 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             <p className="text-gray-600">Đang tải thông tin xe...</p>
           </div>
         </div>
-        <Footer />
-      </div>
-    );
-  }
+      <Footer />
+
+      {/* Modal thông báo xác thực GPLX và số điện thoại */}
+      {!showLicenseForm ? (
+        <Modal
+          open={showVerificationModal}
+          onCancel={() => setShowVerificationModal(false)}
+          footer={null}
+          closable={true}
+          centered
+          width={400}
+          styles={{
+            body: { padding: '24px' }
+          }}
+        >
+          <div className="text-center">
+            <div className="flex justify-center mb-4">
+              <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
+                <ExclamationCircleOutlined className="text-red-500 text-3xl" />
+              </div>
+            </div>
+            <p className="text-base text-gray-800 mb-6 leading-relaxed">
+              Bạn cần xác thực <strong>GPLX</strong> và <strong>số điện thoại</strong> mới có thể đặt xe.
+            </p>
+            <Button
+              type="primary"
+              size="large"
+              className="w-full bg-green-500 hover:bg-green-600 border-0 h-12 text-base font-semibold"
+              onClick={() => {
+                setShowLicenseForm(true);
+              }}
+            >
+              Đồng ý
+            </Button>
+          </div>
+        </Modal>
+      ) : (
+        <Modal
+          open={showVerificationModal}
+          onCancel={() => {
+            setShowVerificationModal(false);
+            setShowLicenseForm(false);
+            licenseForm.resetFields();
+            setLicenseImageUrl("");
+            setLicenseImageUrl2("");
+          }}
+          footer={null}
+          closable={true}
+          centered
+          width={700}
+          styles={{
+            body: { padding: '24px' }
+          }}
+        >
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Xác thực giấy phép lái xe</h2>
+            <Form
+              form={licenseForm}
+              layout="vertical"
+              onFinish={handleSubmitLicenseForm}
+            >
+              <Form.Item
+                label="Số điện thoại"
+                name="phone"
+                rules={[
+                  { required: true, message: "Vui lòng nhập số điện thoại!" },
+                  { pattern: /^[0-9]{10,11}$/, message: "Số điện thoại phải có 10-11 chữ số!" }
+                ]}
+                initialValue={(user as any)?.phone || (user as any)?.phoneNumber || ""}
+              >
+                <Input size="large" placeholder="Nhập số điện thoại" />
+              </Form.Item>
+
+              <Form.Item
+                label="Số giấy phép lái xe"
+                name="licenseNumber"
+                rules={[
+                  { required: true, message: "Vui lòng nhập số GPLX!" }
+                ]}
+              >
+                <Input size="large" placeholder="Nhập số GPLX đã cấp" />
+              </Form.Item>
+
+              <Form.Item
+                label="Họ và tên"
+                name="name"
+                rules={[
+                  { required: true, message: "Vui lòng nhập họ và tên!" }
+                ]}
+              >
+                <Input size="large" placeholder="Nhập đầy đủ họ tên" />
+              </Form.Item>
+
+              <Form.Item
+                label="Ngày sinh"
+                name="birthDate"
+                rules={[
+                  { required: true, message: "Vui lòng chọn ngày sinh!" }
+                ]}
+              >
+                <DatePicker
+                  size="large"
+                  className="w-full"
+                  placeholder="Nhập ngày sinh"
+                  format="DD/MM/YYYY"
+                />
+              </Form.Item>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Ảnh giấy phép lái xe
+                </label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Upload
+                      listType="picture-card"
+                      maxCount={1}
+                      beforeUpload={async (file) => {
+                        try {
+                          const url = await handleUploadToCloudinary(file);
+                          setLicenseImageUrl(url);
+                          return false; // Prevent auto upload
+                        } catch (error) {
+                          message.error("Không thể upload ảnh");
+                          return false;
+                        }
+                      }}
+                      onRemove={() => {
+                        setLicenseImageUrl("");
+                      }}
+                    >
+                      {!licenseImageUrl && (
+                        <div>
+                          <CameraOutlined className="text-2xl mb-2" />
+                          <div className="text-sm">Chọn ảnh</div>
+                          <div className="text-xs text-gray-500">Mặt trước GPLX</div>
+                        </div>
+                      )}
+                    </Upload>
+                    {licenseImageUrl && (
+                      <img src={licenseImageUrl} alt="License front" className="w-full h-32 object-cover rounded mt-2" />
+                    )}
+                  </div>
+                  <div>
+                    <Upload
+                      listType="picture-card"
+                      maxCount={1}
+                      beforeUpload={async (file) => {
+                        try {
+                          const url = await handleUploadToCloudinary(file);
+                          setLicenseImageUrl2(url);
+                          return false;
+                        } catch (error) {
+                          message.error("Không thể upload ảnh");
+                          return false;
+                        }
+                      }}
+                      onRemove={() => {
+                        setLicenseImageUrl2("");
+                      }}
+                    >
+                      {!licenseImageUrl2 && (
+                        <div>
+                          <CameraOutlined className="text-2xl mb-2" />
+                          <div className="text-sm">Chọn ảnh</div>
+                          <div className="text-xs text-gray-500">Mặt sau GPLX</div>
+                        </div>
+                      )}
+                    </Upload>
+                    {licenseImageUrl2 && (
+                      <img src={licenseImageUrl2} alt="License back" className="w-full h-32 object-cover rounded mt-2" />
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <Form.Item>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  size="large"
+                  className="w-full bg-green-500 hover:bg-green-600 border-0 h-12 text-base font-semibold"
+                  loading={uploadingLicense}
+                >
+                  Cập nhật
+                </Button>
+              </Form.Item>
+            </Form>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
 
   if (!car) {
     notFound();
@@ -907,7 +1136,73 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   };
 
   // Điều hướng đến trang booking
-  const handleBookingClick = () => {
+  const handleBookingClick = async () => {
+    if (!car) {
+      console.log('[Booking] No car data');
+      return;
+    }
+
+    console.log('[Booking] Button clicked');
+
+    // Kiểm tra user đã đăng nhập chưa
+    if (!user) {
+      console.log('[Booking] No user, redirecting to login');
+      message.warning("Vui lòng đăng nhập để đặt xe");
+      router.push('/login');
+      return;
+    }
+
+    console.log('[Booking] User found:', user.id);
+
+    // Kiểm tra GPLX và số điện thoại
+    const userPhone = (user as any)?.phone || (user as any)?.phoneNumber || "";
+    const hasPhone = userPhone && userPhone.trim() !== "";
+    
+    console.log('[Booking] Phone check:', { hasPhone, userPhone });
+    
+    // Kiểm tra documents nếu chưa check
+    if (hasDocuments === null) {
+      console.log('[Booking] Checking documents...');
+      try {
+        // Chỉ cần check GPLX, không cần CCCD
+        const licenseRes = await driverLicenseApi.getCurrent();
+        
+        console.log('[Booking] License response:', licenseRes);
+        
+        const hasLicense = licenseRes.success && licenseRes.data && 
+          (licenseRes.data as any)?.id !== undefined;
+        
+        console.log('[Booking] Has license:', hasLicense);
+        
+        setHasDocuments(hasLicense ? true : false);
+        
+        // Kiểm tra lại sau khi có kết quả
+        if (!hasPhone || !hasLicense) {
+          console.log('[Booking] Missing phone or license, showing modal');
+          setShowVerificationModal(true);
+          return;
+        }
+      } catch (error) {
+        console.error("[Booking] Check documents error:", error);
+        setHasDocuments(false);
+        if (!hasPhone) {
+          console.log('[Booking] Error checking documents, showing modal');
+          setShowVerificationModal(true);
+          return;
+        }
+      }
+    } else {
+      // Đã check documents, kiểm tra trực tiếp
+      console.log('[Booking] Documents already checked:', hasDocuments);
+      if (!hasPhone || hasDocuments === false) {
+        console.log('[Booking] Missing phone or documents, showing modal');
+        setShowVerificationModal(true);
+        return;
+      }
+    }
+
+    // Nếu đã có đủ thông tin, chuyển đến trang booking
+    console.log('[Booking] All checks passed, redirecting to booking page');
     const locationId = searchParams?.get('locationId');
     const params = new URLSearchParams();
     if (locationId) {
@@ -915,6 +1210,90 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     }
     const queryString = params.toString();
     router.push(`/booking/${car.id}${queryString ? `?${queryString}` : ''}`);
+  };
+
+  // Upload image to Cloudinary
+  const handleUploadToCloudinary = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'your-cloud-name';
+    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'ev_rental_cars';
+
+    formData.append('upload_preset', uploadPreset);
+
+    try {
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        {
+          method: 'POST',
+          body: formData,
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        const errorMsg = data.error?.message || `Upload failed with status: ${response.status}`;
+        throw new Error(errorMsg);
+      }
+
+      if (data.secure_url) {
+        return data.secure_url;
+      } else {
+        throw new Error('No secure_url in response');
+      }
+    } catch (error) {
+      console.error('[Upload] Cloudinary error:', error);
+      throw error;
+    }
+  };
+
+  // Handle submit license form
+  const handleSubmitLicenseForm = async (values: any) => {
+    setUploadingLicense(true);
+    try {
+      // Update phone number if provided
+      if (values.phone) {
+        const updateData: any = {
+          fullName: user?.fullName,
+          phone: values.phone.trim(),
+          userId: user?.id,
+        };
+        await authApi.updateProfile(updateData);
+        // Update user state
+        const updatedUser = { ...user, phone: values.phone.trim(), phoneNumber: values.phone.trim() } as User;
+        setUser(updatedUser);
+        localStorage.setItem("user", JSON.stringify(updatedUser));
+      }
+
+      // Upload license
+      const licenseData = {
+        name: values.name,
+        licenseNumber: values.licenseNumber,
+        imageUrl: licenseImageUrl || "",
+        imageUrl2: licenseImageUrl2 || "",
+        rentalOrderId: 0, // Will be set when booking
+      };
+
+      const response = await driverLicenseApi.upload(licenseData);
+
+      if (response.success) {
+        message.success("Đã lưu thông tin GPLX thành công!");
+        setShowVerificationModal(false);
+        setShowLicenseForm(false);
+        setHasDocuments(true);
+        // Reload page to refresh data
+        window.location.reload();
+      } else {
+        message.error(response.error || "Không thể lưu thông tin GPLX");
+      }
+    } catch (error: any) {
+      console.error("Submit license form error:", error);
+      message.error(error.message || "Có lỗi xảy ra khi lưu thông tin");
+    } finally {
+      setUploadingLicense(false);
+    }
   };
 
   //5

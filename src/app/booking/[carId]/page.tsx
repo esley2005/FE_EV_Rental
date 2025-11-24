@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { Form, Input, DatePicker, Button, message, Checkbox, Radio, notification, Alert, Modal } from "antd";
+import { ExclamationCircleOutlined } from "@ant-design/icons";
 import { Calendar, MapPin, Phone, User as UserIcon, Search, Car as CarIcon, FileText, Download, Percent, Info, UserCheck } from "lucide-react";
 import dayjs, { Dayjs } from "dayjs";
 import { carsApi, rentalOrderApi, rentalLocationApi, carRentalLocationApi, authApi, driverLicenseApi, citizenIdApi } from "@/services/api";
@@ -34,6 +35,7 @@ export default function BookingPage() {
   const [withDriver, setWithDriver] = useState<boolean>(false);
   const [hasDocuments, setHasDocuments] = useState<boolean | null>(null);
   const [dateRangeValue, setDateRangeValue] = useState<[Dayjs, Dayjs] | null>(null);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
 
   // Helper functions tương tự trang chi tiết xe
   const extractCarRentalLocationList = (source: any): any[] => {
@@ -443,6 +445,29 @@ export default function BookingPage() {
 
     const withDriverValue = values.withDriver || false;
 
+    // Kiểm tra GPLX và số điện thoại
+    const userPhone = (user as any)?.phone || (user as any)?.phoneNumber || "";
+    const hasPhone = userPhone && userPhone.trim() !== "";
+    
+    console.log('[Booking] Verification check:', {
+      hasPhone,
+      userPhone,
+      hasDocuments,
+      withDriver: withDriverValue,
+      needsGPLX: !withDriverValue && hasDocuments === false
+    });
+    
+    // Kiểm tra: nếu không có tài xế thì cần GPLX, luôn cần số điện thoại
+    // hasDocuments có thể là null (chưa check), false (không có), hoặc true (có)
+    const needsGPLX = !withDriverValue && (hasDocuments === false || hasDocuments === null);
+    const needsVerification = !hasPhone || needsGPLX;
+    
+    if (needsVerification) {
+      console.log('[Booking] Showing verification modal - needsPhone:', !hasPhone, 'needsGPLX:', needsGPLX);
+      setShowVerificationModal(true);
+      return;
+    }
+
     setSubmitting(true);
     try {
       const [pickupTime, expectedReturnTime] = values.dateRange;
@@ -466,7 +491,7 @@ export default function BookingPage() {
       });
       
       const orderData: CreateRentalOrderData = {
-        phoneNumber: values.phoneNumber,
+        phoneNumber: (user as any)?.phone || (user as any)?.phoneNumber || "", // Lấy từ user hoặc để trống
         pickupTime: pickupTime.toISOString(),
         expectedReturnTime: expectedReturnTime.toISOString(),
         withDriver: withDriverValue,
@@ -696,7 +721,7 @@ export default function BookingPage() {
                     alt={car.name}
                     className="w-full h-full object-cover rounded-lg"
                   />
-                </div>
+            </div>
                 <div className="flex-1">
                   <h3 className="text-xl font-bold text-gray-900 mb-2">{car.name}</h3>
                   <p className="text-sm text-gray-600 mb-3">{car.model}</p>
@@ -707,44 +732,12 @@ export default function BookingPage() {
                         {selectedLocation.name && `${selectedLocation.name} - `}
                         {selectedLocation.address}
                       </span>
-                    </div>
+          </div>
                   )}
                 </div>
               </div>
             </div>
           )}
-
-          {/* Thông tin đặt xe */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Thông tin đặt xe</h2>
-            <p className="text-sm text-gray-600 mb-4">
-              Vui lòng để lại thông tin liên lạc. Chúng tôi sẽ liên hệ bạn sớm nhất.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Form.Item
-                label="Họ Và Tên"
-                name="name"
-                rules={[{ required: true, message: "Vui lòng nhập tên" }]}
-              >
-                <Input
-                  size="large"
-                  placeholder="Nhập tên"
-                  prefix={<UserIcon className="w-4 h-4 text-gray-400" />}
-                />
-              </Form.Item>
-              <Form.Item
-                label="Số điện thoại"
-                name="phoneNumber"
-                rules={[{ required: true, message: "Vui lòng nhập số điện thoại" }]}
-              >
-                <Input
-                  size="large"
-                  placeholder="Nhập số điện thoại"
-                  prefix={<Phone className="w-4 h-4 text-gray-400" />}
-                />
-              </Form.Item>
-            </div>
-          </div>
 
           {/* Thông tin đơn hàng */}
           <div className="bg-white rounded-lg shadow-sm p-6">
@@ -842,8 +835,8 @@ export default function BookingPage() {
                   <p className="text-sm text-red-600">
                     Vui lòng liên hệ tổng đài hoặc quay lại trang trước để chọn xe khác có vị trí rõ ràng.
                   </p>
-                  <Form.Item
-                    name="rentalLocationId"
+              <Form.Item
+                name="rentalLocationId"
                     rules={[{ required: true, message: "Không xác định được địa điểm nhận xe. Vui lòng liên hệ hỗ trợ." }]}
                     hidden
                   >
@@ -876,7 +869,7 @@ export default function BookingPage() {
                       <div className="flex flex-col items-center gap-2">
                         <UserCheck className="w-5 h-5" />
                         <span>Có tài xế</span>
-                      </div>
+                        </div>
                     </Radio.Button>
                     <Radio.Button value={false} className="flex-1 text-center py-3">
                       <div className="flex flex-col items-center gap-2">
@@ -999,6 +992,41 @@ export default function BookingPage() {
       </main>
 
       <Footer />
+
+      {/* Modal thông báo xác thực GPLX và số điện thoại */}
+      <Modal
+        open={showVerificationModal}
+        onCancel={() => setShowVerificationModal(false)}
+        footer={null}
+        closable={true}
+        centered
+        width={400}
+        styles={{
+          body: { padding: '24px' }
+        }}
+      >
+        <div className="text-center">
+          <div className="flex justify-center mb-4">
+            <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
+              <ExclamationCircleOutlined className="text-red-500 text-3xl" />
+            </div>
+          </div>
+          <p className="text-base text-gray-800 mb-6 leading-relaxed">
+            Bạn cần xác thực <strong>GPLX</strong> và <strong>số điện thoại</strong> mới có thể đặt xe.
+          </p>
+          <Button
+            type="primary"
+            size="large"
+            className="w-full bg-green-500 hover:bg-green-600 border-0 h-12 text-base font-semibold"
+            onClick={() => {
+              setShowVerificationModal(false);
+              router.push('/profile');
+            }}
+          >
+            Đồng ý
+          </Button>
+        </div>
+      </Modal>
     </div>
     </>
   );

@@ -12,6 +12,7 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   WarningOutlined,
+  PhoneOutlined,
 } from "@ant-design/icons";
 import {
   Layout,
@@ -26,8 +27,8 @@ import {
   Space,
   Tag,
 } from "antd";
-import { authApi } from "@/services/api";
-import type { User, UpdateProfileData, ChangePasswordData } from "@/services/api";
+import { authApi, driverLicenseApi, citizenIdApi } from "@/services/api";
+import type { User, UpdateProfileData, ChangePasswordData, DriverLicenseData, CitizenIdData } from "@/services/api";
 import dayjs from "dayjs";
 
 const { Content } = Layout;
@@ -50,6 +51,9 @@ export default function ProfilePage() {
   // Document verification status (for display only)
   const [licenseVerified, setLicenseVerified] = useState<boolean | null>(null);
   const [citizenIdVerified, setCitizenIdVerified] = useState<boolean | null>(null);
+  // Document data
+  const [driverLicense, setDriverLicense] = useState<DriverLicenseData | null>(null);
+  const [citizenId, setCitizenId] = useState<CitizenIdData | null>(null);
 
   useEffect(() => {
     const loadUserProfile = async () => {
@@ -75,6 +79,7 @@ export default function ProfilePage() {
           profileForm.setFieldsValue({
             fullName: userData.fullName,
             email: userData.email,
+            phone: userData.phone || userData.phoneNumber || "",
           });
         }
 
@@ -84,11 +89,12 @@ export default function ProfilePage() {
           profileForm.setFieldsValue({
             fullName: response.data.fullName,
             email: response.data.email,
+            phone: (response.data as any).phone || (response.data as any).phoneNumber || "",
           });
           localStorage.setItem("user", JSON.stringify(response.data));
 
           // tải xác thực giấy phép lái xe nha
-if (response.data.driverLicenseStatus !== undefined) {
+          if (response.data.driverLicenseStatus !== undefined) {
             setLicenseVerified(response.data.driverLicenseStatus === 1);
           }
 
@@ -96,6 +102,26 @@ if (response.data.driverLicenseStatus !== undefined) {
           if (response.data.citizenIdStatus !== undefined) {
             setCitizenIdVerified(response.data.citizenIdStatus === 1);
           }
+        }
+
+        // Load driver license data
+        try {
+          const licenseRes = await driverLicenseApi.getCurrent();
+          if (licenseRes.success && licenseRes.data) {
+            setDriverLicense(licenseRes.data);
+          }
+        } catch (error) {
+          console.error("Load driver license error:", error);
+        }
+
+        // Load citizen ID data
+        try {
+          const citizenIdRes = await citizenIdApi.getCurrent();
+          if (citizenIdRes.success && citizenIdRes.data) {
+            setCitizenId(citizenIdRes.data);
+          }
+        } catch (error) {
+          console.error("Load citizen ID error:", error);
         }
       } catch (error) {
         console.error("Load profile error:", error);
@@ -105,7 +131,7 @@ if (response.data.driverLicenseStatus !== undefined) {
     loadUserProfile();
   }, [router, api, profileForm]);
 
-  const handleUpdateProfile = async (values: { fullName: string }) => {
+  const handleUpdateProfile = async (values: { fullName: string; phone?: string }) => {
     setLoading(true);
     try {
       const trimmedFullName = values.fullName?.trim() || "";
@@ -123,6 +149,7 @@ if (response.data.driverLicenseStatus !== undefined) {
 
       const updateData: UpdateProfileData = {
         fullName: trimmedFullName,
+        phone: values.phone?.trim() || undefined,
         userId: user?.id, // Truyền userId từ user state
       };
 
@@ -133,6 +160,10 @@ if (response.data.driverLicenseStatus !== undefined) {
         const updatedUser = response.data || user;
         if (updatedUser) {
           updatedUser.fullName = trimmedFullName;
+          if (values.phone) {
+            (updatedUser as any).phone = values.phone.trim();
+            (updatedUser as any).phoneNumber = values.phone.trim();
+          }
           setUser({ ...updatedUser });
           localStorage.setItem("user", JSON.stringify(updatedUser));
           
@@ -140,6 +171,7 @@ if (response.data.driverLicenseStatus !== undefined) {
           profileForm.setFieldsValue({
             fullName: trimmedFullName,
             email: updatedUser.email || user?.email,
+            phone: values.phone?.trim() || (updatedUser as any)?.phone || (updatedUser as any)?.phoneNumber || "",
           });
         }
 
@@ -549,6 +581,32 @@ if (response.data.driverLicenseStatus !== undefined) {
                             <Descriptions column={1} bordered>
                               <Descriptions.Item label="Họ và tên">{user.fullName}</Descriptions.Item>
                               <Descriptions.Item label="Email">{user.email}</Descriptions.Item>
+                              <Descriptions.Item label="Số điện thoại">
+                                {(user as any).phone || (user as any).phoneNumber || "Chưa cập nhật"}
+                              </Descriptions.Item>
+                              <Descriptions.Item label="Bằng lái xe">
+                                {driverLicense ? (
+                                  <div>
+                                    <div><strong>Số bằng:</strong> {driverLicense.licenseNumber || "N/A"}</div>
+                                    <div><strong>Tên:</strong> {driverLicense.name || "N/A"}</div>
+                                  </div>
+                                ) : (
+                                  "Chưa cập nhật"
+                                )}
+                              </Descriptions.Item>
+                              <Descriptions.Item label="CCCD">
+                                {citizenId ? (
+                                  <div>
+                                    <div><strong>Số CCCD:</strong> {citizenId.citizenIdNumber || "N/A"}</div>
+                                    <div><strong>Tên:</strong> {citizenId.name || "N/A"}</div>
+                                    {citizenId.birthDate && (
+                                      <div><strong>Ngày sinh:</strong> {citizenId.birthDate}</div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  "Chưa cập nhật"
+                                )}
+                              </Descriptions.Item>
                             </Descriptions>
 <Button
                               type="primary"
@@ -577,6 +635,15 @@ if (response.data.driverLicenseStatus !== undefined) {
                                 <Input size="large" prefix={<MailOutlined />} disabled />
                               </Form.Item>
                             )}
+                            <Form.Item 
+                              label="Số điện thoại" 
+                              name="phone"
+                              rules={[
+                                { pattern: /^[0-9]{10,11}$/, message: "Số điện thoại phải có 10-11 chữ số!" }
+                              ]}
+                            >
+                              <Input size="large" prefix={<PhoneOutlined />} placeholder="Nhập số điện thoại" />
+                            </Form.Item>
                             <Space>
                               <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading} className="bg-blue-600">
                                 Lưu thay đổi

@@ -2,7 +2,7 @@
 import React, { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Car } from "@/types/car";
-import { Zap, Users, MapPin, Star, Car as CarIcon } from "lucide-react";
+import { Zap, Users, MapPin, Star, Car as CarIcon, Truck } from "lucide-react";
 import { motion } from "framer-motion";
 interface CarCardProps {
   car: Car;
@@ -11,9 +11,30 @@ interface CarCardProps {
 export default function CarCard({ car }: CarCardProps) {
   const router = useRouter();
 
+  // Normalize status: đảm bảo là number (0 hoặc 1)
+  const normalizedStatus = typeof car.status === 'number' 
+    ? car.status 
+    : (car.status === 1 || car.status === '1' ? 1 : 0);
+
   // Lấy giá từ data thực tế
   const pricePerDay = car.rentPricePerDay || 0;
   const pricePerHour = car.rentPricePerHour || 0;
+
+  // Tính discount (giả sử có discount 14-17% như trong hình)
+  // Có thể lấy từ backend sau, tạm thời random hoặc tính từ giá
+  const discountPercent = useMemo(() => {
+    // Tạm thời random 14-17% để demo
+    return Math.floor(Math.random() * 4) + 14;
+  }, []);
+
+  const hasDiscount = discountPercent > 0;
+  const originalPricePerDay = hasDiscount 
+    ? Math.round(pricePerDay / (1 - discountPercent / 100))
+    : pricePerDay;
+  const discountedPricePerDay = pricePerDay;
+
+  // Tính giá gói 4 giờ (60% giá ngày)
+  const price4Hours = Math.round(pricePerDay * 0.6);
 
   // Format giá tiền - hiển thị đầy đủ hoặc format với "K"
   const formatPrice = (price: number, useShortFormat: boolean = true) => {
@@ -95,37 +116,46 @@ export default function CarCard({ car }: CarCardProps) {
           />
 
           {/* Badge icon tia sét (góc trên trái) */}
-          <div className="absolute top-2 left-2">
-            <div className="bg-gray-800 bg-opacity-70 rounded-lg p-1.5">
+          <div className="absolute top-2 left-2 z-10">
+            <div className="bg-gray-900 bg-opacity-80 rounded-lg p-1.5 border border-yellow-400/50">
               <Zap className="text-yellow-400 fill-yellow-400" size={16} />
             </div>
           </div>
-          {/* Badge giảm giá (góc dưới phải) - chỉ hiển thị nếu có trong data */}
-          {/* Có thể thêm logic kiểm tra giảm giá từ backend sau */}
 
-          {/* Badge trạng thái (góc trên phải) */}
-          <div className="absolute top-2 right-2">
-            <span
-              className={`px-2 py-1 text-[10px] font-semibold rounded-lg shadow-md ${car.status === 1
-                  ? "bg-blue-600 text-white"
-                  : "bg-red-500 text-white"
+          {/* Badge giảm giá hoặc trạng thái (góc trên phải) */}
+          <div className="absolute top-2 right-2 z-10">
+            {hasDiscount ? (
+              <span className="px-2.5 py-1 text-xs font-bold rounded-lg shadow-lg bg-gradient-to-r from-red-500 to-orange-500 text-white border border-white/30">
+                Giảm {discountPercent}%
+              </span>
+            ) : (
+              <span
+                className={`px-2.5 py-1 text-xs font-bold rounded-lg shadow-lg ${
+                  normalizedStatus === 1
+                    ? "bg-blue-600 text-white"
+                    : "bg-red-500 text-white"
                 }`}
-            >
-              {car.status === 1 ? "Sẵn sàng" : "Hết xe"}
-            </span>
+              >
+                {normalizedStatus === 1 ? "Sẵn sàng" : "Hết xe"}
+              </span>
+            )}
           </div>
         </div>
       </div>
 
       {/* Thông tin xe */}
       <div className="p-4" onClick={() => router.push(`/cars/${car.id}`)}>
-        {/* Badge "Miễn thế chấp" */}
-        <div className="mb-2">
-          <div className="inline-flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-lg px-2 py-1">
-            <div className="w-4 h-4 bg-green-600 rounded-full flex items-center justify-center">
-              <CarIcon className="text-white" size={10} />
+        {/* Badges "Miễn thế chấp" và "Giao xe tận nơi" */}
+        <div className="flex flex-wrap gap-2 mb-2">
+          <div className="inline-flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-full px-2.5 py-1">
+            <div className="w-3.5 h-3.5 bg-green-600 rounded-full flex items-center justify-center">
+              <CarIcon className="text-white" size={9} />
             </div>
             <span className="text-green-700 font-medium text-xs">Miễn thế chấp</span>
+          </div>
+          <div className="inline-flex items-center gap-1.5 bg-orange-50 border border-orange-200 rounded-full px-2.5 py-1">
+            <Truck className="text-orange-600" size={12} />
+            <span className="text-orange-700 font-medium text-xs">Giao xe tận nơi</span>
           </div>
         </div>
 
@@ -199,36 +229,46 @@ export default function CarCard({ car }: CarCardProps) {
 
         {/* Giá thuê */}
         <motion.div 
-          className="border-t pt-3"
+          className="border-t border-gray-200 pt-3 mt-3"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6 }}
         >
-          <div>
-            <motion.span 
-              className="text-blue-600 font-bold text-xl"
-              initial={{ scale: 0.8 }}
-              animate={{ scale: 1 }}
-              transition={{ 
-                type: "spring", 
-                stiffness: 200, 
-                damping: 10,
-                delay: 0.7 
-              }}
-            >
-              {formatPrice(pricePerDay)}₫/ngày
-            </motion.span>
+          <div className="space-y-1">
+            {/* Giá ngày */}
+            <div className="flex items-baseline gap-2">
+              {hasDiscount && (
+                <span className="text-gray-400 text-sm line-through">
+                  {formatPrice(originalPricePerDay)}₫
+                </span>
+              )}
+              <motion.span 
+                className="text-blue-600 font-bold text-lg"
+                initial={{ scale: 0.8 }}
+                animate={{ scale: 1 }}
+                transition={{ 
+                  type: "spring", 
+                  stiffness: 200, 
+                  damping: 10,
+                  delay: 0.7 
+                }}
+              >
+                {formatPrice(discountedPricePerDay)}₫/ngày
+              </motion.span>
+            </div>
+            
+            {/* Gói 4 giờ */}
+            {price4Hours > 0 && (
+              <motion.p 
+                className="text-gray-600 text-sm font-medium"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.8 }}
+              >
+                {formatPrice(price4Hours)}₫ gói 4 giờ
+              </motion.p>
+            )}
           </div>
-          {pricePerHour > 0 && (
-            <motion.p 
-              className="text-gray-500 text-[10px] mt-0.5"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.8 }}
-            >
-              {formatPrice(pricePerHour, false)}₫/giờ
-            </motion.p>
-          )}
         </motion.div>
       </div>
     </motion.div>

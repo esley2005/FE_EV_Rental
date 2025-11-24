@@ -55,17 +55,6 @@ export default function CheckoutPage() {
     }
   }, [orderId]);
 
-  // Tự động thanh toán nếu autoPay=true và đã load xong order + user
-  useEffect(() => {
-    if (autoPay && order && user && !loading) {
-      // Đợi 1 giây để UI render xong rồi mới tự động thanh toán
-      const timer = setTimeout(() => {
-        handleAutoPayment(order, user);
-      }, 1500);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [autoPay, order, user, loading]);
 
   const loadOrderAndUser = async () => {
     if (!orderId) return;
@@ -284,56 +273,6 @@ export default function CheckoutPage() {
 
   const paymentAmount = getPaymentAmount();
 
-  // Tự động thanh toán khi autoPay=true và đã load xong order + user
-  useEffect(() => {
-    if (autoPay && order && user && !loading) {
-      // Tính amount
-      const amount = (order.deposit && order.deposit > 0) 
-        ? order.deposit 
-        : Math.round((order.total || order.subTotal || 0) * 0.3);
-      
-      if (amount <= 0) return;
-
-      // Đợi 1.5 giây để UI render xong rồi mới tự động thanh toán
-      const timer = setTimeout(async () => {
-        try {
-          message.loading("Đang tạo yêu cầu thanh toán...", 1);
-          
-          const response = await paymentApi.createMomoPayment(
-            order.id,
-            user.id,
-            amount
-          );
-
-          if (response.success && response.data) {
-            const paymentUrl = response.data.momoPayUrl || response.data.payUrl;
-
-            if (paymentUrl) {
-              message.success("Đang chuyển đến trang thanh toán MoMo...", 2);
-              
-              // Redirect đến MoMo payment page sau 1 giây
-              setTimeout(() => {
-                window.location.href = paymentUrl;
-              }, 1000);
-            } else {
-              message.error("Không nhận được payment URL từ MoMo");
-            }
-          } else {
-            message.error(response.error || "Không thể tạo payment request");
-          }
-        } catch (error: unknown) {
-          const errorMessage =
-            error instanceof Error
-              ? error.message
-              : "Có lỗi xảy ra khi tạo payment";
-          message.error(errorMessage);
-        }
-      }, 1500);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [autoPay, order, user, loading]);
-
   if (loading) {
     return (
       <>
@@ -390,126 +329,173 @@ export default function CheckoutPage() {
   return (
     <>
       <Header />
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-gray-100 pt-24 pb-16">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-sky-50/20 pt-24 pb-16">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-6"
+            className="mb-8"
           >
             <Button
               icon={<ArrowLeftOutlined />}
               onClick={() => router.back()}
               className="mb-4"
+              type="text"
             >
               Quay lại
             </Button>
-            <h1 className="text-3xl font-bold text-gray-800">Thanh toán đơn hàng</h1>
-            <p className="text-gray-600 mt-2">Mã đơn hàng: #{order.id}</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">Thanh toán đơn hàng</h1>
+                <p className="text-gray-600">Mã đơn hàng: <span className="font-semibold text-blue-600">#{order.id}</span></p>
+              </div>
+            </div>
           </motion.div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left Column - Order Details */}
             <div className="lg:col-span-2 space-y-6">
               {/* Order Info Card */}
-              <Card title={
-                <div className="flex items-center gap-2">
-                  <FileTextOutlined className="text-blue-600" />
-                  <span>Thông tin đơn hàng</span>
-                </div>
-              }>
+              <Card 
+                title={
+                  <div className="flex items-center gap-2">
+                    <FileTextOutlined className="text-blue-600 text-lg" />
+                    <span className="text-lg font-semibold">Thông tin đơn hàng</span>
+                  </div>
+                }
+                className="shadow-md"
+              >
                 {order.car && (
-                  <div className="flex gap-4 mb-6">
-                    <div className="w-32 h-24 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
+                  <div className="flex gap-6 mb-6 pb-6 border-b border-gray-200">
+                    <div className="w-40 h-32 bg-gradient-to-br from-gray-100 to-gray-200 rounded-xl overflow-hidden flex-shrink-0 shadow-sm">
                       <Image
                         src={order.car.imageUrl || "/logo_ev.png"}
                         alt={order.car.name || "Xe"}
-                        width={128}
-                        height={96}
+                        width={160}
+                        height={128}
                         className="w-full h-full object-cover"
                         unoptimized
                       />
                     </div>
                     <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-gray-800 mb-1">
+                      <h3 className="text-xl font-bold text-gray-900 mb-1">
                         {order.car.name}
                       </h3>
-                      <p className="text-gray-600 text-sm mb-2">{order.car.model}</p>
+                      <p className="text-gray-600 mb-3">{order.car.model}</p>
                       <div className="flex flex-wrap gap-2">
-                        <Tag color="blue">{order.car.seats} chỗ</Tag>
-                        <Tag color="green">{order.car.batteryType || "Điện"}</Tag>
-                        {order.withDriver && <Tag color="purple">Có tài xế</Tag>}
+                        <Tag color="blue" className="px-3 py-1 text-sm font-medium">
+                          {order.car.seats} chỗ
+                        </Tag>
+                        <Tag color="green" className="px-3 py-1 text-sm font-medium">
+                          {order.car.batteryType || "Điện"}
+                        </Tag>
+                        {order.withDriver && (
+                          <Tag color="purple" className="px-3 py-1 text-sm font-medium">
+                            Có tài xế
+                          </Tag>
+                        )}
                       </div>
                     </div>
                   </div>
                 )}
 
-                <Descriptions column={1} size="small" bordered>
-                  <Descriptions.Item label={
-                    <span className="flex items-center gap-2">
-                      <CalendarOutlined />
-                      Ngày nhận xe
+                <Descriptions column={1} size="middle" bordered>
+                  <Descriptions.Item 
+                    label={
+                      <span className="flex items-center gap-2 font-medium">
+                        <CalendarOutlined className="text-blue-600" />
+                        Ngày nhận xe
+                      </span>
+                    }
+                    className="py-3"
+                  >
+                    <span className="font-semibold text-gray-900">
+                      {formatDateTime(order.pickupTime, "DD/MM/YYYY HH:mm")}
                     </span>
-                  }>
-                    {formatDateTime(order.pickupTime, "DD/MM/YYYY HH:mm")}
                   </Descriptions.Item>
-                  <Descriptions.Item label={
-                    <span className="flex items-center gap-2">
-                      <CalendarOutlined />
-                      Ngày trả xe
+                  <Descriptions.Item 
+                    label={
+                      <span className="flex items-center gap-2 font-medium">
+                        <CalendarOutlined className="text-blue-600" />
+                        Ngày trả xe
+                      </span>
+                    }
+                    className="py-3"
+                  >
+                    <span className="font-semibold text-gray-900">
+                      {formatDateTime(order.expectedReturnTime, "DD/MM/YYYY HH:mm")}
                     </span>
-                  }>
-                    {formatDateTime(order.expectedReturnTime, "DD/MM/YYYY HH:mm")}
                   </Descriptions.Item>
-                  <Descriptions.Item label="Số ngày thuê">
-                    {calculateDays(order.pickupTime, order.expectedReturnTime)} ngày
+                  <Descriptions.Item 
+                    label={<span className="font-medium">Số ngày thuê</span>}
+                    className="py-3"
+                  >
+                    <span className="font-semibold text-blue-600">
+                      {calculateDays(order.pickupTime, order.expectedReturnTime)} ngày
+                    </span>
                   </Descriptions.Item>
                   {order.location && (
-                    <Descriptions.Item label={
-                      <span className="flex items-center gap-2">
-                        <EnvironmentOutlined />
-                        Địa điểm nhận xe
+                    <Descriptions.Item 
+                      label={
+                        <span className="flex items-center gap-2 font-medium">
+                          <EnvironmentOutlined className="text-blue-600" />
+                          Địa điểm nhận xe
+                        </span>
+                      }
+                      className="py-3"
+                    >
+                      <span className="font-semibold text-gray-900">
+                        {order.location.name || order.location.address || "Không xác định"}
                       </span>
-                    }>
-                      {order.location.name || order.location.address || "Không xác định"}
                     </Descriptions.Item>
                   )}
                 </Descriptions>
               </Card>
 
               {/* Payment Summary */}
-              <Card title={
-                <div className="flex items-center gap-2">
-                  <DollarOutlined className="text-green-600" />
-                  <span>Tổng kết thanh toán</span>
-                </div>
-              }>
-                <div className="space-y-3">
+              <Card 
+                title={
+                  <div className="flex items-center gap-2">
+                    <DollarOutlined className="text-green-600 text-lg" />
+                    <span className="text-lg font-semibold">Tổng kết thanh toán</span>
+                  </div>
+                }
+                className="shadow-md"
+              >
+                <div className="space-y-4">
                   {order.subTotal && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Tiền thuê xe:</span>
-                      <span className="font-semibold">{formatCurrency(order.subTotal)}</span>
-                    </div>
-                  )}
-                  {(order.deposit || paymentAmount > 0) && (
-                    <div className="flex justify-between text-blue-600">
-                      <span>Tiền đặt cọc:</span>
-                      <span className="font-semibold">
-                        {formatCurrency(order.deposit || paymentAmount)}
-                        {!order.deposit && <Tag color="orange" className="ml-2">Tạm tính (30%)</Tag>}
+                    <div className="flex justify-between items-center py-2">
+                      <span className="text-gray-700 text-base">Tiền thuê xe:</span>
+                      <span className="font-semibold text-gray-900 text-base">
+                        {formatCurrency(order.subTotal)}
                       </span>
                     </div>
                   )}
-                  {order.discount && order.discount > 0 && (
-                    <div className="flex justify-between text-red-600">
-                      <span>Giảm giá:</span>
-                      <span className="font-semibold">- {formatCurrency(order.discount)}</span>
+                  {(order.deposit || paymentAmount > 0) && (
+                    <div className="flex justify-between items-center py-2 bg-blue-50 -mx-4 px-4 rounded-lg">
+                      <span className="text-blue-700 text-base font-medium">Tiền đặt cọc:</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-blue-700 text-base">
+                          {formatCurrency(order.deposit || paymentAmount)}
+                        </span>
+                        {!order.deposit && (
+                          <Tag color="orange" className="text-xs">Tạm tính (30%)</Tag>
+                        )}
+                      </div>
                     </div>
                   )}
-                  <div className="flex justify-between pt-3 border-t border-gray-300">
-                    <span className="text-lg font-semibold text-gray-800">Tổng cần thanh toán:</span>
-                    <span className="text-xl font-bold text-green-600">
+                  {order.discount && order.discount > 0 && (
+                    <div className="flex justify-between items-center py-2">
+                      <span className="text-gray-700 text-base">Giảm giá:</span>
+                      <span className="font-semibold text-red-600 text-base">
+                        - {formatCurrency(order.discount)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center pt-4 mt-4 border-t-2 border-gray-300">
+                    <span className="text-xl font-bold text-gray-900">Tổng cần thanh toán:</span>
+                    <span className="text-2xl font-bold text-green-600">
                       {formatCurrency(paymentAmount)}
                     </span>
                   </div>
@@ -522,11 +508,11 @@ export default function CheckoutPage() {
               <Card 
                 title={
                   <div className="flex items-center gap-2">
-                    <WalletOutlined className="text-pink-600" />
-                    <span>Thanh toán</span>
+                    <WalletOutlined className="text-blue-600 text-lg" />
+                    <span className="text-lg font-semibold">Thanh toán</span>
                   </div>
                 }
-                className="sticky top-24"
+                className="sticky top-24 shadow-md"
               >
                 <div className="space-y-4">
                   {autoPay ? (
@@ -580,17 +566,19 @@ export default function CheckoutPage() {
                         className="mb-4 border-2 border-red-400"
                         icon={<WarningOutlined className="text-2xl text-red-600" />}
                       />
-                      <MomoPaymentButton
-                        rentalOrderId={order.id}
-                        userId={user.id}
-                        amount={paymentAmount}
-                        onSuccess={(momoOrderId) => {
-                          console.log("Payment initiated:", momoOrderId);
-                        }}
-                        onError={(error) => {
-                          message.error(error);
-                        }}
-                      />
+                      {user && (
+                        <MomoPaymentButton
+                          rentalOrderId={order.id}
+                          userId={user.id}
+                          amount={paymentAmount}
+                          onSuccess={(momoOrderId) => {
+                            console.log("Payment initiated:", momoOrderId);
+                          }}
+                          onError={(error) => {
+                            message.error(error);
+                          }}
+                        />
+                      )}
                     </>
                   ) : (
                     <Alert
@@ -601,19 +589,22 @@ export default function CheckoutPage() {
                     />
                   )}
 
-                  <div className="text-xs text-gray-500 mt-4 space-y-2">
-                    <p>
-                      <CheckCircleOutlined className="mr-1" />
-                      Thanh toán an toàn qua MoMo
-                    </p>
-                    <p>
-                      <CheckCircleOutlined className="mr-1" />
-                      Hỗ trợ thẻ tín dụng/ghi nợ và ví MoMo
-                    </p>
+                  <div className="bg-gray-50 rounded-lg p-4 mt-6 space-y-2">
+                    <p className="text-sm text-gray-700 font-medium mb-2">Thông tin thanh toán:</p>
+                    <div className="text-xs text-gray-600 space-y-1.5">
+                      <p className="flex items-center gap-2">
+                        <CheckCircleOutlined className="text-green-600" />
+                        <span>Thanh toán an toàn qua MoMo</span>
+                      </p>
+                      <p className="flex items-center gap-2">
+                        <CheckCircleOutlined className="text-green-600" />
+                        <span>Hỗ trợ thẻ tín dụng/ghi nợ và ví MoMo</span>
+                      </p>
+                    </div>
                   </div>
 
-                  <Link href="/my-bookings" className="block">
-                    <Button type="link" block>
+                  <Link href="/my-bookings" className="block mt-4">
+                    <Button type="link" block className="text-blue-600">
                       Xem lại đơn hàng
                     </Button>
                   </Link>

@@ -125,8 +125,13 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
         const carsList = normalizeDotNetList<Car>(response.data);
         const fallbackList = Array.isArray(response.data) ? (response.data as Car[]) : [];
         const listToUse = carsList.length > 0 ? carsList : fallbackList;
-        // Filter out deleted cars
-        const activeCars = listToUse.filter((car) => !car.isDeleted);
+        // Filter out deleted cars và normalize status
+        const activeCars = listToUse
+          .filter((car) => !car.isDeleted)
+          .map((car) => ({
+            ...car,
+            status: typeof car.status === 'number' ? car.status : (car.status === 1 || car.status === '1' ? 1 : 0),
+          }));
         
         // Fetch carRentalLocations cho tất cả xe để hiển thị location
         const carsWithLocations = await Promise.all(
@@ -137,16 +142,23 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
                 (Array.isArray(car.carRentalLocations) || (car.carRentalLocations as any)?.$values);
 
               if (!hasLocations) {
-                // Fetch carRentalLocations từ API
-                const locationResponse = await carRentalLocationApi.getByCarId(car.id);
-                if (locationResponse.success && locationResponse.data) {
-                  const locationsData = Array.isArray(locationResponse.data)
-                    ? locationResponse.data
-                    : (locationResponse.data as any)?.$values || [];
-                  return {
-                    ...car,
-                    carRentalLocations: locationsData
-                  };
+                // Fetch carRentalLocations từ API - xử lý lỗi 404 gracefully
+                try {
+                  const locationResponse = await carRentalLocationApi.getByCarId(car.id);
+                  if (locationResponse.success && locationResponse.data) {
+                    const locationsData = Array.isArray(locationResponse.data)
+                      ? locationResponse.data
+                      : (locationResponse.data as any)?.$values || [];
+                    return {
+                      ...car,
+                      carRentalLocations: locationsData
+                    };
+                  }
+                } catch (locationError: any) {
+                  // Bỏ qua lỗi 404 hoặc các lỗi khác, không log để tránh spam console
+                  if (locationError?.status !== 404 && locationError?.response?.status !== 404) {
+                    console.warn(`Failed to fetch locations for car ${car.id}:`, locationError);
+                  }
                 }
               }
               return car;
@@ -209,7 +221,7 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
     setEditingCar(null);
     form.resetFields();
     form.setFieldsValue({
-      status: 0,
+      status: 1, // Mặc định là "Sẵn sàng" (1) thay vì "Hết xe" (0)
       isActive: true,
       rentalLocationId: rentalLocations.length > 0 ? rentalLocations[0].id : undefined
     });
@@ -218,6 +230,21 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
 
   const handleEdit = (car: Car) => {
     setEditingCar(car);
+    
+    // Tính giá giờ từ giá ngày nếu chưa có giá giờ
+    const calculatedPricePerHour = car.rentPricePerHour 
+      ? car.rentPricePerHour 
+      : (car.rentPricePerDay ? Math.round(car.rentPricePerDay / 22) : 0);
+    
+    // Tự động tính giá có tài xế từ giá thường (× 1.4)
+    const calculatedPricePerHourWithDriver = calculatedPricePerHour > 0
+      ? Math.round(calculatedPricePerHour * 1.4)
+      : (car.rentPricePerHourWithDriver || 0);
+    
+    const calculatedPricePerDayWithDriver = calculatedPricePerHourWithDriver > 0
+      ? Math.round(calculatedPricePerHourWithDriver * 22)
+      : (car.rentPricePerDayWithDriver || 0);
+    
     form.setFieldsValue({
       name: car.name ?? "",
       model: car.model ?? "",
@@ -226,11 +253,11 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
       trunkCapacity: car.trunkCapacity,
       batteryType: car.batteryType ?? "",
       batteryDuration: car.batteryDuration,
-      rentPricePerDay: car.rentPricePerDay,
-      rentPricePerHour: car.rentPricePerHour,
-      rentPricePerDayWithDriver: car.rentPricePerDayWithDriver,
-      rentPricePerHourWithDriver: car.rentPricePerHourWithDriver,
-      status: car.status,
+      rentPricePerDay: car.rentPricePerDay || (calculatedPricePerHour > 0 ? Math.round(calculatedPricePerHour * 22) : 0),
+      rentPricePerHour: calculatedPricePerHour,
+      rentPricePerDayWithDriver: calculatedPricePerDayWithDriver,
+      rentPricePerHourWithDriver: calculatedPricePerHourWithDriver,
+      status: car.status ?? 0, // Đảm bảo có giá trị mặc định
       imageUrl: car.imageUrl,
       imageUrl2: car.imageUrl2 ?? undefined,
       imageUrl3: car.imageUrl3 ?? undefined,
@@ -386,6 +413,20 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
   const handleSubmit = async (values: CarFormValues) => {
     setLoading(true);
     try {
+      // Tự động tính giá theo ngày từ giá giờ (giá giờ × 22)
+      const calculatedPricePerDay = values.rentPricePerHour 
+        ? Math.round(values.rentPricePerHour * 22) 
+        : (values.rentPricePerDay || 0);
+      
+      // Tự động tính giá có tài xế = giá thường × 1.4 (tăng 40%)
+      const calculatedPricePerHourWithDriver = values.rentPricePerHour
+        ? Math.round(values.rentPricePerHour * 1.4)
+        : (values.rentPricePerHourWithDriver || 0);
+      
+      const calculatedPricePerDayWithDriver = calculatedPricePerHourWithDriver > 0
+        ? Math.round(calculatedPricePerHourWithDriver * 22)
+        : (values.rentPricePerDayWithDriver || 0);
+
       // Map sang PascalCase để tương thích backend .NET (tránh lỗi 'rentPricePerDay is required')
       const carDataPascal: Record<string, unknown> = {
         // Khi update có thể cần Id
@@ -397,14 +438,14 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
         TrunkCapacity: values.trunkCapacity,
         BatteryType: values.batteryType,
         BatteryDuration: values.batteryDuration,
-        RentPricePerDay: values.rentPricePerDay,
+        RentPricePerDay: calculatedPricePerDay,
         RentPricePerHour: values.rentPricePerHour,
-        RentPricePerDayWithDriver: values.rentPricePerDayWithDriver,
-        RentPricePerHourWithDriver: values.rentPricePerHourWithDriver,
+        RentPricePerDayWithDriver: calculatedPricePerDayWithDriver,
+        RentPricePerHourWithDriver: calculatedPricePerHourWithDriver,
         ImageUrl: values.imageUrl,
         ImageUrl2: values.imageUrl2 || null,
         ImageUrl3: values.imageUrl3 || null,
-        Status: values.status,
+        Status: Number(values.status), // Đảm bảo là number
         IsActive: values.isActive !== undefined ? values.isActive : true,
         IsDeleted: false,
         CarRentalLocations: [],
@@ -426,13 +467,50 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
         const carId = editingCar ? editingCar.id : extractIdFromData(response.data);
         const selectedLocationId: number | undefined = values.rentalLocationId;
 
+        // Cập nhật ngay lập tức vào state với data từ form (không cần đợi fetch lại)
+        if (editingCar && carId) {
+          setCars((prevCars) => {
+            return prevCars.map((car) => {
+              if (car.id === carId) {
+                return {
+                  ...car,
+                  status: Number(values.status), // Đảm bảo status được cập nhật ngay
+                  name: values.name,
+                  model: values.model,
+                  seats: values.seats,
+                  sizeType: values.sizeType,
+                  trunkCapacity: values.trunkCapacity,
+                  batteryType: values.batteryType,
+                  batteryDuration: values.batteryDuration,
+                  rentPricePerDay: values.rentPricePerDay,
+                  rentPricePerHour: values.rentPricePerHour,
+                  rentPricePerDayWithDriver: values.rentPricePerDayWithDriver,
+                  rentPricePerHourWithDriver: values.rentPricePerHourWithDriver,
+                  imageUrl: values.imageUrl,
+                  imageUrl2: values.imageUrl2,
+                  imageUrl3: values.imageUrl3,
+                  isActive: values.isActive,
+                };
+              }
+              return car;
+            });
+          });
+        }
+
         if (carId) {
           // Lấy danh sách location hiện tại của xe
           let existingCarRentalLocations: CarRentalLocationData[] = [];
           if (editingCar) {
-            const existingResponse = await carRentalLocationApi.getByCarId(carId);
-            if (existingResponse.success && existingResponse.data) {
-              existingCarRentalLocations = normalizeDotNetList<CarRentalLocationData>(existingResponse.data);
+            try {
+              const existingResponse = await carRentalLocationApi.getByCarId(carId);
+              if (existingResponse.success && existingResponse.data) {
+                existingCarRentalLocations = normalizeDotNetList<CarRentalLocationData>(existingResponse.data);
+              }
+            } catch (locationError: any) {
+              // Bỏ qua lỗi 404, không log để tránh spam console
+              if (locationError?.status !== 404 && locationError?.response?.status !== 404) {
+                console.warn(`[CarManagement] Failed to fetch existing locations for car ${carId}:`, locationError);
+              }
             }
           }
 
@@ -498,8 +576,10 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
           icon: <CheckCircle color="#52c41a" />,
         });
         setModalOpen(false);
-        loadCars();
+        setEditingCar(null);
         form.resetFields();
+        // Reload danh sách để đồng bộ trạng thái từ server
+        await loadCars();
       } else {
         api.error({
           message: 'Lỗi',
@@ -524,12 +604,12 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
       title: 'Ảnh',
       dataIndex: 'imageUrl',
       key: 'imageUrl',
-      width: 80,
+      width: 60,
       render: (url: string, record: Car) => (
         <img
           src={url || '/logo_ev.png'}
           alt={record.name}
-          className="w-16 h-16 object-cover rounded"
+          className="w-12 h-12 object-cover rounded"
           onError={(e) => {
             (e.target as HTMLImageElement).src = '/logo_ev.png';
           }}
@@ -556,7 +636,7 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
       title: 'Số chỗ',
       dataIndex: 'seats',
       key: 'seats',
-      width: 80,
+      width: 70,
     },
     {
       title: 'Giá/ngày',
@@ -569,18 +649,22 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
       title: 'Trạng thái',
       dataIndex: 'status',
       key: 'status',
-      width: 120,
-      render: (status: number) => (
-        <Tag color={status === 1 ? 'green' : 'red'}>
-          {status === 1 ? 'Sẵn sàng' : 'Hết xe'}
-        </Tag>
-      ),
+      width: 100,
+      render: (status: number | string | undefined) => {
+        // Đảm bảo status là number
+        const statusNum = typeof status === 'number' ? status : (status === 1 || status === '1' ? 1 : 0);
+        return (
+          <Tag color={statusNum === 1 ? 'green' : 'red'}>
+            {statusNum === 1 ? 'Sẵn sàng' : 'Hết xe'}
+          </Tag>
+        );
+      },
     },
     {
       title: 'Kích hoạt',
       dataIndex: 'isActive',
       key: 'isActive',
-      width: 100,
+      width: 90,
       render: (isActive: boolean) => (
         <Tag color={isActive ? 'blue' : 'default'}>
           {isActive ? 'Active' : 'Inactive'}
@@ -590,12 +674,12 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
     {
       title: 'Địa điểm',
       key: 'locations',
-      width: 280,
+      width: 140,
       render: (_value: unknown, record: Car) => {
         const carLocations = (record as unknown as { carRentalLocations?: unknown })?.carRentalLocations;
         if (!carLocations) {
           return (
-            <Tag color="default" className="text-xs">
+            <Tag color="default" className="text-xs m-0" style={{ margin: 0, padding: '2px 6px' }}>
               <span className="text-gray-400">Chưa gán</span>
             </Tag>
           );
@@ -604,7 +688,7 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
         const locationsList = normalizeDotNetList<RawCarRentalLocation>(carLocations);
         if (locationsList.length === 0) {
           return (
-            <Tag color="default" className="text-xs">
+            <Tag color="default" className="text-xs m-0" style={{ margin: 0, padding: '2px 6px' }}>
               <span className="text-gray-400">Chưa gán</span>
             </Tag>
           );
@@ -634,21 +718,21 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
 
         if (!locationName && !locationAddress) {
           return (
-            <Tag color="default" className="text-xs">
+            <Tag color="default" className="text-xs m-0" style={{ margin: 0, padding: '2px 6px' }}>
               <span className="text-gray-400">Chưa gán</span>
             </Tag>
           );
         }
 
         return (
-          <div className="flex items-start gap-1.5 bg-blue-50 border border-blue-200 rounded-lg px-2 py-1.5 max-w-[250px]">
-            <MapPin size={12} className="flex-shrink-0 text-blue-600 mt-0.5" />
+          <div className="flex items-center gap-0 bg-blue-50 border border-blue-200 rounded px-0.5 py-0 max-w-[150px]">
+            <MapPin size={8} className="flex-shrink-0 text-blue-600" />
             <div className="flex-1 min-w-0">
               {locationName && (
-                <div className="text-xs font-medium text-gray-800 leading-tight">{locationName}</div>
+                <div className="text-xs font-medium text-gray-800 leading-none">{locationName}</div>
               )}
               {locationAddress && (
-                <div className="text-xs text-gray-600 leading-tight mt-0.5">{locationAddress}</div>
+                <div className="text-xs text-gray-600 leading-none">{locationAddress}</div>
               )}
             </div>
           </div>
@@ -660,26 +744,30 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
       key: 'action',
       width: 150,
       render: (_value: unknown, record: Car) => (
-        <Space>
+        <Space size={4}>
           <Button
             type="primary"
             size="small"
-            icon={<Edit />}
+            icon={<Edit size={14} />}
             onClick={() => handleEdit(record)}
+            className="bg-blue-600 hover:bg-blue-700"
           >
             Sửa
           </Button>
-          <Popconfirm
-            title="Xóa xe này?"
-            description="Bạn có chắc chắn muốn xóa xe này?"
-            onConfirm={() => handleDelete(record.id)}
-            okText="Xóa"
-            cancelText="Hủy"
-          >
-            <Button danger size="small" icon={<Trash2 />}>
-              Xóa
-            </Button>
-          </Popconfirm>
+          {!staffMode && (
+            <Popconfirm
+              title="Xóa xe này?"
+              description="Bạn có chắc chắn muốn xóa xe này? Hành động này không thể hoàn tác."
+              onConfirm={() => handleDelete(record.id)}
+              okText="Xóa"
+              cancelText="Hủy"
+              okButtonProps={{ danger: true }}
+            >
+              <Button danger size="small" icon={<Trash2 size={14} />}>
+                Xóa
+              </Button>
+            </Popconfirm>
+          )}
         </Space> 
       ),
     },
@@ -701,22 +789,27 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
               icon={<Plus />}
               onClick={handleAdd}
               className="bg-blue-600"
+              size="small"
             >
               Thêm xe mới
             </Button>
           ) : null
         }
+        bodyStyle={{ padding: '12px' }}
       >
         <Table
           columns={columns}
           dataSource={cars}
           rowKey="id"
           loading={loading}
+          size="small"
           pagination={{
             pageSize: 10,
             showTotal: (total) => `Tổng ${total} xe`,
+            size: 'small',
           }}
           scroll={{ x: 1200 }}
+          className="compact-table"
         />
       </Card>
 
@@ -811,60 +904,79 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
             </Form.Item>
 
             <Form.Item
-              label="Giá thuê/ngày (VND)"
-              name="rentPricePerDay"
-              rules={[{ required: true }]}
-              tooltip="Ví dụ: 900000"
+              label="Giá thuê/giờ (VND)"
+              name="rentPricePerHour"
+              rules={[{ required: true, message: 'Vui lòng nhập giá thuê/giờ!' }]}
+              tooltip="Giá thuê/ngày tự động = giá/giờ × 22. Giá có tài xế tự động = giá thường × 1.4 (+40%)"
             >
               <InputNumber
                 min={0}
                 className="w-full"
                 formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                onChange={(value) => {
+                  // Tự động tính giá theo ngày = giá giờ × 22
+                  if (value && typeof value === 'number') {
+                    const calculatedDayPrice = Math.round(value * 22);
+                    form.setFieldsValue({ rentPricePerDay: calculatedDayPrice });
+                    
+                    // Tự động tính giá có tài xế = giá thường × 1.4 (tăng 40%)
+                    const priceWithDriver = Math.round(value * 1.4);
+                    const dayPriceWithDriver = Math.round(priceWithDriver * 22);
+                    form.setFieldsValue({ 
+                      rentPricePerHourWithDriver: priceWithDriver,
+                      rentPricePerDayWithDriver: dayPriceWithDriver
+                    });
+                  }
+                }}
               />
             </Form.Item>
 
             <Form.Item
-              label="Giá thuê/giờ (VND)"
-              name="rentPricePerHour"
-              rules={[{ required: true }]}
-              tooltip="Ví dụ: 150000"
+              label="Giá thuê/ngày (VND)"
+              name="rentPricePerDay"
+              tooltip="Tự động tính từ giá/giờ (giá/giờ × 22)"
             >
               <InputNumber
                 min={0}
                 className="w-full"
                 formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                disabled
+                style={{ backgroundColor: '#f5f5f5', cursor: 'not-allowed' }}
+              />
+            </Form.Item>
+
+            <Form.Item
+              label="Giá thuê/giờ (có tài xế) được +40%"
+              name="rentPricePerHourWithDriver"
+              tooltip="Tự động tính = giá thuê/giờ × 1.4 (tăng 40%)"
+            >
+              <InputNumber
+                min={0}
+                className="w-full"
+                formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                disabled
+                style={{ backgroundColor: '#f5f5f5', cursor: 'not-allowed' }}
               />
             </Form.Item>
 
             <Form.Item
               label="Giá thuê/ngày (có tài xế)"
               name="rentPricePerDayWithDriver"
-              rules={[{ required: true }]}
-              tooltip="Ví dụ: 1200000"
+              tooltip="Tự động tính từ giá/giờ (có tài xế) (giá/giờ × 22)"
             >
               <InputNumber
                 min={0}
                 className="w-full"
                 formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-              />
-            </Form.Item>
-
-            <Form.Item
-              label="Giá thuê/giờ (có tài xế)"
-              name="rentPricePerHourWithDriver"
-              rules={[{ required: true }]}
-              tooltip="Ví dụ: 200000"
-            >
-              <InputNumber
-                min={0}
-                className="w-full"
-                formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                disabled
+                style={{ backgroundColor: '#f5f5f5', cursor: 'not-allowed' }}
               />
             </Form.Item>
 
             <Form.Item
               label="Trạng thái"
               name="status"
+              initialValue={1}
               rules={[{ required: true }]}
             >
               <Select>
