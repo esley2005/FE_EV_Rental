@@ -34,7 +34,7 @@ import CarManagement from "@/components/admin/CarManagement";
 import CarStatusManagement from "@/components/staff/CarStatusManagement";
 import RentalOrderManagement from "@/components/staff/RentalOrderManagement";
 import { authUtils } from "@/utils/auth";
-import { carsApi as carsApiWrapped, bookingsApi as bookingsApiWrapped, rentalOrderApi, authApi, type ApiResponse } from "@/services/api";
+import { carsApi, bookingsApi as bookingsApiWrapped, rentalOrderApi, authApi, type ApiResponse } from "@/services/api";
 import { useRouter } from "next/navigation"; // ✅ Đúng cho App Router
 
 const { Header, Sider, Content, Footer } = Layout;
@@ -91,11 +91,20 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const [denied, setDenied] = useState(false);
   const [selectedCar, setSelectedCar] = useState<{ carId: string; carName: string } | null>(null);
   const [metricsLoading, setMetricsLoading] = useState(true);
-  const [metrics, setMetrics] = useState({
+  const [metrics, setMetrics] = useState<{
+    revenue: number;
+    orders: number;
+    templates: number;
+    clients: number;
+    availableCars: number; // Số xe còn xe (status = 1)
+    unavailableCars: number; // Số xe hết xe (status = 0)
+  }>({
     revenue: 0,
     orders: 0,
     templates: 0,
     clients: 0,
+    availableCars: 0,
+    unavailableCars: 0,
   });
 
   const router = useRouter();
@@ -123,34 +132,24 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       try {
         setMetricsLoading(true);
 
-        type UnknownApi = ApiResponse<unknown> | unknown;
-        const rentalApi = (rentalOrderApi as unknown as { getAll?: () => Promise<ApiResponse<unknown>> }).getAll?.();
-        const [ordersRes, carsRes, usersRes] = await Promise.all<[
-          UnknownApi,
-          UnknownApi,
-          unknown
-        ]>([
-          (rentalApi as Promise<UnknownApi>) ?? (bookingsApiWrapped.getAll() as Promise<UnknownApi>),
-          carsApiWrapped.getAll() as Promise<UnknownApi>,
-          authApi.getAllUsers().catch(() => ({ success: false, data: [] })) as Promise<unknown>,
+        // Load dữ liệu giống như CarStatusManagement
+        const [ordersRes, carsRes, usersRes] = await Promise.all([
+          rentalOrderApi.getAll().catch(() => ({ success: false, data: [] } as ApiResponse<unknown>)),
+          carsApi.getAll(),
+          authApi.getAllUsers().catch(() => ({ success: false, data: [] } as ApiResponse<unknown>)),
         ]);
 
         // Orders and revenue
         let revenue = 0;
         let orders = 0;
-        const hasDataArray = (res: unknown): res is { data: unknown[] } =>
-          typeof res === "object" && res !== null && Array.isArray((res as Record<string, unknown>).data);
-        const getArray = (res: unknown): unknown[] => {
-          if (hasDataArray(res)) return res.data;
-          // Kiểm tra nếu có $values (format từ .NET)
-          if (typeof res === "object" && res !== null && (res as any).$values && Array.isArray((res as any).$values)) {
-            return (res as any).$values;
-          }
-          return Array.isArray(res) ? res : [];
-        };
-        const arr = getArray(ordersRes);
-        if (arr.length) {
-          orders = arr.length;
+        
+        if (ordersRes.success && ordersRes.data) {
+          const ordersList = Array.isArray(ordersRes.data)
+            ? ordersRes.data
+            : (ordersRes.data as any)?.$values || [];
+          
+          orders = ordersList.length;
+          
           const getNumberField = (obj: unknown, keys: string[]): number => {
             if (typeof obj === "object" && obj !== null) {
               const rec = obj as Record<string, unknown>;
@@ -164,21 +163,46 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             }
             return 0;
           };
-          revenue = arr.reduce<number>((sum, o) => sum + getNumberField(o, ["total", "Total", "totalAmount"]), 0);
+          revenue = (ordersList as unknown[]).reduce((sum: number, o: unknown) => sum + getNumberField(o, ["total", "Total", "totalAmount"]), 0);
         }
 
-        // Vehicles count - chỉ đếm xe không bị xóa
-        const vehiclesArray = getArray(carsRes);
-        const vehiclesCount = vehiclesArray.filter((car: any) => !car.isDeleted).length;
+        // Vehicles count - sử dụng cùng logic như CarStatusManagement
+        let availableCars = 0;
+        let unavailableCars = 0;
+        let vehiclesCount = 0;
+        
+        if (carsRes.success && carsRes.data) {
+          const carsList = Array.isArray(carsRes.data)
+            ? carsRes.data
+            : (carsRes.data as any)?.$values || [];
+          
+          // Filter và đếm giống như CarStatusManagement
+          const activeCars = carsList.filter((car: any) => !car.isDeleted);
+          vehiclesCount = activeCars.length;
+          
+          // Đếm số xe còn xe (status = 1) và hết xe (status = 0)
+          activeCars.forEach((car: any) => {
+            // Xác định trạng thái từ car.status (0 = Disabled, 1 = Available)
+            const carStatusNum = typeof car.status === "number" 
+              ? car.status 
+              : (car.status === 1 || car.status === "1" ? 1 : 0);
+            
+            if (carStatusNum === 1) {
+              availableCars++;
+            } else {
+              unavailableCars++;
+            }
+          });
+        }
 
         // Clients count - lấy từ authApi response
         let clientsCount = 0;
-        if (usersRes && typeof usersRes === "object") {
-          const usersData = (usersRes as any).data || (usersRes as any).$values || usersRes;
-          if (Array.isArray(usersData)) {
+        if (usersRes && typeof usersRes === "object" && "success" in usersRes && usersRes.success) {
+          const users = (usersRes as any).data || [];
+          if (Array.isArray(users)) {
             // Chỉ đếm user có role là Customer/Custom (không phải Admin/Staff)
             // Backend tự động set role là "Customer" hoặc "Custom" khi đăng ký
-            clientsCount = usersData.filter((user: any) => {
+            clientsCount = users.filter((user: any) => {
               const role = (user.role || user.roleName || "").toLowerCase().trim();
               // Loại trừ Admin và Staff, chỉ đếm Customer/Custom hoặc role rỗng (mặc định là customer)
               return role !== "admin" && role !== "staff";
@@ -187,7 +211,14 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         }
 
         if (mounted) {
-          setMetrics({ revenue, orders, templates: vehiclesCount, clients: clientsCount });
+          setMetrics({ 
+            revenue, 
+            orders, 
+            templates: vehiclesCount, 
+            clients: clientsCount,
+            availableCars,
+            unavailableCars,
+          });
         }
       } catch {
         // swallow; metrics stay default
@@ -347,12 +378,26 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Card bordered hoverable loading={metricsLoading}>
-                <Statistic title="Đơn hàng" value={metrics.orders} />
+                <Statistic title="Đơn hàng đã cọc" value={metrics.orders} />
               </Card>
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Card bordered hoverable loading={metricsLoading}>
-                <Statistic title="Số xe" value={metrics.templates} suffix="xe" />
+                <div className="flex flex-col">
+                  <div className="text-sm text-gray-500 mb-3">Số xe</div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                      <span className="text-2xl font-bold text-green-600">{metrics.availableCars || 0}</span>
+                    </div>
+                    <span className="text-gray-300 text-xl">/</span>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                      <span className="text-2xl font-bold text-red-600">{metrics.unavailableCars || 0}</span>
+                    </div>
+                    <span className="text-gray-500 text-base ml-1">xe</span>
+                  </div>
+                </div>
               </Card>
             </Col>
             <Col xs={24} sm={12} md={6}>

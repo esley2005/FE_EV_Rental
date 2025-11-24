@@ -18,6 +18,7 @@ import {
   CheckCircleOutlined,
   ClockCircleOutlined,
   UserOutlined,
+  CloseCircleOutlined,
 } from "@ant-design/icons";
 import { carsApi, rentalOrderApi, authApi } from "@/services/api";
 import type { Car } from "@/types/car";
@@ -26,6 +27,7 @@ import dayjs from "dayjs";
 
 interface CarWithStatus extends Car {
   status: "available" | "booked" | "renting" | "maintenance";
+  originalStatus?: number; // Lưu car.status gốc từ database
   currentOrder?: RentalOrderData & {
     user?: { fullName?: string; email?: string; phone?: string };
   };
@@ -142,6 +144,7 @@ export default function CarStatusManagement() {
           return {
             ...car,
             status,
+            originalStatus: carStatusNum, // Lưu status gốc từ database
             currentOrder,
           };
         });
@@ -231,42 +234,26 @@ export default function CarStatusManagement() {
     {
       title: "Trạng thái",
       key: "status",
-      width: 180,
+      width: 150,
       render: (_: any, record: CarWithStatus) => {
-        // Kiểm tra trạng thái từ car.status (0 = Disabled, 1 = Available)
-        const carStatusNum = typeof record.status === "number" 
-          ? record.status 
-          : (record.status === 1 || record.status === "1" ? 1 : 0);
+        // Lấy trạng thái gốc từ database (0 = Hết xe, 1 = Còn xe)
+        const carStatusNum = record.originalStatus !== undefined 
+          ? record.originalStatus 
+          : (typeof (record as Car).status === "number" 
+            ? (record as Car).status 
+            : ((record as Car).status === 1 || (record as Car).status === "1" ? 1 : 0));
         
-        // Nếu có đơn hàng, ưu tiên hiển thị trạng thái từ đơn hàng
-        if (record.status === "available" || (carStatusNum === 1 && !record.currentOrder)) {
+        // Chỉ hiển thị 2 trạng thái: Còn xe (xanh lá) hoặc Hết xe (đỏ)
+        if (carStatusNum === 1) {
           return (
-            <Tag color="success" icon={<CheckCircleOutlined />}>
-              Available
-            </Tag>
-          );
-        } else if (record.status === "booked") {
-          return (
-            <Tag color="warning" icon={<ClockCircleOutlined />}>
-              Booked
-            </Tag>
-          );
-        } else if (record.status === "renting") {
-          return (
-            <Tag color="processing" icon={<ClockCircleOutlined />}>
-              Rented
-            </Tag>
-          );
-        } else if (carStatusNum === 0 || record.status === "maintenance") {
-          return (
-            <Tag color="error" icon={<ClockCircleOutlined />}>
-              Under Maintenance
+            <Tag color="green" icon={<CheckCircleOutlined />}>
+              Còn xe
             </Tag>
           );
         } else {
           return (
-            <Tag color="default" icon={<ClockCircleOutlined />}>
-              Disabled
+            <Tag color="red" icon={<CloseCircleOutlined />}>
+              Hết xe
             </Tag>
           );
         }
@@ -277,7 +264,7 @@ export default function CarStatusManagement() {
       key: "customer",
       render: (_: any, record: CarWithStatus) => {
         if (record.status === "available") {
-          return <span className="text-gray-400">-</span>;
+          return <span className="text-gray-400">Chưa có đơn</span>;
         }
         if (record.currentOrder?.user) {
           return (
@@ -294,14 +281,14 @@ export default function CarStatusManagement() {
             </Space>
           );
         }
-        return <span className="text-gray-400">-</span>;
+        return <span className="text-gray-400">Chưa có đơn</span>;
       },
     },
     {
-      title: "Thời gian",
+      title: "Thời gian thuê",
       key: "time",
       render: (_: any, record: CarWithStatus) => {
-        if (!record.currentOrder) return <span className="text-gray-400">-</span>;
+        if (!record.currentOrder) return <span className="text-gray-400">Chưa cập nhật</span>;
         
         if (record.status === "booked") {
           return (
@@ -310,7 +297,7 @@ export default function CarStatusManagement() {
               <div className="text-sm">
                 {record.currentOrder.pickupTime
                   ? dayjs(record.currentOrder.pickupTime).format("DD/MM/YYYY HH:mm")
-                  : "-"}
+                  : "Chưa cập nhật"}
               </div>
             </div>
           );
@@ -321,18 +308,18 @@ export default function CarStatusManagement() {
               <div className="text-sm">
                 {record.currentOrder.pickupTime
                   ? dayjs(record.currentOrder.pickupTime).format("DD/MM/YYYY HH:mm")
-                  : "-"}
+                  : "Chưa cập nhật"}
               </div>
               <div className="text-xs text-gray-500 mt-1">Trả dự kiến:</div>
               <div className="text-sm">
                 {record.currentOrder.expectedReturnTime
                   ? dayjs(record.currentOrder.expectedReturnTime).format("DD/MM/YYYY HH:mm")
-                  : "-"}
+                  : "Chưa cập nhật"}
               </div>
             </div>
           );
         }
-        return <span className="text-gray-400">-</span>;
+        return <span className="text-gray-400">Chưa cập nhật</span>;
       },
     },
   ];
