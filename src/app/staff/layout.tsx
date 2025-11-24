@@ -33,6 +33,7 @@ import DocumentVerification from "@/components/DocumentVerification";
 import CarManagement from "@/components/admin/CarManagement";
 import CarStatusManagement from "@/components/staff/CarStatusManagement";
 import RentalOrderManagement from "@/components/staff/RentalOrderManagement";
+import CustomerList from "@/components/staff/CustomerList";
 import { authUtils } from "@/utils/auth";
 import { carsApi, bookingsApi as bookingsApiWrapped, rentalOrderApi, authApi, type ApiResponse } from "@/services/api";
 import { useRouter } from "next/navigation"; // ✅ Đúng cho App Router
@@ -428,9 +429,11 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
                 />
               ) : null
             ) : selectedModule === "customers" ? (
-              <DocumentVerification
-                mode={selectedSubMenu === "1" ? "check-documents" : "verify-system"}
-              />
+              selectedSubMenu === "1" ? (
+                <DocumentVerification mode="check-documents" />
+              ) : (
+                <CustomerList />
+              )
             ) : selectedModule === "payments" ? (
               <RentalOrderManagement />
             ) : selectedModule === "vehicles" ? (
