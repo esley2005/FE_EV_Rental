@@ -1674,15 +1674,15 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               {/* Booking Button */}
               <button
                 onClick={handleBookingClick}
-                disabled={car.isActive !== true || !dateRangeValue}
+                disabled={car.status !== 1 || !dateRangeValue}
                 className={`w-full py-4 px-6 rounded-lg font-bold text-lg transition-colors mb-5 flex items-center justify-center gap-2 ${
-                  car.isActive === true && dateRangeValue
+                  car.status === 1 && dateRangeValue
                     ? 'bg-blue-500 text-white hover:bg-blue-600'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
               >
                 <span></span>
-                {car.isActive === true ? 'CHỌN THUÊ' : 'Xe đã hết'}
+                {car.status === 1 ? 'CHỌN THUÊ' : 'Xe đã hết'}
               </button>
 
               {/* Quick Info */}

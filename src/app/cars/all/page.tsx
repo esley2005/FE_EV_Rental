@@ -238,39 +238,16 @@ export default function AllCarsPage() {
             })
           : [];
         
-        console.log('[All Cars Page] After filter - activeCars length:', activeCars.length);
+        // console.log('[All Cars Page] After filter - activeCars length:', activeCars.length);
         
-<<<<<<< Updated upstream
-        // ✅ Đồng bộ với admin: LUÔN fetch carRentalLocations cho TẤT CẢ xe để hiển thị location
-        // vì API getAll() có thể không trả về relationships
-        console.log(`[All Cars Page] Fetching carRentalLocations for all cars to display location...`);
-=======
-        // ✅ Tối ưu: Batch load tất cả locations một lần để tránh N+1 queries và lỗi 401
-        console.log(`[All Cars Page] Loading all locations to cache...`);
-        let locationsCache = new Map<number, any>();
-        try {
-          const locationsResponse = await rentalLocationApi.getAll();
-          if (locationsResponse.success && locationsResponse.data) {
-            const locationsList = Array.isArray(locationsResponse.data)
-              ? locationsResponse.data
-              : (locationsResponse.data as any)?.$values || [];
-            locationsList.forEach((loc: any) => {
-              const id = loc.id || loc.Id;
-              if (id) locationsCache.set(Number(id), loc);
-            });
-            console.log(`[All Cars Page] ✅ Loaded ${locationsCache.size} locations into cache`);
-          }
-        } catch (err) {
-          console.warn('[All Cars Page] Failed to load locations cache:', err);
-        }
-        
-        // ✅ Sử dụng Car/GetByLocationId thay vì CarRentalLocation/GetByCarId
-        // Logic: Với mỗi car, lấy tất cả locations, rồi check xem location nào có car này
-        console.log(`[All Cars Page] Fetching locations for all cars using Car/GetByLocationId...`);
->>>>>>> Stashed changes
+
+        // // ✅ Đồng bộ với admin: LUÔN fetch carRentalLocations cho TẤT CẢ xe để hiển thị location
+        // // vì API getAll() có thể không trả về relationships
+        // console.log(`[All Cars Page] Fetching carRentalLocations for all cars to display location...`);
+
         
         // Lấy tất cả locations nếu chưa có trong cache
-        if (locationsCache.size === 0) {
+        if (locations.length === 0) {
           try {
             const locationsResponse = await rentalLocationApi.getAll();
             if (locationsResponse.success && locationsResponse.data) {
@@ -352,8 +329,8 @@ export default function AllCarsPage() {
                       return !Number.isNaN(cId) && cId === carId;
                     });
 
-<<<<<<< Updated upstream
-                // ✅ Đồng bộ với admin: Chỉ lấy location đầu tiên (1 xe = 1 location)
+// <<<<<<< Updated upstream
+//                 // ✅ Đồng bộ với admin: Chỉ lấy location đầu tiên (1 xe = 1 location)
                 if (locationsData.length > 0) {
                   // Fetch rentalLocation đầy đủ cho location đầu tiên nếu chưa có
                   const firstLocation = locationsData[0] as any;
@@ -385,22 +362,7 @@ export default function AllCarsPage() {
                             console.warn(`[Car ${car.id}] Failed to fetch location detail for ${locationId}:`, err);
                           }
                         }
-                      }
-=======
-                    if (hasCar) {
-                      // Location này có car, thêm vào danh sách
-                      carLocations.push({
-                        locationId: locationId,
-                        rentalLocation: {
-                          id: locationData.id || locationData.Id,
-                          name: locationData.name || locationData.Name,
-                          address: locationData.address || locationData.Address,
-                          coordinates: locationData.coordinates || locationData.Coordinates,
-                          isActive: locationData.isActive ?? locationData.IsActive,
-                        },
-                      });
-                      console.log(`[Car ${car.id}] ✅ Found at location ${locationId} (${locationData.name || locationData.Name})`);
->>>>>>> Stashed changes
+
                     }
                   }
                 } catch (error) {

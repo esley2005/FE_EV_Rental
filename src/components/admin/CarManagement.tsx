@@ -567,14 +567,16 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
     },
     {
       title: 'Trạng thái',
-      dataIndex: 'isActive',
+      dataIndex: 'status',
       key: 'status',
+
       width: 120,
       render: (isActive: boolean) => (
         <Tag color={isActive === true ? 'green' : 'red'}>
           {isActive === true ? 'Sẵn sàng' : 'Hết xe'}
         </Tag>
       ),
+
     },
     {
       title: 'Kích hoạt',

@@ -128,6 +128,7 @@ export default function CarCard({ car }: CarCardProps) {
             }}
           />
 
+
          
           <div className="absolute top-2 left-2">
             <div className="bg-gray-800 bg-opacity-70 rounded-lg p-1.5">
@@ -145,6 +146,7 @@ export default function CarCard({ car }: CarCardProps) {
               {car.isActive === true ? "Sẵn sàng" : "Hết xe"}
             </span>
           </div>
+
         </div>
       </div>
 

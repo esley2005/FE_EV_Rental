@@ -175,6 +175,7 @@ export default function PaymentSuccessPage() {
       
       if (orderResponse.success && orderResponse.data) {
         const orderData = orderResponse.data;
+<<<<<<< Updated upstream
         
         // Load car details (location sẽ lấy từ car object)
         const carsResponse = await carsApi.getAll();
@@ -212,6 +213,45 @@ export default function PaymentSuccessPage() {
           }
         }
         
+=======
+
+        console.log('[Payment Success] Order data:', orderData);
+
+        // Load car and location
+        const [carsResponse, locationsResponse] = await Promise.all([
+          carsApi.getAll(),
+          rentalLocationApi.getAll()
+        ]);
+
+        console.log('[Payment Success] Cars response:', carsResponse);
+        console.log('[Payment Success] Locations response:', locationsResponse);
+
+        // Parse cars
+        let cars: Car[] = [];
+        if (carsResponse && carsResponse.success && carsResponse.data) {
+          const carsData = Array.isArray(carsResponse.data) 
+            ? carsResponse.data 
+            : (carsResponse.data as { $values?: Car[] })?.$values || [];
+          cars = Array.isArray(carsData) ? carsData : [];
+        }
+
+        // Parse locations
+        let locations: Array<{ id?: number; name?: string; address?: string }> = [];
+        if (locationsResponse && locationsResponse.success && locationsResponse.data) {
+          const locationsData = Array.isArray(locationsResponse.data)
+            ? locationsResponse.data
+            : (locationsResponse.data as { $values?: Array<{ id?: number; name?: string; address?: string }> })?.$values || [];
+          locations = Array.isArray(locationsData) ? locationsData : [];
+        }
+
+        const car = cars.find((c) => c.id === orderData.carId);
+        const location = locations.find((l) => l.id === orderData.rentalLocationId);
+
+        console.log('[Payment Success] Found car:', car);
+        console.log('[Payment Success] Found location:', location);
+
+
+>>>>>>> Stashed changes
         setOrder({
           ...orderData,
           car,
