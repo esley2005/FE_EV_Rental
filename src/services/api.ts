@@ -687,10 +687,32 @@ export const authApi = {
     }),
 
   // Lấy thông tin user hiện tại
-  getProfile: () =>
-    apiCall<User>('/user/profile', {
-      method: 'GET',
-    }),
+  // ✅ TẠM TẮT: Không gọi API, chỉ lấy từ localStorage
+  getProfile: () => {
+    // Tạm thời không gọi API, chỉ lấy từ localStorage
+    const userStr = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
+    if (userStr) {
+      try {
+        const userData = JSON.parse(userStr);
+        return Promise.resolve({
+          success: true,
+          data: userData as User,
+        });
+      } catch (e) {
+        console.warn('[Auth API] Failed to parse user from localStorage:', e);
+      }
+    }
+    // Nếu không có trong localStorage, return error
+    return Promise.resolve({
+      success: false,
+      error: 'User not found in localStorage',
+    });
+    
+    // Code cũ - đã comment để tạm tắt API call
+    // return apiCall<User>('/user/profile', {
+    //   method: 'GET',
+    // });
+  },
 
   // Lấy thông tin user theo ID
   getProfileById: async (userId: number) => {
