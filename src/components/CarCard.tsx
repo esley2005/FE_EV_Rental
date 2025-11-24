@@ -227,7 +227,7 @@ export default function CarCard({ car }: CarCardProps) {
                 ease: "easeInOut"
               }}
             >
-              {normalizedStatus === 1 ? "✓ Sẵn sàng" : "✗ Hết xe"}
+              {normalizedStatus === 1 ? "Sẵn sàng" : "✗ Hết xe"}
             </motion.span>
           </motion.div>
         </div>
@@ -236,7 +236,7 @@ export default function CarCard({ car }: CarCardProps) {
       {/* Thông tin xe */}
       <div className="p-5" onClick={() => router.push(`/cars/${car.id}`)}>
         {/* Badge "Miễn thế chấp" */}
-        <div className="mb-4">
+        {/* <div className="mb-4">
           <motion.div 
             className="inline-flex items-center gap-2 bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 border-2 border-green-400 rounded-xl px-4 py-2 shadow-lg"
             whileHover={{ scale: 1.08, y: -2 }}
@@ -257,7 +257,7 @@ export default function CarCard({ car }: CarCardProps) {
             </motion.div>
             <span className="text-green-700 font-bold text-xs">✨ Miễn thế chấp</span>
           </motion.div>
-        </div>
+        </div> */}
 
         {/* Tên xe */}
         <motion.h2 
@@ -267,7 +267,7 @@ export default function CarCard({ car }: CarCardProps) {
           transition={{ delay: 0.5 }}
           whileHover={{ scale: 1.05 }}
         >
-          🚗 {car.name || car.model}
+          🚗 {car.name} {car.model && car.model}
         </motion.h2>
 
         {/* Thông số kỹ thuật chính */}

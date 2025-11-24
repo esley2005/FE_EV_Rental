@@ -48,7 +48,7 @@ import {
 //1
 // params.id chính là số ID của xe trong đường dẫn (VD: /cars/5 → id = "5")
 interface CarDetailPageProps {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }
 
 type CarLocationDisplay = {
@@ -198,7 +198,7 @@ const getQuantityFromRelation = (relation: any): number | null => {
 };
 
 export default function CarDetailPage({ params }: CarDetailPageProps) {
-  const resolvedParams = React.use(params);
+  const { id: carIdParam } = params;
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
@@ -677,7 +677,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   useEffect(() => {
     const loadCar = async () => {
       try {
-        const carId = parseInt(resolvedParams.id);
+        const carId = parseInt(carIdParam);
         if (isNaN(carId)) {
           notFound();
           return;
@@ -798,7 +798,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     };
 
     loadCar();
-  }, [resolvedParams.id]);
+  }, [carIdParam]);
 
   // Load user profile để kiểm tra status
   useEffect(() => {
@@ -939,49 +939,32 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     router.push(`/booking/${car.id}${queryString ? `?${queryString}` : ''}`);
   };
 
-  //5
-  // Ảnh
-  // Tên, Model
-  // Thông số (loại, số chỗ, dung tích cốp, pin, v.v.)
-  // Giá thuê (ngày, giờ, có tài xế)
-  // Nút "Thuê xe ngay"
-  // Nút Gọi tư vấn / Chat hỗ trợ
-  // Phần "Xe khác" (hiển thị 3 xe ngẫu nhiên khác)
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header />
+      {/* NAV BACK TO LIST - luôn nằm dưới header */}
+      <div
+  className="
+    sticky top-20 z-40 
+    border-b border-white/10
+    bg-[url('/anh-nen.jpg')] 
+    bg-cover bg-center 
+    backdrop-blur-md
+    py-6
+  "
+>
+  <Link
+    href="/#cars"
+            className="flex items-center gap-3 px-4 text-base font-semibold text-white transition hover:text-blue-300"
+  >
+    <span className="ml-[100px]">←</span>
+              <span>Danh sách xe</span>
+  </Link>
+</div>
 
       {/* Add top padding to prevent content being hidden behind fixed header */}
-      <main className="flex-1 container mx-auto px-4 pt-24 pb-8">
-        {/* Breadcrumb - Đường dẫn điều hướng */}
-        <nav className="mb-6">
-          <ol className="flex items-center space-x-2 text-sm mb-4">
-            <li>
-              <Link 
-                href="/" 
-                className="text-gray-600 hover:text-blue-600 font-medium transition-colors duration-200 flex items-center gap-1"
-              >
-                <span>🏠</span>
-                <span>Trang chủ</span>
-              </Link>
-            </li>
-            <li className="text-gray-400">/</li>
-            <li>
-              <Link 
-                href="/#cars" 
-                className="text-gray-600 hover:text-blue-600 font-medium transition-colors duration-200 flex items-center gap-1"
-              >
-                <span>🚗</span>
-                <span>Xe điện</span>
-              </Link>
-            </li>
-            <li className="text-gray-400">/</li>
-            <li className="text-blue-600 font-semibold flex items-center gap-1">
-              <span>📋</span>
-              <span>{car.name}</span>
-            </li>
-          </ol>
-        </nav>
+        <main className="flex-1 container mx-auto px-4 pt-24 pb-8">
+          
 
         {/* Hình ảnh xe - Gallery với 3 ảnh */}
         <div className="bg-white rounded-lg shadow-lg p-4 mb-4">
@@ -1239,59 +1222,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
       
             <div className="bg-white rounded-lg shadow-lg p-4">
              
-            {/* <h2 className="text-xl font-bold text-gray-900 mb-4">
-                <MapPin className="inline-block mr-2 text-blue-600" /> Vị trí xe
-              </h2>
-
-              {loading && (
-                <div className="flex flex-col items-center justify-center py-8 gap-4">
-                  <MapPin className="inline-block text-blue-600" />
-                  <p className="text-gray-600">Đang tải vị trí xe...</p>
-                </div>
-              )}
-
-              {!loading && carCoords && (
-                <>
-                  {carAddress && (
-                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                      <p className="text-sm text-gray-700">
-                        <MapPin className="inline-block mr-2 text-blue-600" />
-                        <strong>Địa chỉ:</strong> {carAddress}
-                      </p>
-                    </div>
-                  )}
-                  <div className="rounded-lg overflow-hidden border border-gray-200">
-                    <CarMap
-                      cars={[
-                        {
-                          ...car,
-                          coords: carCoords,
-                          primaryAddress: carAddress || undefined,
-                        },
-                      ]}
-                      center={[carCoords.lat, carCoords.lng]}
-                      zoom={15}
-                      height={400}
-                    />
-                  </div>
-                </>
-              )} */}
-
-              {/* {!loading && !carCoords && carAddress && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                  <p className="text-sm text-gray-700 mb-2">
-                    <MapPin className="inline-block mr-2 text-yellow-600" />
-                    <strong>Địa chỉ:</strong> {carAddress}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Đang xử lý tọa độ để hiển thị bản đồ...
-                  </p>
-                  <p className="text-xs text-gray-400 mt-2">
-                    (Kiểm tra console để xem chi tiết debug)
-                  </p>
-                </div>
-              )}
-               */}
+            
 
               {!loading && !carCoords && !carAddress && (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
