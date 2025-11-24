@@ -114,8 +114,11 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
 
   useEffect(() => {
     loadCars();
-    loadRentalLocations();
-  }, []);
+    // Chỉ load rental locations nếu không phải staff mode
+    if (!staffMode) {
+      loadRentalLocations();
+    }
+  }, [staffMode]);
 
   const loadCars = async () => {
     setLoading(true);
@@ -128,36 +131,41 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
         // Filter out deleted cars
         const activeCars = listToUse.filter((car) => !car.isDeleted);
         
-        // Fetch carRentalLocations cho tất cả xe để hiển thị location
-        const carsWithLocations = await Promise.all(
-          activeCars.map(async (car) => {
-            try {
-              // Nếu đã có carRentalLocations, không cần fetch lại
-              const hasLocations = car.carRentalLocations && 
-                (Array.isArray(car.carRentalLocations) || (car.carRentalLocations as any)?.$values);
+        // Nếu là staff mode, không cần fetch location (chỉ cần trạng thái)
+        if (staffMode) {
+          setCars(activeCars);
+        } else {
+          // Fetch carRentalLocations cho tất cả xe để hiển thị location (chỉ khi không phải staff mode)
+          const carsWithLocations = await Promise.all(
+            activeCars.map(async (car) => {
+              try {
+                // Nếu đã có carRentalLocations, không cần fetch lại
+                const hasLocations = car.carRentalLocations && 
+                  (Array.isArray(car.carRentalLocations) || (car.carRentalLocations as any)?.$values);
 
-              if (!hasLocations) {
-                // Fetch carRentalLocations từ API
-                const locationResponse = await carRentalLocationApi.getByCarId(car.id);
-                if (locationResponse.success && locationResponse.data) {
-                  const locationsData = Array.isArray(locationResponse.data)
-                    ? locationResponse.data
-                    : (locationResponse.data as any)?.$values || [];
-                  return {
-                    ...car,
-                    carRentalLocations: locationsData
-                  };
+                if (!hasLocations) {
+                  // Fetch carRentalLocations từ API
+                  const locationResponse = await carRentalLocationApi.getByCarId(car.id);
+                  if (locationResponse.success && locationResponse.data) {
+                    const locationsData = Array.isArray(locationResponse.data)
+                      ? locationResponse.data
+                      : (locationResponse.data as any)?.$values || [];
+                    return {
+                      ...car,
+                      carRentalLocations: locationsData
+                    };
+                  }
                 }
+                return car;
+              } catch (error) {
+                console.warn(`Failed to fetch locations for car ${car.id}:`, error);
+                return car;
               }
-              return car;
-            } catch (error) {
-              console.warn(`Failed to fetch locations for car ${car.id}:`, error);
-              return car;
-            }
-          })
-        );
-        
-        setCars(carsWithLocations);
+            })
+          );
+          
+          setCars(carsWithLocations);
+        }
       }
     } catch (error) {
       console.error('Load cars error:', error);
@@ -238,6 +246,84 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
       rentalLocationId: extractRentalLocationId(car),
     });
     setModalOpen(true);
+  };
+
+  const handleStatusChange = async (carId: number, newStatus: number) => {
+    setLoading(true);
+    try {
+      // Tìm xe trong danh sách hiện tại
+      const currentCar = cars.find(car => car.id === carId);
+      if (!currentCar) {
+        api.error({
+          message: 'Lỗi',
+          description: 'Không tìm thấy thông tin xe!',
+          placement: 'topRight',
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Gửi đầy đủ thông tin xe với Status mới (backend yêu cầu tất cả trường bắt buộc)
+      const carDataPascal: Record<string, unknown> = {
+        Id: carId,
+        Name: currentCar.name || '',
+        Model: currentCar.model || '',
+        Seats: currentCar.seats || 5,
+        SizeType: currentCar.sizeType || '',
+        TrunkCapacity: currentCar.trunkCapacity || 0,
+        BatteryType: currentCar.batteryType || '',
+        BatteryDuration: currentCar.batteryDuration || 0,
+        RentPricePerDay: currentCar.rentPricePerDay || 0,
+        RentPricePerHour: currentCar.rentPricePerHour || 0,
+        RentPricePerDayWithDriver: currentCar.rentPricePerDayWithDriver || 0,
+        RentPricePerHourWithDriver: currentCar.rentPricePerHourWithDriver || 0,
+        ImageUrl: currentCar.imageUrl || '',
+        ImageUrl2: currentCar.imageUrl2 || '',
+        ImageUrl3: currentCar.imageUrl3 || '',
+        Status: newStatus,
+        IsActive: currentCar.isActive !== undefined ? currentCar.isActive : true,
+        IsDeleted: false,
+        CarRentalLocations: [],
+        RentalOrders: [],
+        CreatedAt: currentCar.createdAt || new Date().toISOString(),
+        UpdatedAt: new Date().toISOString(),
+      };
+
+      const response = await carsApi.update(carId, carDataPascal as Partial<Car>);
+
+      if (response.success) {
+        // Cập nhật state ngay lập tức để UI phản ánh thay đổi
+        setCars(prevCars => 
+          prevCars.map(car => 
+            car.id === carId ? { ...car, status: newStatus } : car
+          )
+        );
+        
+        api.success({
+          message: 'Cập nhật trạng thái thành công!',
+          placement: 'topRight',
+          icon: <CheckCircle color="#52c41a" />,
+        });
+        
+        // Reload để đảm bảo đồng bộ với server
+        loadCars();
+      } else {
+        api.error({
+          message: 'Lỗi',
+          description: response.error || 'Không thể cập nhật trạng thái!',
+          placement: 'topRight',
+        });
+      }
+    } catch (error) {
+      console.error('Status update error:', error);
+      api.error({
+        message: 'Có lỗi xảy ra',
+        description: 'Không thể cập nhật trạng thái!',
+        placement: 'topRight',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDelete = async (id: number) => {
@@ -386,32 +472,37 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
   const handleSubmit = async (values: CarFormValues) => {
     setLoading(true);
     try {
-      // Map sang PascalCase để tương thích backend .NET (tránh lỗi 'rentPricePerDay is required')
-      const carDataPascal: Record<string, unknown> = {
-        // Khi update có thể cần Id
-        ...(editingCar ? { Id: editingCar.id } : {}),
-        Model: values.model,
-        Name: values.name,
-        Seats: values.seats,
-        SizeType: values.sizeType,
-        TrunkCapacity: values.trunkCapacity,
-        BatteryType: values.batteryType,
-        BatteryDuration: values.batteryDuration,
-        RentPricePerDay: values.rentPricePerDay,
-        RentPricePerHour: values.rentPricePerHour,
-        RentPricePerDayWithDriver: values.rentPricePerDayWithDriver,
-        RentPricePerHourWithDriver: values.rentPricePerHourWithDriver,
-        ImageUrl: values.imageUrl,
-        ImageUrl2: values.imageUrl2 || null,
-        ImageUrl3: values.imageUrl3 || null,
-        Status: values.status,
-        IsActive: values.isActive !== undefined ? values.isActive : true,
-        IsDeleted: false,
-        CarRentalLocations: [],
-        RentalOrders: [],
-        CreatedAt: editingCar ? editingCar.createdAt : new Date().toISOString(),
-        UpdatedAt: editingCar ? new Date().toISOString() : null,
-      };
+      // Nếu là staff mode, chỉ gửi trường Status
+      const carDataPascal: Record<string, unknown> = staffMode
+        ? {
+            ...(editingCar ? { Id: editingCar.id } : {}),
+            Status: values.status,
+          }
+        : {
+            // Khi update có thể cần Id
+            ...(editingCar ? { Id: editingCar.id } : {}),
+            Model: values.model,
+            Name: values.name,
+            Seats: values.seats,
+            SizeType: values.sizeType,
+            TrunkCapacity: values.trunkCapacity,
+            BatteryType: values.batteryType,
+            BatteryDuration: values.batteryDuration,
+            RentPricePerDay: values.rentPricePerDay,
+            RentPricePerHour: values.rentPricePerHour,
+            RentPricePerDayWithDriver: values.rentPricePerDayWithDriver,
+            RentPricePerHourWithDriver: values.rentPricePerHourWithDriver,
+            ImageUrl: values.imageUrl,
+            ImageUrl2: values.imageUrl2 || null,
+            ImageUrl3: values.imageUrl3 || null,
+            Status: values.status,
+            IsActive: values.isActive !== undefined ? values.isActive : true,
+            IsDeleted: false,
+            CarRentalLocations: [],
+            RentalOrders: [],
+            CreatedAt: editingCar ? editingCar.createdAt : new Date().toISOString(),
+            UpdatedAt: editingCar ? new Date().toISOString() : null,
+          };
 
       let response: Awaited<ReturnType<typeof carsApi.create>>;
       if (editingCar) {
@@ -426,7 +517,8 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
         const carId = editingCar ? editingCar.id : extractIdFromData(response.data);
         const selectedLocationId: number | undefined = values.rentalLocationId;
 
-        if (carId) {
+        // Chỉ xử lý location nếu không phải staff mode
+        if (!staffMode && carId) {
           // Lấy danh sách location hiện tại của xe
           let existingCarRentalLocations: CarRentalLocationData[] = [];
           if (editingCar) {
@@ -493,7 +585,9 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
         }
 
         api.success({
-          message: editingCar ? 'Cập nhật xe thành công!' : 'Thêm xe thành công!',
+          message: staffMode 
+            ? 'Cập nhật trạng thái xe thành công!' 
+            : (editingCar ? 'Cập nhật xe thành công!' : 'Thêm xe thành công!'),
           placement: 'topRight',
           icon: <CheckCircle color="#52c41a" />,
         });
@@ -569,12 +663,32 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
       title: 'Trạng thái',
       dataIndex: 'status',
       key: 'status',
-      width: 120,
-      render: (status: number) => (
-        <Tag color={status === 1 ? 'green' : 'red'}>
-          {status === 1 ? 'Sẵn sàng' : 'Hết xe'}
-        </Tag>
-      ),
+      width: 150,
+      render: (status: number, record: Car) => {
+        if (staffMode) {
+          // Normalize status để đảm bảo là số
+          const statusNum = typeof status === 'number' ? status : (status === 1 || status === '1' ? 1 : 0);
+          return (
+            <Select
+              value={statusNum}
+              onChange={async (value) => {
+                await handleStatusChange(record.id, value);
+              }}
+              style={{ width: '100%' }}
+              size="small"
+            >
+              <Select.Option value={1}>Sẵn sàng</Select.Option>
+              <Select.Option value={0}>Hết xe</Select.Option>
+            </Select>
+          );
+        }
+        const statusNum = typeof status === 'number' ? status : (status === 1 || status === '1' ? 1 : 0);
+        return (
+          <Tag color={statusNum === 1 ? 'green' : 'red'}>
+            {statusNum === 1 ? 'Sẵn sàng' : 'Hết xe'}
+          </Tag>
+        );
+      },
     },
     {
       title: 'Kích hoạt',
@@ -655,34 +769,36 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
         );
       },
     },
-    {
-      title: 'Thao tác',
-      key: 'action',
-      width: 150,
-      render: (_value: unknown, record: Car) => (
-        <Space>
-          <Button
-            type="primary"
-            size="small"
-            icon={<Edit />}
-            onClick={() => handleEdit(record)}
-          >
-            Sửa
-          </Button>
-          <Popconfirm
-            title="Xóa xe này?"
-            description="Bạn có chắc chắn muốn xóa xe này?"
-            onConfirm={() => handleDelete(record.id)}
-            okText="Xóa"
-            cancelText="Hủy"
-          >
-            <Button danger size="small" icon={<Trash2 />}>
-              Xóa
+    ...(staffMode ? [] : [
+      {
+        title: 'Thao tác',
+        key: 'action',
+        width: 150,
+        render: (_value: unknown, record: Car) => (
+          <Space>
+            <Button
+              type="primary"
+              size="small"
+              icon={<Edit />}
+              onClick={() => handleEdit(record)}
+            >
+              Sửa
             </Button>
-          </Popconfirm>
-        </Space> 
-      ),
-    },
+            <Popconfirm
+              title="Xóa xe này?"
+              description="Bạn có chắc chắn muốn xóa xe này?"
+              onConfirm={() => handleDelete(record.id)}
+              okText="Xóa"
+              cancelText="Hủy"
+            >
+              <Button danger size="small" icon={<Trash2 />}>
+                Xóa
+              </Button>
+            </Popconfirm>
+          </Space> 
+        ),
+      }
+    ]),
   ];
 
   return (
@@ -737,33 +853,33 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
             <Form.Item
               label="Tên xe"
               name="name"
-              rules={[{ required: true, message: 'Vui lòng nhập tên xe!' }]}
+              rules={staffMode ? [] : [{ required: true, message: 'Vui lòng nhập tên xe!' }]}
             >
-              <Input placeholder="VinFast VF 8" />
+              <Input placeholder="VinFast VF 8" disabled={staffMode} />
             </Form.Item>
 
             <Form.Item
               label="Model"
               name="model"
-              rules={[{ required: true, message: 'Vui lòng nhập model!' }]}
+              rules={staffMode ? [] : [{ required: true, message: 'Vui lòng nhập model!' }]}
             >
-              <Input placeholder="VF 8 Plus" />
+              <Input placeholder="VF 8 Plus" disabled={staffMode} />
             </Form.Item>
 
             <Form.Item
               label="Số chỗ ngồi"
               name="seats"
-              rules={[{ required: true, message: 'Vui lòng nhập số chỗ!' }]}
+              rules={staffMode ? [] : [{ required: true, message: 'Vui lòng nhập số chỗ!' }]}
             >
-              <InputNumber min={2} max={9} className="w-full" />
+              <InputNumber min={2} max={9} className="w-full" disabled={staffMode} />
             </Form.Item>
 
             <Form.Item
               label="Loại xe"
               name="sizeType"
-              rules={[{ required: true, message: 'Vui lòng chọn loại xe!' }]}
+              rules={staffMode ? [] : [{ required: true, message: 'Vui lòng chọn loại xe!' }]}
             >
-              <Select placeholder="Chọn loại xe">
+              <Select placeholder="Chọn loại xe" disabled={staffMode}>
                 <Select.Option value="mini">Mini</Select.Option>
                 <Select.Option value="coupé">Coupé</Select.Option>
                 <Select.Option value="crossover">Crossover</Select.Option>
@@ -778,18 +894,18 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
             <Form.Item
               label="Dung tích cốp (lít)"
               name="trunkCapacity"
-              rules={[{ required: true }]}
+              rules={staffMode ? [] : [{ required: true }]}
               tooltip="Ví dụ: 40, 300, 500"
             >
-              <InputNumber min={0} max={2000} className="w-full" />
+              <InputNumber min={0} max={2000} className="w-full" disabled={staffMode} />
             </Form.Item>
 
             <Form.Item
               label="Loại pin"
               name="batteryType"
-              rules={[{ required: true, message: 'Vui lòng chọn loại pin!' }]}
+              rules={staffMode ? [] : [{ required: true, message: 'Vui lòng chọn loại pin!' }]}
             >
-              <Select placeholder="Chọn loại pin">
+              <Select placeholder="Chọn loại pin" disabled={staffMode}>
                 <Select.Option value="LFP">LFP</Select.Option>
                 <Select.Option value="NMC">NMC</Select.Option>
                 <Select.Option value="NCA">NCA</Select.Option>
@@ -804,61 +920,65 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
             <Form.Item
               label="Quãng đường (km)"
               name="batteryDuration"
-              rules={[{ required: true }]}
+              rules={staffMode ? [] : [{ required: true }]}
               tooltip="Ví dụ: 300, 400, 500 km"
             >
-              <InputNumber min={0} max={2000} className="w-full" />
+              <InputNumber min={0} max={2000} className="w-full" disabled={staffMode} />
             </Form.Item>
 
             <Form.Item
               label="Giá thuê/ngày (VND)"
               name="rentPricePerDay"
-              rules={[{ required: true }]}
+              rules={staffMode ? [] : [{ required: true }]}
               tooltip="Ví dụ: 900000"
             >
               <InputNumber
                 min={0}
                 className="w-full"
                 formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                disabled={staffMode}
               />
             </Form.Item>
 
             <Form.Item
               label="Giá thuê/giờ (VND)"
               name="rentPricePerHour"
-              rules={[{ required: true }]}
+              rules={staffMode ? [] : [{ required: true }]}
               tooltip="Ví dụ: 150000"
             >
               <InputNumber
                 min={0}
                 className="w-full"
                 formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                disabled={staffMode}
               />
             </Form.Item>
 
             <Form.Item
               label="Giá thuê/ngày (có tài xế)"
               name="rentPricePerDayWithDriver"
-              rules={[{ required: true }]}
+              rules={staffMode ? [] : [{ required: true }]}
               tooltip="Ví dụ: 1200000"
             >
               <InputNumber
                 min={0}
                 className="w-full"
                 formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                disabled={staffMode}
               />
             </Form.Item>
 
             <Form.Item
               label="Giá thuê/giờ (có tài xế)"
               name="rentPricePerHourWithDriver"
-              rules={[{ required: true }]}
+              rules={staffMode ? [] : [{ required: true }]}
               tooltip="Ví dụ: 200000"
             >
               <InputNumber
                 min={0}
                 className="w-full"
                 formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                disabled={staffMode}
               />
             </Form.Item>
 
@@ -876,7 +996,7 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
             <Form.Item
               label="Địa điểm cho thuê"
               name="rentalLocationId"
-              rules={[{ required: true, message: 'Vui lòng chọn địa điểm!' }]}
+              rules={staffMode ? [] : [{ required: true, message: 'Vui lòng chọn địa điểm!' }]}
             >
               <Select
                 placeholder="Chọn địa điểm cho thuê xe"
@@ -884,6 +1004,7 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
                 optionFilterProp="label"
                 showSearch
                 allowClear
+                disabled={staffMode}
                 filterOption={(input, option) => {
                   const label = option?.label?.toString() || '';
                   return label.toLowerCase().includes(input.toLowerCase());
@@ -909,11 +1030,12 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
           <Form.Item
             label="URL ảnh xe chính (bắt buộc)"
             name="imageUrl"
-            rules={[{ required: true, message: 'Vui lòng nhập URL ảnh chính!' }]}
+            rules={staffMode ? [] : [{ required: true, message: 'Vui lòng nhập URL ảnh chính!' }]}
             tooltip="Link ảnh từ internet hoặc upload bên dưới"
           >
             <Input
               placeholder="https://res.cloudinary.com/... hoặc upload ảnh bên dưới"
+              disabled={staffMode}
             />
           </Form.Item>
 
@@ -936,33 +1058,36 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
             }}
           </Form.Item>
 
-          <Form.Item label="Hoặc upload ảnh chính từ máy">
-            <Upload
-              customRequest={(options) => handleImageUpload(options, 'imageUrl')}
-              showUploadList={false}
-              accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-              maxCount={1}
-            >
-              <Button
-                icon={<UploadIcon />}
-                loading={uploading}
-                type="dashed"
-                block
+          {!staffMode && (
+            <Form.Item label="Hoặc upload ảnh chính từ máy">
+              <Upload
+                customRequest={(options) => handleImageUpload(options, 'imageUrl')}
+                showUploadList={false}
+                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                maxCount={1}
               >
-                {uploading ? 'Đang tải lên...' : 'Chọn ảnh chính từ máy tính'}
-              </Button>
-            </Upload>
-          </Form.Item>
+                <Button
+                  icon={<UploadIcon />}
+                  loading={uploading}
+                  type="dashed"
+                  block
+                >
+                  {uploading ? 'Đang tải lên...' : 'Chọn ảnh chính từ máy tính'}
+                </Button>
+              </Upload>
+            </Form.Item>
+          )}
 
           {/* Ảnh phụ 1 */}
           <Form.Item
             label="URL ảnh xe phụ 1 (bắt buộc)"
             name="imageUrl2"
-            rules={[{ required: true, message: 'Vui lòng nhập URL ảnh chính!' }]}
+            rules={staffMode ? [] : [{ required: true, message: 'Vui lòng nhập URL ảnh chính!' }]}
             tooltip="Link ảnh từ internet hoặc upload bên dưới"
           >
             <Input
               placeholder="https://res.cloudinary.com/... hoặc upload ảnh bên dưới"
+              disabled={staffMode}
             />
           </Form.Item>
 
@@ -985,33 +1110,36 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
             }}
           </Form.Item>
 
-          <Form.Item label="Hoặc upload ảnh phụ 1 từ máy">
-            <Upload
-              customRequest={(options) => handleImageUpload(options, 'imageUrl2')}
-              showUploadList={false}
-              accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-              maxCount={1}
-            >
-              <Button
-                icon={<UploadIcon />}
-                loading={uploading}
-                type="dashed"
-                block
+          {!staffMode && (
+            <Form.Item label="Hoặc upload ảnh phụ 1 từ máy">
+              <Upload
+                customRequest={(options) => handleImageUpload(options, 'imageUrl2')}
+                showUploadList={false}
+                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                maxCount={1}
               >
-                {uploading ? 'Đang tải lên...' : 'Chọn ảnh phụ 1 từ máy tính'}
-              </Button>
-            </Upload>
-          </Form.Item>
+                <Button
+                  icon={<UploadIcon />}
+                  loading={uploading}
+                  type="dashed"
+                  block
+                >
+                  {uploading ? 'Đang tải lên...' : 'Chọn ảnh phụ 1 từ máy tính'}
+                </Button>
+              </Upload>
+            </Form.Item>
+          )}
 
           {/* Ảnh phụ 2 */}
           <Form.Item
             label="URL ảnh xe phụ 2 (bắt buộc)"
             name="imageUrl3"
-            rules={[{ required: true, message: 'Vui lòng nhập URL ảnh chính!' }]}
+            rules={staffMode ? [] : [{ required: true, message: 'Vui lòng nhập URL ảnh chính!' }]}
             tooltip="Link ảnh từ internet hoặc upload bên dưới"
           >
             <Input
               placeholder="https://res.cloudinary.com/... hoặc upload ảnh bên dưới"
+              disabled={staffMode}
             />
           </Form.Item>
 
@@ -1034,35 +1162,37 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
             }}
           </Form.Item>
 
-          <Form.Item label="Hoặc upload ảnh phụ 2 từ máy">
-            <Upload
-              customRequest={(options) => handleImageUpload(options, 'imageUrl3')}
-              showUploadList={false}
-              accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-              maxCount={1}
-            >
-              <Button
-                icon={<UploadIcon />}
-                loading={uploading}
-                type="dashed"
-                block
+          {!staffMode && (
+            <Form.Item label="Hoặc upload ảnh phụ 2 từ máy">
+              <Upload
+                customRequest={(options) => handleImageUpload(options, 'imageUrl3')}
+                showUploadList={false}
+                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                maxCount={1}
               >
-                {uploading ? 'Đang tải lên...' : 'Chọn ảnh phụ 2 từ máy tính'}
-              </Button>
-            </Upload>
-            <p className="text-xs text-gray-500 mt-2">
-              ✓ Chấp nhận: JPG, PNG, GIF, WEBP<br />
-              ✓ Kích thước tối đa: 5MB<br />
-              ✓ Ảnh sẽ được lưu trên Cloudinary (CDN tốc độ cao)
-            </p>
-          </Form.Item>
+                <Button
+                  icon={<UploadIcon />}
+                  loading={uploading}
+                  type="dashed"
+                  block
+                >
+                  {uploading ? 'Đang tải lên...' : 'Chọn ảnh phụ 2 từ máy tính'}
+                </Button>
+              </Upload>
+              <p className="text-xs text-gray-500 mt-2">
+                ✓ Chấp nhận: JPG, PNG, GIF, WEBP<br />
+                ✓ Kích thước tối đa: 5MB<br />
+                ✓ Ảnh sẽ được lưu trên Cloudinary (CDN tốc độ cao)
+              </p>
+            </Form.Item>
+          )}
 
           <Form.Item
             label="Kích hoạt"
             name="isActive"
             valuePropName="checked"
           >
-            <Switch />
+            <Switch disabled={staffMode} />
           </Form.Item>
 
           <Form.Item className="mb-0">

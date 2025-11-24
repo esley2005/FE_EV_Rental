@@ -257,8 +257,6 @@ export default function BookingPage() {
 
   const carId = params?.carId as string;
   const locationIdFromUrl = searchParams?.get('locationId');
-  const startDateFromUrl = searchParams?.get('startDate');
-  const endDateFromUrl = searchParams?.get('endDate');
 
   useEffect(() => {
     if (!carId) return;
@@ -275,22 +273,6 @@ export default function BookingPage() {
           message.error("Không tìm thấy xe!");
           router.push('/');
           return;
-        }
-
-        // Nếu có thời gian từ URL, set vào form
-        if (startDateFromUrl && endDateFromUrl) {
-          try {
-            const startDate = dayjs(startDateFromUrl);
-            const endDate = dayjs(endDateFromUrl);
-            if (startDate.isValid() && endDate.isValid()) {
-              form.setFieldsValue({
-                dateRange: [startDate, endDate],
-              });
-              setDateRangeValue([startDate, endDate]);
-            }
-          } catch (error) {
-            console.error('Error parsing dates from URL:', error);
-          }
         }
 
         // Load user
@@ -374,7 +356,7 @@ export default function BookingPage() {
     };
 
     loadData();
-  }, [carId, form, router, resolveCarLocation, startDateFromUrl, endDateFromUrl]);
+  }, [carId, form, router, resolveCarLocation]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
@@ -496,147 +478,64 @@ export default function BookingPage() {
 
       const response = await rentalOrderApi.create(orderData);
 
-      console.log('[Booking] Create order response:', {
-        success: response.success,
-        hasData: !!response.data,
-        dataType: typeof response.data,
-        fullResponse: response
-      });
-
-      if (response.success) {
-        // Lấy orderId từ nhiều nguồn khác nhau để đảm bảo lấy được
-        let orderId: number | null = null;
+      if (response.success && response.data) {
+        const orderId = (response.data as any).id || (response.data as any).Id;
         
-        if (response.data) {
-          const data = response.data as any;
-          // Thử nhiều cách lấy orderId
-          orderId = data.id || 
-                   data.Id || 
-                   data.orderId ||
-                   data.OrderId ||
-                   data.rentalOrderId ||
-                   data.RentalOrderId ||
-                   (typeof data === 'number' ? data : null);
-        }
-        
-        // Nếu không lấy được từ data, thử lấy từ response trực tiếp
-        if (!orderId) {
-          const responseAny = response as any;
-          orderId = responseAny.id || 
-                   responseAny.Id || 
-                   responseAny.orderId ||
-                   responseAny.OrderId ||
-                   null;
-        }
-        
-        // Nếu vẫn không có, thử parse từ message hoặc string response
-        if (!orderId && response.message) {
-          const messageStr = String(response.message);
-          const idMatch = messageStr.match(/id[:\s]*(\d+)/i) || messageStr.match(/(\d+)/);
-          if (idMatch && idMatch[1]) {
-            orderId = parseInt(idMatch[1], 10);
+        // LUÔN LUÔN cập nhật OrderDate = thời gian khi ấn "Xác nhận"
+        if (orderId && orderId > 0) {
+          console.log('[Booking] Order created successfully. Updating OrderDate to confirm time:', orderDateISO);
+          try {
+            const updateResponse = await rentalOrderApi.updateOrderDate(orderId, orderDateISO);
+            if (updateResponse.success) {
+              console.log('[Booking] OrderDate updated successfully to confirm time:', updateResponse.data?.orderDate || (updateResponse.data as any)?.OrderDate);
+            } else {
+              console.warn('[Booking] Failed to update OrderDate:', updateResponse.error);
+              // Không block flow, nhưng log warning để biết có vấn đề
+            }
+          } catch (updateError) {
+            console.error('[Booking] Error updating OrderDate:', updateError);
+            // Không block flow nếu update OrderDate thất bại
           }
         }
         
-        console.log('[Booking] Extracted OrderId:', orderId);
-        console.log('[Booking] Full response data:', JSON.stringify(response.data, null, 2));
-        console.log('[Booking] Full response object:', response);
-        
-        // Thử cập nhật OrderDate = thời gian khi ấn "Xác nhận" (nếu backend hỗ trợ)
-        // Lưu ý: OrderDate đã được set khi tạo order, nên việc update này là optional
-        if (orderId && orderId > 0) {
-          // Chạy async, không đợi kết quả để không block flow
-          rentalOrderApi.updateOrderDate(orderId, orderDateISO)
-            .then((updateResponse) => {
-              if (updateResponse.success) {
-                console.log('[Booking] OrderDate updated successfully to confirm time');
-              } else {
-                // Im lặng nếu không có endpoint - không phải lỗi nghiêm trọng
-                // vì OrderDate đã được set khi tạo order
-                if (process.env.NODE_ENV === 'development') {
-                  console.log('[Booking] UpdateOrderDate endpoint not available (this is OK, OrderDate was set on create)');
-                }
-              }
-            })
-            .catch((updateError) => {
-              // Im lặng nếu update thất bại - không phải lỗi nghiêm trọng
-              if (process.env.NODE_ENV === 'development') {
-                console.log('[Booking] UpdateOrderDate failed (this is OK, OrderDate was set on create):', updateError);
-              }
-            });
-        }
-        
-        // Thông báo đặt xe thành công và chuyển đến trang thanh toán
+        // Thông báo đặt xe thành công và yêu cầu thanh toán cọc
         api.success({
-          message: "Đặt xe thành công!",
+          message: (
+            <span className="font-bold text-lg">
+              ⚠️ ĐẶT XE THÀNH CÔNG - CẦN THANH TOÁN CỌC NGAY!
+            </span>
+          ),
           description: (
             <div>
-              <p className="font-bold text-base mb-2">⚠️ QUAN TRỌNG: BẠN PHẢI THANH TOÁN CỌC NGAY!</p>
-              <p>Đơn hàng của bạn đã được tạo thành công.</p>
-              <p className="font-semibold text-red-600 mt-1">
-                Để đảm bảo đơn hàng được xác nhận, bạn cần thanh toán tiền đặt cọc ngay bây giờ.
+              <p className="mb-2 font-semibold text-base">
+                Đơn hàng của bạn đã được tạo thành công!
               </p>
-              <p className="mt-1">Đang chuyển đến trang thanh toán...</p>
+              <p className="mb-2 text-base">
+                <strong className="text-red-600">BẮT BUỘC:</strong> Bạn phải thanh toán tiền đặt cọc để xác nhận đơn hàng và giữ chỗ.
+              </p>
+              <p className="mb-1 text-sm text-gray-700">
+                • Tiền đặt cọc thường là 30% tổng giá trị đơn hàng
+              </p>
+              <p className="mb-1 text-sm text-gray-700">
+                • Số tiền còn lại sẽ thanh toán khi nhận xe
+              </p>
+              <p className="mt-2 text-sm font-semibold text-blue-600">
+                Đang chuyển đến trang thanh toán...
+              </p>
             </div>
           ),
           placement: "topRight",
-          duration: 3,
+          duration: 6,
         });
         
         // Redirect đến trang checkout để thanh toán cọc ngay
-        // Giảm timeout để chuyển nhanh hơn
-        if (orderId && orderId > 0 && !isNaN(orderId)) {
-          setTimeout(() => {
+        setTimeout(() => {
+          if (orderId && orderId > 0) {
             router.push(`/checkout?orderId=${orderId}&autoPay=true`);
-          }, 800);
-        } else {
-          console.error('[Booking] OrderId không hợp lệ:', orderId);
-          console.error('[Booking] Response data:', response.data);
-          console.error('[Booking] Full response:', response);
-          
-          // Thử lấy order mới nhất từ user orders như fallback
-          if (user && user.id) {
-            try {
-              const userOrdersResponse = await rentalOrderApi.getByUserId(user.id);
-              if (userOrdersResponse.success && userOrdersResponse.data) {
-                const orders = Array.isArray(userOrdersResponse.data) 
-                  ? userOrdersResponse.data 
-                  : (userOrdersResponse.data as any)?.$values || [];
-                
-                if (orders.length > 0) {
-                  // Lấy order mới nhất (theo orderDate hoặc createdAt)
-                  const latestOrder = orders.sort((a: any, b: any) => {
-                    const dateA = new Date(a.orderDate || a.OrderDate || a.createdAt || a.CreatedAt || 0);
-                    const dateB = new Date(b.orderDate || b.OrderDate || b.createdAt || b.CreatedAt || 0);
-                    return dateB.getTime() - dateA.getTime();
-                  })[0];
-                  
-                  const latestOrderId = latestOrder.id || latestOrder.Id || latestOrder.orderId || latestOrder.OrderId;
-                  
-                  if (latestOrderId && latestOrderId > 0) {
-                    console.log('[Booking] Using latest order as fallback:', latestOrderId);
-                    setTimeout(() => {
-                      router.push(`/checkout?orderId=${latestOrderId}&autoPay=true`);
-                    }, 800);
-                    return;
-                  }
-                }
-              }
-            } catch (fallbackError) {
-              console.error('[Booking] Fallback to get latest order failed:', fallbackError);
-            }
-          }
-          
-          api.error({
-            message: "Lỗi khi tạo đơn hàng",
-            description: "Không thể lấy được ID đơn hàng. Vui lòng kiểm tra lại trong 'Đơn hàng của tôi'.",
-            placement: "topRight",
-            duration: 5,
-          });
-          setTimeout(() => {
+          } else {
             router.push('/my-bookings');
-          }, 2000);
-        }
+          }
+        }, 1500);
       } else {
         api.error({
           message: "Đặt xe thất bại",
@@ -815,9 +714,9 @@ export default function BookingPage() {
             </div>
           )}
 
-    
+          {/* Thông tin đặt xe */}
           <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Thông tin người thuê</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Thông tin đặt xe</h2>
             <p className="text-sm text-gray-600 mb-4">
               Vui lòng để lại thông tin liên lạc. Chúng tôi sẽ liên hệ bạn sớm nhất.
             </p>
@@ -847,7 +746,7 @@ export default function BookingPage() {
             </div>
           </div>
 
-       
+          {/* Thông tin đơn hàng */}
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-6">Thông tin đơn hàng</h2>
 
@@ -877,54 +776,33 @@ export default function BookingPage() {
                     return current && current < dayjs().startOf('day');
                   }}
                   disabledTime={(value, type) => {
-                    const now = dayjs();
-                    
-                    // Nếu chọn ngày hôm nay, chặn các giờ và phút trong quá khứ
-                    if (value && value.isSame(now, 'day')) {
-                      const currentHour = now.hour();
-                      const currentMinute = now.minute();
+                    if (type === 'start') {
+                      const now = dayjs();
                       
-                      return {
-                        disabledHours: () => {
-                          const hours = [];
-                          // Chặn giờ từ 0-4 (00:00 - 04:59)
-                          for (let i = 0; i < 5; i++) {
-                            hours.push(i);
-                          }
-                          // Chặn các giờ đã qua trong ngày hôm nay (từ 5 trở đi)
-                          if (currentHour >= 5) {
-                            for (let i = 5; i < currentHour; i++) {
+                      // Nếu chọn ngày hôm nay, chặn các giờ và phút trong quá khứ
+                      if (value && value.isSame(now, 'day')) {
+                        return {
+                          disabledHours: () => {
+                            const hours = [];
+                            for (let i = 0; i < now.hour(); i++) {
                               hours.push(i);
                             }
-                          }
-                          return hours;
-                        },
-                        disabledMinutes: (selectedHour: number) => {
-                          // Nếu chọn giờ hiện tại, chặn các phút đã qua
-                          if (selectedHour === currentHour) {
-                            const minutes = [];
-                            for (let i = 0; i <= currentMinute; i++) {
-                              minutes.push(i);
+                            return hours;
+                          },
+                          disabledMinutes: (selectedHour: number) => {
+                            if (selectedHour === now.hour()) {
+                              const minutes = [];
+                              for (let i = 0; i <= now.minute(); i++) {
+                                minutes.push(i);
+                              }
+                              return minutes;
                             }
-                            return minutes;
-                          }
-                          return [];
-                        },
-                      };
+                            return [];
+                          },
+                        };
+                      }
                     }
-                    
-                    // Nếu không phải ngày hôm nay, chỉ chặn giờ ngoài khoảng 05:00 - 23:00
-                    return {
-                      disabledHours: () => {
-                        // Chặn giờ từ 0-4 (00:00 - 04:59)
-                        const hours = [];
-                        for (let i = 0; i < 5; i++) {
-                          hours.push(i);
-                        }
-                        return hours;
-                      },
-                      disabledMinutes: () => [],
-                    };
+                    return {};
                   }}
                 />
               </Form.Item>

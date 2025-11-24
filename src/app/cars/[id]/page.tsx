@@ -3,10 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { notFound, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Spin, message, notification, Modal, Button, DatePicker } from "antd";
-import dayjs, { Dayjs } from "dayjs";
-
-const { RangePicker } = DatePicker;
+import { Spin, message, notification, Modal, Button } from "antd";
 // Removed @ant-design/icons to standardize on lucide-react icons
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -42,13 +39,12 @@ import {
   Phone,
   CheckCircle,
   Sparkles,
-  Calendar,
 } from "lucide-react";
 
 //1
 // params.id chính là số ID của xe trong đường dẫn (VD: /cars/5 → id = "5")
 interface CarDetailPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 type CarLocationDisplay = {
@@ -198,7 +194,7 @@ const getQuantityFromRelation = (relation: any): number | null => {
 };
 
 export default function CarDetailPage({ params }: CarDetailPageProps) {
-  const { id: carIdParam } = params;
+  const resolvedParams = React.use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
@@ -219,7 +215,6 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   const [userOrderIdForCar, setUserOrderIdForCar] = useState<number | null>(null);
   const [checkingReviewEligibility, setCheckingReviewEligibility] = useState(false);
   const [selectedLocationFromUrl, setSelectedLocationFromUrl] = useState<{ id: number; name: string; address: string } | null>(null);
-  const [dateRangeValue, setDateRangeValue] = useState<[Dayjs, Dayjs] | null>(null);
 
   // Load location from URL if locationId exists
   useEffect(() => {
@@ -677,7 +672,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   useEffect(() => {
     const loadCar = async () => {
       try {
-        const carId = parseInt(carIdParam);
+        const carId = parseInt(resolvedParams.id);
         if (isNaN(carId)) {
           notFound();
           return;
@@ -770,19 +765,12 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             console.warn('[Car Detail] ⚠️ No coordinates found for car');
           }
           
-          // Lọc các xe khác (không phải xe hiện tại) theo cùng sizeType và lấy 3 xe đầu tiên
-          const currentCarSizeType = currentCar.sizeType;
-          console.log('[Car Detail] Current car sizeType:', currentCarSizeType);
-          
+          // Lọc các xe khác (không phải xe hiện tại) và lấy 3 xe đầu tiên
           const otherCarsList = activeCars
-            .filter((c: Car) => 
-              c && 
-              c.id !== carId && 
-              c.sizeType === currentCarSizeType
-            )
+            .filter((c: Car) => c && c.id !== carId)
             .slice(0, 3);
           
-          console.log('[Car Detail] otherCarsList (filtered by sizeType):', otherCarsList);
+          console.log('[Car Detail] otherCarsList:', otherCarsList);
           console.log('[Car Detail] otherCarsList length:', otherCarsList.length);
           
           setOtherCars(otherCarsList);
@@ -798,7 +786,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     };
 
     loadCar();
-  }, [carIdParam]);
+  }, [resolvedParams.id]);
 
   // Load user profile để kiểm tra status
   useEffect(() => {
@@ -920,54 +908,50 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
   // Điều hướng đến trang booking
   const handleBookingClick = () => {
-    if (!dateRangeValue || !dateRangeValue[0] || !dateRangeValue[1]) {
-      message.warning('Vui lòng chọn thời gian thuê xe');
-      return;
-    }
-    
     const locationId = searchParams?.get('locationId');
     const params = new URLSearchParams();
     if (locationId) {
       params.set('locationId', locationId);
     }
-    // Thêm thời gian thuê vào URL params
-    if (dateRangeValue[0] && dateRangeValue[1]) {
-      params.set('startDate', dateRangeValue[0].format('YYYY-MM-DDTHH:mm'));
-      params.set('endDate', dateRangeValue[1].format('YYYY-MM-DDTHH:mm'));
-    }
     const queryString = params.toString();
     router.push(`/booking/${car.id}${queryString ? `?${queryString}` : ''}`);
   };
 
+  //5
+  // Ảnh
+  // Tên, Model
+  // Thông số (loại, số chỗ, dung tích cốp, pin, v.v.)
+  // Giá thuê (ngày, giờ, có tài xế)
+  // Nút "Thuê xe ngay"
+  // Nút Gọi tư vấn / Chat hỗ trợ
+  // Phần "Xe khác" (hiển thị 3 xe ngẫu nhiên khác)
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header />
-      {/* NAV BACK TO LIST - luôn nằm dưới header */}
-      <div
-  className="
-    sticky top-20 z-40 
-    border-b border-white/10
-    bg-[url('/anh-nen.jpg')] 
-    bg-cover bg-center 
-    backdrop-blur-md
-    py-6
-  "
->
-  <Link
-    href="/#cars"
-            className="flex items-center gap-3 px-4 text-base font-semibold text-white transition hover:text-blue-300"
-  >
-    <span className="ml-[100px]">←</span>
-              <span>Danh sách xe</span>
-  </Link>
-</div>
 
       {/* Add top padding to prevent content being hidden behind fixed header */}
-        <main className="flex-1 container mx-auto px-4 pt-24 pb-8">
-          
+      <main className="flex-1 container mx-auto px-4 pt-24 pb-8">
+        {/* Breadcrumb */}
+        <nav className="mb-6">
+          <ol className="flex items-center space-x-2 text-sm text-gray-500 mb-6">
+            <li>
+              <Link href="/" className="hover:text-blue-600">
+                Trang chủ
+              </Link>
+            </li>
+            <li>/</li>
+            <li>
+              <Link href="/#cars" className="hover:text-blue-600">
+                Xe điện
+              </Link>
+            </li>
+            <li>/</li>
+            <li className="text-gray-900">{car.name}</li>
+          </ol>
+        </nav>
 
         {/* Hình ảnh xe - Gallery với 3 ảnh */}
-        <div className="bg-white rounded-lg shadow-lg p-4 mb-4">
+        <div className="bg-white rounded-lg shadow-lg p-4 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Ảnh chính - chiếm 2 cột */}
             <div 
@@ -1111,11 +1095,11 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
           )}
         </Modal>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
           {/* Phần thông tin xe chính - Chiếm 2/3 cột */}
-          <div className="lg:col-span-2 space-y-4">
+          <div className="lg:col-span-2 space-y-6">
             {/* Vehicle Header */}
-            <div className="bg-white rounded-lg shadow-lg p-4">
+            <div className="bg-white rounded-lg shadow-lg p-6">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
                   <h1 className="text-3xl font-bold text-gray-900 mb-3">
@@ -1220,9 +1204,61 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             </div>
 
       
-            <div className="bg-white rounded-lg shadow-lg p-4">
+            <div className="bg-white rounded-lg shadow-lg p-6">
              
-            
+            {/* <h2 className="text-xl font-bold text-gray-900 mb-4">
+                <MapPin className="inline-block mr-2 text-blue-600" /> Vị trí xe
+              </h2>
+
+              {loading && (
+                <div className="flex flex-col items-center justify-center py-8 gap-4">
+                  <MapPin className="inline-block text-blue-600" />
+                  <p className="text-gray-600">Đang tải vị trí xe...</p>
+                </div>
+              )}
+
+              {!loading && carCoords && (
+                <>
+                  {carAddress && (
+                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm text-gray-700">
+                        <MapPin className="inline-block mr-2 text-blue-600" />
+                        <strong>Địa chỉ:</strong> {carAddress}
+                      </p>
+                    </div>
+                  )}
+                  <div className="rounded-lg overflow-hidden border border-gray-200">
+                    <CarMap
+                      cars={[
+                        {
+                          ...car,
+                          coords: carCoords,
+                          primaryAddress: carAddress || undefined,
+                        },
+                      ]}
+                      center={[carCoords.lat, carCoords.lng]}
+                      zoom={15}
+                      height={400}
+                    />
+                  </div>
+                </>
+              )} */}
+
+              {/* {!loading && !carCoords && carAddress && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <p className="text-sm text-gray-700 mb-2">
+                    <MapPin className="inline-block mr-2 text-yellow-600" />
+                    <strong>Địa chỉ:</strong> {carAddress}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Đang xử lý tọa độ để hiển thị bản đồ...
+                  </p>
+                  <p className="text-xs text-gray-400 mt-2">
+                    (Kiểm tra console để xem chi tiết debug)
+                  </p>
+                </div>
+              )}
+               */}
 
               {!loading && !carCoords && !carAddress && (
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
@@ -1314,7 +1350,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             </div>
 
             {/* Đặc điểm (Features) Section */}
-            <div className="bg-white rounded-lg shadow-lg p-4">
+            <div className="bg-white rounded-lg shadow-lg p-6">
               <h2 className="text-xl font-bold text-gray-900 mb-4">Đặc điểm</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-gray-200">
                 {/* Truyền động */}
@@ -1364,7 +1400,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             </div>
 
             {/* Mô tả (Description) Section */}
-            <div className="bg-white rounded-lg shadow-lg p-4">
+            <div className="bg-white rounded-lg shadow-lg p-6">
               <h2 className="text-xl font-bold text-gray-900 mb-4">Mô tả</h2>
 
               {/* Rental Policies */}
@@ -1411,7 +1447,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             </div>
 
             {/* Các tiện nghi khác (Other Amenities) Section */}
-            <div className="bg-white rounded-lg shadow-lg p-4">
+            <div className="bg-white rounded-lg shadow-lg p-6">
               <h2 className="text-xl font-bold text-gray-900 mb-4">Các tiện nghi khác</h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                 {[
@@ -1440,7 +1476,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             </div>
 
             {/* Giấy tờ thuê xe (Rental Documents) Section */}
-            <div className="bg-white rounded-lg shadow-lg p-4">
+            <div className="bg-white rounded-lg shadow-lg p-6">
               <div className="flex items-center gap-2 mb-2">
                 <h2 className="text-xl font-bold text-gray-900">Giấy tờ thuê xe</h2>
                 <HelpCircle className="text-gray-400 cursor-help" />
@@ -1469,7 +1505,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             </div>
 
             {/* Tài sản thế chấp (Collateral) Section */}
-            <div className="bg-white rounded-lg shadow-lg p-4">
+            <div className="bg-white rounded-lg shadow-lg p-6">
               <div className="flex items-center gap-2 mb-4">
                 <h2 className="text-xl font-bold text-gray-900">Tài sản thế chấp</h2>
                 <HelpCircle className="text-gray-400 cursor-help" />
@@ -1483,7 +1519,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             </div>
 
             {/* Phụ phí có thể phát sinh (Additional Fees) Section */}
-            <div className="bg-white rounded-lg shadow-lg p-4">
+            <div className="bg-white rounded-lg shadow-lg p-6">
               <h2 className="text-xl font-bold text-blue-600 mb-4">Phụ phí có thể phát sinh</h2>
               <div className="space-y-4">
                 {/* Phí vượt giới hạn */}
@@ -1555,9 +1591,9 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
           {/* Phần booking panel - Chiếm 1/3 cột */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-lg p-4">
+            <div className="bg-white rounded-lg shadow-lg p-6">
               {/* Giá thuê theo các gói */}
-              <div className="mb-4">
+              <div className="mb-6">
                 <h3 className="text-lg font-bold text-gray-900 mb-4">Bảng giá thuê</h3>
                 
                {/* Box chung hiển thị toàn bộ giá thuê */}
@@ -1624,95 +1660,18 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               </div>
 
               {/* Status */}
-              <div className={`text-center p-3 rounded-lg mb-4 ${car.status === 1 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+              <div className={`text-center p-3 rounded-lg mb-6 ${car.status === 1 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                 <span className="font-semibold">
                   {car.status === 1 ? ' Xe đang có sẵn' : '✗ Hết xe'}
                 </span>
               </div>
 
-              {/* Thời gian thuê */}
-              <div className="mb-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <Calendar className="w-5 h-5 text-blue-500" />
-                  <span className="font-semibold text-gray-900">Thời gian thuê</span>
-                </div>
-                <RangePicker
-                  showTime={{ format: 'HH:mm' }}
-                  format="DD/MM/YYYY HH:mm"
-                  size="large"
-                  className="w-full"
-                  placeholder={["Thời gian nhận xe", "Thời gian trả xe"]}
-                  value={dateRangeValue}
-                  onChange={(dates) => {
-                    if (dates && dates[0] && dates[1]) {
-                      setDateRangeValue([dates[0], dates[1]]);
-                    } else {
-                      setDateRangeValue(null);
-                    }
-                  }}
-                  disabledDate={(current) => {
-                    // Chặn các ngày trong quá khứ
-                    return current && current < dayjs().startOf('day');
-                  }}
-                  disabledTime={(value, type) => {
-                    const now = dayjs();
-                    
-                    // Nếu chọn ngày hôm nay, chặn các giờ và phút trong quá khứ
-                    if (value && value.isSame(now, 'day')) {
-                      const currentHour = now.hour();
-                      const currentMinute = now.minute();
-                      
-                      return {
-                        disabledHours: () => {
-                          const hours = [];
-                          // Chặn giờ từ 0-4 (00:00 - 04:59)
-                          for (let i = 0; i < 5; i++) {
-                            hours.push(i);
-                          }
-                          // Chặn các giờ đã qua trong ngày hôm nay (từ 5 trở đi)
-                          if (currentHour >= 5) {
-                            for (let i = 5; i < currentHour; i++) {
-                              hours.push(i);
-                            }
-                          }
-                          return hours;
-                        },
-                        disabledMinutes: (selectedHour: number) => {
-                          // Nếu chọn giờ hiện tại, chặn các phút đã qua
-                          if (selectedHour === currentHour) {
-                            const minutes = [];
-                            for (let i = 0; i <= currentMinute; i++) {
-                              minutes.push(i);
-                            }
-                            return minutes;
-                          }
-                          return [];
-                        },
-                      };
-                    }
-                    
-                    // Nếu không phải ngày hôm nay, chỉ chặn giờ ngoài khoảng 05:00 - 23:00
-                    return {
-                      disabledHours: () => {
-                        // Chặn giờ từ 0-4 (00:00 - 04:59)
-                        const hours = [];
-                        for (let i = 0; i < 5; i++) {
-                          hours.push(i);
-                        }
-                        return hours;
-                      },
-                      disabledMinutes: () => [],
-                    };
-                  }}
-                />
-              </div>
-
               {/* Booking Button */}
               <button
                 onClick={handleBookingClick}
-                disabled={car.status !== 1 || !dateRangeValue}
+                disabled={car.status !== 1}
                 className={`w-full py-4 px-6 rounded-lg font-bold text-lg transition-colors mb-5 flex items-center justify-center gap-2 ${
-                  car.status === 1 && dateRangeValue
+                  car.status === 1
                     ? 'bg-blue-500 text-white hover:bg-blue-600'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
@@ -1752,7 +1711,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
             Thông số kỹ thuật
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div className="flex justify-between py-2 border-b border-gray-100">
                 <span className="text-gray-600">Model</span>
@@ -1797,8 +1756,8 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
         {/* Xe khác */}
         {otherCars.length > 0 ? (
           <div className="mt-12">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Xe điện khác</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Xe điện khác</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {otherCars.map((otherCar) => (
                 <Link key={otherCar.id} href={`/cars/${otherCar.id}`}>
                   <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow cursor-pointer">
@@ -1833,8 +1792,8 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
           </div>
         ) : (
           <div className="mt-12">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Xe điện khác</h2>
-            <p className="text-gray-500 text-center py-4">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Xe điện khác</h2>
+            <p className="text-gray-500 text-center py-8">
               Hiện chưa có xe khác để hiển thị
             </p>
           </div>

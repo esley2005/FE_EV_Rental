@@ -25,7 +25,7 @@ import type { RentalOrderData } from "@/services/api";
 import dayjs from "dayjs";
 
 interface CarWithStatus extends Car {
-  status: "available" | "booked" | "renting";
+  status: "available" | "booked" | "renting" | "maintenance";
   currentOrder?: RentalOrderData & {
     user?: { fullName?: string; email?: string; phone?: string };
   };
@@ -35,7 +35,7 @@ export default function CarStatusManagement() {
   const [cars, setCars] = useState<CarWithStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState("");
-  const [activeTab, setActiveTab] = useState<string>("available");
+  const [activeTab, setActiveTab] = useState<string>("all");
 
   useEffect(() => {
     loadData();
@@ -77,49 +77,32 @@ export default function CarStatusManagement() {
             (order: RentalOrderData) => order.carId === car.id
           );
 
-          // Xác định trạng thái
-          let status: "available" | "booked" | "renting" = "available";
+          // Xác định trạng thái từ car.status (0 = Disabled, 1 = Available)
+          const carStatusNum = typeof car.status === "number" 
+            ? car.status 
+            : (car.status === 1 || car.status === "1" ? 1 : 0);
+          
+          // Nếu xe bị disabled (status = 0), đánh dấu là maintenance/disabled
+          let status: "available" | "booked" | "renting" | "maintenance" = carStatusNum === 0 ? "maintenance" : "available";
           let currentOrder: (RentalOrderData & { user?: any }) | undefined;
 
-          // Kiểm tra đơn hàng đang thuê (status = 4: Renting)
-          const rentingOrder = relatedOrders.find(
-            (order: RentalOrderData) => {
-              const statusNum = typeof order.status === "number"
-                ? order.status
-                : parseInt(String(order.status || "0"), 10);
-              return statusNum === 4; // Renting
-            }
-          );
-
-          if (rentingOrder) {
-            status = "renting";
-            const user = userMap.get(rentingOrder.userId);
-            currentOrder = {
-              ...rentingOrder,
-              user: user
-                ? {
-                    fullName: user.fullName || user.name,
-                    email: user.email,
-                    phone: user.phone || user.phoneNumber,
-                  }
-                : undefined,
-            };
-          } else {
-            // Kiểm tra đơn hàng đã đặt trước (status = 0, 1, 2, 3: Pending, DocumentsSubmitted, DepositPending, Confirmed)
-            const bookedOrder = relatedOrders.find(
+          // Chỉ kiểm tra đơn hàng nếu xe không bị disabled
+          if (carStatusNum === 1) {
+            // Kiểm tra đơn hàng đang thuê (status = 4: Renting)
+            const rentingOrder = relatedOrders.find(
               (order: RentalOrderData) => {
                 const statusNum = typeof order.status === "number"
                   ? order.status
                   : parseInt(String(order.status || "0"), 10);
-                return statusNum >= 0 && statusNum <= 3;
+                return statusNum === 4; // Renting
               }
             );
 
-            if (bookedOrder) {
-              status = "booked";
-              const user = userMap.get(bookedOrder.userId);
+            if (rentingOrder) {
+              status = "renting";
+              const user = userMap.get(rentingOrder.userId);
               currentOrder = {
-                ...bookedOrder,
+                ...rentingOrder,
                 user: user
                   ? {
                       fullName: user.fullName || user.name,
@@ -128,6 +111,31 @@ export default function CarStatusManagement() {
                     }
                   : undefined,
               };
+            } else {
+              // Kiểm tra đơn hàng đã đặt trước (status = 0, 1, 2, 3: Pending, DocumentsSubmitted, DepositPending, Confirmed)
+              const bookedOrder = relatedOrders.find(
+                (order: RentalOrderData) => {
+                  const statusNum = typeof order.status === "number"
+                    ? order.status
+                    : parseInt(String(order.status || "0"), 10);
+                  return statusNum >= 0 && statusNum <= 3;
+                }
+              );
+
+              if (bookedOrder) {
+                status = "booked";
+                const user = userMap.get(bookedOrder.userId);
+                currentOrder = {
+                  ...bookedOrder,
+                  user: user
+                    ? {
+                        fullName: user.fullName || user.name,
+                        email: user.email,
+                        phone: user.phone || user.phoneNumber,
+                      }
+                    : undefined,
+                };
+              }
             }
           }
 
@@ -150,14 +158,11 @@ export default function CarStatusManagement() {
   const filteredCars = useMemo(() => {
     let filtered = cars;
 
-    // Lọc theo tab
+    // Lọc theo tab - nếu "all" thì không lọc
     if (activeTab === "available") {
       filtered = filtered.filter((car) => car.status === "available");
-    } else if (activeTab === "booked") {
-      filtered = filtered.filter((car) => car.status === "booked");
-    } else if (activeTab === "renting") {
-      filtered = filtered.filter((car) => car.status === "renting");
     }
+    // Nếu activeTab === "all" thì không lọc, hiển thị tất cả
 
     // Lọc theo search text
     if (searchText) {
@@ -226,24 +231,42 @@ export default function CarStatusManagement() {
     {
       title: "Trạng thái",
       key: "status",
-      width: 150,
+      width: 180,
       render: (_: any, record: CarWithStatus) => {
-        if (record.status === "available") {
+        // Kiểm tra trạng thái từ car.status (0 = Disabled, 1 = Available)
+        const carStatusNum = typeof record.status === "number" 
+          ? record.status 
+          : (record.status === 1 || record.status === "1" ? 1 : 0);
+        
+        // Nếu có đơn hàng, ưu tiên hiển thị trạng thái từ đơn hàng
+        if (record.status === "available" || (carStatusNum === 1 && !record.currentOrder)) {
           return (
             <Tag color="success" icon={<CheckCircleOutlined />}>
-              Có sẵn
+              Available
             </Tag>
           );
         } else if (record.status === "booked") {
           return (
             <Tag color="warning" icon={<ClockCircleOutlined />}>
-              Đã đặt trước
+              Booked
+            </Tag>
+          );
+        } else if (record.status === "renting") {
+          return (
+            <Tag color="processing" icon={<ClockCircleOutlined />}>
+              Rented
+            </Tag>
+          );
+        } else if (carStatusNum === 0 || record.status === "maintenance") {
+          return (
+            <Tag color="error" icon={<ClockCircleOutlined />}>
+              Under Maintenance
             </Tag>
           );
         } else {
           return (
-            <Tag color="processing" icon={<ClockCircleOutlined />}>
-              Đang cho thuê
+            <Tag color="default" icon={<ClockCircleOutlined />}>
+              Disabled
             </Tag>
           );
         }
@@ -346,29 +369,20 @@ export default function CarStatusManagement() {
         onChange={setActiveTab}
         items={[
           {
+            key: "all",
+            label: (
+              <Space>
+                <CarOutlined />
+                <span>Tất cả ({cars.length})</span>
+              </Space>
+            ),
+          },
+          {
             key: "available",
             label: (
               <Space>
                 <CheckCircleOutlined />
-                <span>Xe có sẵn ({cars.filter((c) => c.status === "available").length})</span>
-              </Space>
-            ),
-          },
-          {
-            key: "booked",
-            label: (
-              <Space>
-                <ClockCircleOutlined />
-                <span>Xe đã đặt trước ({cars.filter((c) => c.status === "booked").length})</span>
-              </Space>
-            ),
-          },
-          {
-            key: "renting",
-            label: (
-              <Space>
-                <ClockCircleOutlined />
-                <span>Xe đang cho thuê ({cars.filter((c) => c.status === "renting").length})</span>
+                <span>Available ({cars.filter((c) => c.status === "available").length})</span>
               </Space>
             ),
           },
@@ -379,11 +393,11 @@ export default function CarStatusManagement() {
         {filteredCars.length === 0 ? (
           <Empty
             description={
-              activeTab === "available"
+              activeTab === "all"
+                ? "Không có xe nào trong hệ thống"
+                : activeTab === "available"
                 ? "Không có xe nào có sẵn"
-                : activeTab === "booked"
-                ? "Không có xe nào đã đặt trước"
-                : "Không có xe nào đang cho thuê"
+                : "Không có dữ liệu"
             }
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           />

@@ -1,8 +1,5 @@
 "use client";
 
-// ✅ Ensure patch is loaded before antd imports
-import '@/lib/antd-setup';
-
 import React, { useEffect, useState } from "react";
 import {
   PieChartOutlined,
@@ -33,12 +30,12 @@ import CarStatusList from "@/components/CarStatusList";
 import DeliveryForm from "@/components/DeliveryForm";
 import ReturnForm from "@/components/ReturnForm";
 import DocumentVerification from "@/components/DocumentVerification";
-import RentalOrderManagement from "@/components/staff/RentalOrderManagement";
 import CarManagement from "@/components/admin/CarManagement";
-import CarMaintenanceManagement from "@/components/staff/CarMaintenanceManagement";
+import CarStatusManagement from "@/components/staff/CarStatusManagement";
+import RentalOrderManagement from "@/components/staff/RentalOrderManagement";
 import { authUtils } from "@/utils/auth";
-import { carsApi as carsApiWrapped, bookingsApi as bookingsApiWrapped, rentalOrderApi, type ApiResponse } from "@/services/api";
-import { useRouter } from "next/navigation"; 
+import { carsApi as carsApiWrapped, bookingsApi as bookingsApiWrapped, rentalOrderApi, authApi, type ApiResponse } from "@/services/api";
+import { useRouter } from "next/navigation"; // ✅ Đúng cho App Router
 
 const { Header, Sider, Content, Footer } = Layout;
 
@@ -46,21 +43,16 @@ const { Header, Sider, Content, Footer } = Layout;
  🧱 PHẦN 1: MENU CHÍNH (HEADER MENU)
  ========================================================= */
 const mainMenu = [
-  { key: "orders", label: "Quản lý đơn hàng", icon: <FileOutlined /> },
-  // { key: "tasks", label: "Giao / Nhận xe", icon: <PieChartOutlined /> },
-  // { key: "customers", label: "Xác thực giấy tờ", icon: <UserOutlined /> },
-  // { key: "payments", label: "Thanh toán tại điểm", icon: <DesktopOutlined /> },
+  { key: "tasks", label: "Giao / Nhận xe", icon: <PieChartOutlined /> },
+  { key: "customers", label: "Xác thực khách hàng", icon: <UserOutlined /> },
+  { key: "payments", label: "Thanh toán tại điểm", icon: <DesktopOutlined /> },
   { key: "vehicles", label: "Xe tại điểm", icon: <TeamOutlined /> },
-  { key: "maintenance", label: "Bảo trì & Sự cố", icon: <DesktopOutlined /> },
 ];
 
 /* =========================================================
  📑 PHẦN 2: SUBMENU (SIDEBAR)
  ========================================================= */
 const subMenus: Record<string, { key: string; label: string; icon: React.ReactNode }[]> = {
-  orders: [
-    { key: "1", label: "Danh sách đơn hàng", icon: <FileOutlined /> },
-  ],
   tasks: [
     { key: "1", label: "Danh sách xe sẵn sàng", icon: <PieChartOutlined /> },
     { key: "2", label: "Xe đã đặt / đang thuê", icon: <DesktopOutlined /> },
@@ -80,17 +72,8 @@ const subMenus: Record<string, { key: string; label: string; icon: React.ReactNo
 
   vehicles: [
     { key: "1", label: "Quản lý xe", icon: <TeamOutlined /> },
-    // { key: "2", label: "Trạng thái pin & kỹ thuật", icon: <TeamOutlined /> },
-    // { key: "3", label: "Báo cáo sự cố / hỏng hóc", icon: <FileOutlined /> },
-  ],
-
-  documents: [
-    { key: "1", label: "Hướng dẫn sử dụng hệ thống", icon: <FileOutlined /> },
-  ],
-
-  maintenance: [
-  
-    { key: "2", label: "Báo cáo sự cố / hỏng hóc", icon: <FileOutlined /> }
+    { key: "2", label: "Trạng thái pin & kỹ thuật", icon: <TeamOutlined /> },
+    { key: "3", label: "Báo cáo sự cố / hỏng hóc", icon: <FileOutlined /> },
   ],
 };
 
@@ -99,7 +82,7 @@ const subMenus: Record<string, { key: string; label: string; icon: React.ReactNo
  ========================================================= */
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
-  const [selectedModule, setSelectedModule] = useState("orders");
+  const [selectedModule, setSelectedModule] = useState("tasks");
   const [selectedSubMenu, setSelectedSubMenu] = useState("1");
 
   const [showDelivery, setShowDelivery] = useState(false);
@@ -142,12 +125,14 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
         type UnknownApi = ApiResponse<unknown> | unknown;
         const rentalApi = (rentalOrderApi as unknown as { getAll?: () => Promise<ApiResponse<unknown>> }).getAll?.();
-        const [ordersRes, carsRes] = await Promise.all<[
+        const [ordersRes, carsRes, usersRes] = await Promise.all<[
           UnknownApi,
-          UnknownApi
+          UnknownApi,
+          unknown
         ]>([
           (rentalApi as Promise<UnknownApi>) ?? (bookingsApiWrapped.getAll() as Promise<UnknownApi>),
           carsApiWrapped.getAll() as Promise<UnknownApi>,
+          authApi.getAllUsers().catch(() => ({ success: false, data: [] })) as Promise<unknown>,
         ]);
 
         // Orders and revenue
@@ -157,6 +142,10 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           typeof res === "object" && res !== null && Array.isArray((res as Record<string, unknown>).data);
         const getArray = (res: unknown): unknown[] => {
           if (hasDataArray(res)) return res.data;
+          // Kiểm tra nếu có $values (format từ .NET)
+          if (typeof res === "object" && res !== null && (res as any).$values && Array.isArray((res as any).$values)) {
+            return (res as any).$values;
+          }
           return Array.isArray(res) ? res : [];
         };
         const arr = getArray(ordersRes);
@@ -175,15 +164,27 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             }
             return 0;
           };
-          revenue = arr.reduce<number>((sum, o) => sum + getNumberField(o, ["total", "Total"]), 0);
+          revenue = arr.reduce<number>((sum, o) => sum + getNumberField(o, ["total", "Total", "totalAmount"]), 0);
         }
 
-        // Vehicles count
+        // Vehicles count - chỉ đếm xe không bị xóa
         const vehiclesArray = getArray(carsRes);
-        const vehiclesCount = vehiclesArray.length;
+        const vehiclesCount = vehiclesArray.filter((car: any) => !car.isDeleted).length;
 
-        // Clients count - API không tồn tại, đặt mặc định 0
-        const clientsCount = 0;
+        // Clients count - lấy từ authApi response
+        let clientsCount = 0;
+        if (usersRes && typeof usersRes === "object") {
+          const usersData = (usersRes as any).data || (usersRes as any).$values || usersRes;
+          if (Array.isArray(usersData)) {
+            // Chỉ đếm user có role là Customer/Custom (không phải Admin/Staff)
+            // Backend tự động set role là "Customer" hoặc "Custom" khi đăng ký
+            clientsCount = usersData.filter((user: any) => {
+              const role = (user.role || user.roleName || "").toLowerCase().trim();
+              // Loại trừ Admin và Staff, chỉ đếm Customer/Custom hoặc role rỗng (mặc định là customer)
+              return role !== "admin" && role !== "staff";
+            }).length;
+          }
+        }
 
         if (mounted) {
           setMetrics({ revenue, orders, templates: vehiclesCount, clients: clientsCount });
@@ -284,7 +285,17 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <Input.Search placeholder="Tìm kiếm nhanh" allowClear style={{ width: 260 }} />
-            
+            <Badge count={3} size="small">
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  background: "rgba(255,255,255,0.2)",
+                }}
+              />
+            </Badge>
           </div>
 
           {/* ✅ Dropdown người dùng */}
@@ -320,36 +331,36 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           <Breadcrumb
             style={{ marginBottom: 16 }}
             items={[
-              { title: mainMenu.find((m) => m.key === selectedModule)?.label },
+              { title: mainMenu.find((m) => m.key === selectedModule)?.label || "" },
               {
-                title: subMenus[selectedModule].find((s) => s.key === selectedSubMenu)?.label,
+                title: subMenus[selectedModule]?.find((s) => s.key === selectedSubMenu)?.label || "",
               },
             ]}
           />
 
           {/* ElaAdmin-like top summary cards */}
-          {/* <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
             <Col xs={24} sm={12} md={6}>
-              <Card variant="outlined" hoverable loading={metricsLoading}>
+              <Card bordered hoverable loading={metricsLoading}>
                 <Statistic title="Doanh thu" prefix={<span>₫</span>} value={metrics.revenue} precision={0} />
               </Card>
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <Card variant="outlined" hoverable loading={metricsLoading}>
+              <Card bordered hoverable loading={metricsLoading}>
                 <Statistic title="Đơn hàng" value={metrics.orders} />
               </Card>
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <Card variant="outlined" hoverable loading={metricsLoading}>
-                <Statistic title="Số xe" value={metrics.templates} />
+              <Card bordered hoverable loading={metricsLoading}>
+                <Statistic title="Số xe" value={metrics.templates} suffix="xe" />
               </Card>
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <Card variant="outlined" hoverable loading={metricsLoading}>
-                <Statistic title="Khách hàng" value={metrics.clients} />
+              <Card bordered hoverable loading={metricsLoading}>
+                <Statistic title="Số khách hàng" value={metrics.clients} suffix="người" />
               </Card>
             </Col>
-          </Row> */}
+          </Row>
 
           {/* Đã bỏ các khối Lưu lượng và Chỉ số theo yêu cầu */}
 
@@ -361,32 +372,22 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               minHeight: 400,
             }}
           >
-            {selectedModule === "orders" ? (
-              <RentalOrderManagement />
-            ) : selectedModule === "tasks" ? (
-              selectedSubMenu === "1" || selectedSubMenu === "2" ? (
+            {selectedModule === "tasks" ? (
+              selectedSubMenu === "1" ? (
+                // Xem toàn bộ xe theo trạng thái
+                <CarStatusManagement />
+              ) : selectedSubMenu === "2" || selectedSubMenu === "3" || selectedSubMenu === "4" ? (
                 <CarStatusList
                   onDeliver={(car) => handleOpenDelivery(car)}
                   onReturn={(car) => handleOpenReturn(car)}
                 />
-              ) : selectedSubMenu === "3" ? (
-                <div>
-                  <p>Chọn xe ở danh sách để thực hiện thủ tục bàn giao.</p>
-                  <CarStatusList onDeliver={(car) => handleOpenDelivery(car)} />
-                </div>
-              ) : selectedSubMenu === "4" ? (
-                <div>
-                  <p>Chọn xe để ký xác nhận giao / nhận.</p>
-                  <CarStatusList
-                    onDeliver={(car) => handleOpenDelivery(car)}
-                    onReturn={(car) => handleOpenReturn(car)}
-                  />
-                </div>
               ) : null
             ) : selectedModule === "customers" ? (
               <DocumentVerification
                 mode={selectedSubMenu === "1" ? "check-documents" : "verify-system"}
               />
+            ) : selectedModule === "payments" ? (
+              <RentalOrderManagement />
             ) : selectedModule === "vehicles" ? (
               selectedSubMenu === "1" ? (
                 <CarManagement staffMode={true} />
@@ -395,8 +396,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               ) : (
                 <p>Trang báo cáo sự cố / hỏng hóc</p>
               )
-            ) : selectedModule === "maintenance" ? (
-              <CarMaintenanceManagement selectedSubMenu={selectedSubMenu} />
             ) : (
               children
             )}
@@ -407,7 +406,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               open={showDelivery}
               onCancel={() => setShowDelivery(false)}
               footer={null}
-              destroyOnHidden
+              destroyOnClose
             >
               {selectedCar && (
                 <DeliveryForm
@@ -423,7 +422,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               open={showReturn}
               onCancel={() => setShowReturn(false)}
               footer={null}
-              destroyOnHidden
+              destroyOnClose
             >
               {selectedCar && (
                 <ReturnForm
@@ -438,7 +437,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
         {/* ⚙️ FOOTER */}
         <Footer style={{ textAlign: "center", background: "#f0f2f5" }}>
-          EV Rental Staff ©{new Date().getFullYear()} 
+          EV Rental Staff Portal ©{new Date().getFullYear()} Created by Duy
         </Footer>
       </Layout>
     </Layout>
