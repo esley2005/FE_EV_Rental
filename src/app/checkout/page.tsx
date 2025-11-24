@@ -563,21 +563,10 @@ export default function CheckoutPage() {
                             <Radio value={PaymentGateway.PayOS} className="w-full py-2">
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold">PayOS</span>
-                                <Tag color="blue">QR Code</Tag>
+                                <Tag color="blue">QR Code</Tag>  <Tag color="green">Ngân hàng</Tag>
                               </div>
                             </Radio>
-                            <Radio value={PaymentGateway.BankTransfer} className="w-full py-2">
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold">Chuyển khoản</span>
-                                <Tag color="green">Ngân hàng</Tag>
-                              </div>
-                            </Radio>
-                            <Radio value={PaymentGateway.Cash} className="w-full py-2">
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold">Tiền mặt</span>
-                                <Tag color="orange">Trực tiếp</Tag>
-                              </div>
-                            </Radio>
+                          
                           </Space>
                         </Radio.Group>
                       </div>
