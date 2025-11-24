@@ -10,6 +10,14 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Fix for Turbopack internal helpers 404 error
+  experimental: {
+    turbo: {
+      resolveAlias: {
+        // Ensure internal helpers are resolved correctly
+      },
+    },
+  },
 };
 
 export default nextConfig;

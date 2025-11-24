@@ -1389,57 +1389,31 @@ export const rentalOrderApi = {
   },
 
   // Cập nhật ngày đặt đơn hàng (orderDate = createdAt)
-  // Thử nhiều endpoint và method có thể có
+  // ✅ OPTIONAL: Chỉ thử nếu backend có endpoint này
+  // OrderDate đã được set khi tạo order, nên việc update này là optional và không bắt buộc
   updateOrderDate: async (orderId: number, orderDate: string) => {
-    console.log('[RentalOrder API] Attempting to update OrderDate:', { orderId, orderDate });
+    // ✅ Tạm thời disable để tránh 404 errors
+    // Nếu backend có endpoint UpdateOrderDate, có thể bật lại
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[RentalOrder API] UpdateOrderDate is disabled to avoid 404 errors. OrderDate was already set on order creation.');
+    }
+    return {
+      success: false,
+      error: 'Endpoint UpdateOrderDate không khả dụng. OrderDate đã được set khi tạo order.'
+    };
     
-    // Thử các endpoint và method khác nhau
+    /* 
+    // Code cũ - đã disable để tránh 404 errors
+    // Nếu backend có endpoint UpdateOrderDate, có thể uncomment và sử dụng:
+    
     const attempts = [
-      // 1. PUT /RentalOrder/UpdateOrderDate (endpoint chuyên dụng nếu có)
       {
         endpoint: '/RentalOrder/UpdateOrderDate',
         method: 'PUT',
         body: { OrderId: orderId, OrderDate: orderDate }
       },
-      // 2. POST /RentalOrder/UpdateOrderDate
       {
         endpoint: '/RentalOrder/UpdateOrderDate',
-        method: 'POST',
-        body: { OrderId: orderId, OrderDate: orderDate }
-      },
-      // 3. PUT /RentalOrder/Update (endpoint update chung)
-      {
-        endpoint: '/RentalOrder/Update',
-        method: 'PUT',
-        body: { OrderId: orderId, OrderDate: orderDate }
-      },
-      // 4. PUT /RentalOrder/Update với Id
-      {
-        endpoint: '/RentalOrder/Update',
-        method: 'PUT',
-        body: { Id: orderId, OrderDate: orderDate }
-      },
-      // 5. PUT /RentalOrder/Update/{orderId}
-      {
-        endpoint: `/RentalOrder/Update/${orderId}`,
-        method: 'PUT',
-        body: { OrderId: orderId, OrderDate: orderDate }
-      },
-      // 6. PUT /RentalOrder/Update/{orderId} với Id thay vì OrderId
-      {
-        endpoint: `/RentalOrder/Update/${orderId}`,
-        method: 'PUT',
-        body: { Id: orderId, OrderDate: orderDate }
-      },
-      // 7. POST /RentalOrder/Update
-      {
-        endpoint: '/RentalOrder/Update',
-        method: 'POST',
-        body: { OrderId: orderId, OrderDate: orderDate }
-      },
-      // 8. POST /RentalOrder/Update/{orderId}
-      {
-        endpoint: `/RentalOrder/Update/${orderId}`,
         method: 'POST',
         body: { OrderId: orderId, OrderDate: orderDate }
       },
@@ -1447,33 +1421,24 @@ export const rentalOrderApi = {
     
     for (const attempt of attempts) {
       try {
-        console.log(`[RentalOrder API] Trying ${attempt.method} ${attempt.endpoint}...`);
         const response = await apiCall<RentalOrderData>(attempt.endpoint, {
           method: attempt.method as 'PUT' | 'POST',
           body: JSON.stringify(attempt.body),
         });
         
         if (response.success) {
-          console.log(`[RentalOrder API] Successfully updated OrderDate via ${attempt.method} ${attempt.endpoint}`);
           return response;
-        } else {
-          console.log(`[RentalOrder API] ${attempt.method} ${attempt.endpoint} returned success=false:`, response.error);
         }
       } catch (error) {
-        console.log(`[RentalOrder API] ${attempt.method} ${attempt.endpoint} failed:`, error);
-        // Tiếp tục thử endpoint tiếp theo
+        // Continue to next attempt
       }
     }
     
-    // Nếu không có endpoint nào hoạt động, trả về lỗi (nhưng không log error vì đây không phải lỗi nghiêm trọng)
-    // OrderDate đã được set khi tạo order, nên việc update này là optional
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[RentalOrder API] UpdateOrderDate endpoint not available (this is OK, OrderDate was set on create)');
-    }
     return {
       success: false,
-      error: 'Endpoint UpdateOrderDate không khả dụng. OrderDate đã được set khi tạo order.'
+      error: 'Endpoint UpdateOrderDate không khả dụng.'
     };
+    */
   },
 
   // Hủy đơn hàng
@@ -1641,6 +1606,24 @@ export const paymentApi = {
           userId,
           amount,
           gateway
+        }),
+      }
+    );
+    return response;
+  },
+
+  // Đổi phương thức thanh toán (Change Payment Gateway)
+  changePaymentGateway: async (
+    paymentId: number,
+    newGateway: PaymentGateway
+  ): Promise<ApiResponse<CreatePaymentWithGatewayResponse>> => {
+    const response = await apiCall<CreatePaymentWithGatewayResponse>(
+      '/Payment/ChangePaymentGateway',
+      {
+        method: 'PUT',
+        body: JSON.stringify({
+          paymentId,
+          gateway: newGateway
         }),
       }
     );
