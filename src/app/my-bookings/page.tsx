@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import { 
@@ -68,6 +68,8 @@ export default function MyBookingsPage() {
   const [selectedBooking, setSelectedBooking] = useState<BookingWithDetails | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [currentTime, setCurrentTime] = useState(Date.now()); // Để update countdown mỗi giây
+  const cancelledBookingIds = useRef<Set<number>>(new Set()); // Track các đơn đã được hủy tự động
 
   useEffect(() => {
     loadUserAndBookings();
@@ -87,6 +89,17 @@ export default function MyBookingsPage() {
       clearInterval(refreshInterval);
     };
   }, [user?.id]);
+
+  // Update currentTime mỗi giây để countdown chạy real-time
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000); // Update mỗi giây
+    
+    return () => {
+      clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     filterBookings();
@@ -399,7 +412,7 @@ export default function MyBookingsPage() {
     }
   };
 
-  const handleCancelBooking = async (booking: BookingWithDetails) => {
+  const handleCancelBooking = async (booking: BookingWithDetails, silent: boolean = false) => {
     try {
       setLoading(true);
       // Gọi API CancelOrder
@@ -416,15 +429,30 @@ export default function MyBookingsPage() {
           setDetailModalOpen(false);
         }
         
-        // Wrap notification trong setTimeout để tránh warning về render
-        setTimeout(() => {
-          api.success({
-            message: 'Hủy đơn hàng thành công',
-            description: 'Đơn hàng đã được hủy thành công.',
-            placement: 'topRight',
-            icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
-          });
-        }, 0);
+        // Chỉ hiển thị notification nếu không phải silent mode
+        if (!silent) {
+          setTimeout(() => {
+            api.success({
+              message: 'Hủy đơn hàng thành công',
+              description: 'Đơn hàng đã được hủy thành công.',
+              placement: 'topRight',
+              icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+            });
+          }, 0);
+        } else {
+          // Silent mode: hiển thị warning về tự động hủy
+          setTimeout(() => {
+            api.warning({
+              message: 'Đơn hàng đã tự động hủy',
+              description: `Đơn hàng #${booking.id} đã bị hủy tự động do quá thời hạn thanh toán cọc (10 phút).`,
+              placement: 'topRight',
+              duration: 5,
+            });
+          }, 0);
+        }
+        
+        // Xóa khỏi cancelled set sau khi reload để có thể track lại nếu cần
+        cancelledBookingIds.current.delete(booking.id);
       } else {
         const errorMsg = response.error || response.message || 'Không thể hủy đơn hàng';
         throw new Error(errorMsg);
@@ -432,15 +460,17 @@ export default function MyBookingsPage() {
     } catch (error: any) {
       console.error('Cancel booking error:', error);
       const errorMessage = error?.message || error?.error || 'Có lỗi xảy ra khi hủy đơn hàng. Vui lòng thử lại.';
-      // Wrap notification trong setTimeout để tránh warning về render
-      setTimeout(() => {
-        api.error({
-          message: 'Không thể hủy đơn hàng',
-          description: errorMessage,
-          placement: 'topRight',
-          icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
-        });
-      }, 0);
+      // Chỉ hiển thị error nếu không phải silent mode
+      if (!silent) {
+        setTimeout(() => {
+          api.error({
+            message: 'Không thể hủy đơn hàng',
+            description: errorMessage,
+            placement: 'topRight',
+            icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+          });
+        }, 0);
+      }
     } finally {
       setLoading(false);
     }
@@ -455,6 +485,67 @@ export default function MyBookingsPage() {
           //   || 
           //  status === 'confirmed';
   };
+
+  // Tính countdown 10 phút từ thời điểm tạo đơn hàng
+  const getDepositCountdown = (booking: BookingWithDetails): { remaining: number; expired: boolean; formatted: string } => {
+    if (!canPayDeposit(booking)) {
+      return { remaining: 0, expired: false, formatted: '' };
+    }
+
+    const createdAt = booking.createdAt || booking.orderDate;
+    if (!createdAt) {
+      return { remaining: 0, expired: true, formatted: '00:00' };
+    }
+
+    const createdTime = new Date(createdAt).getTime();
+    const now = currentTime;
+    const elapsed = now - createdTime; // milliseconds
+    const tenMinutes = 10 * 60 * 1000; // 10 phút = 600000ms
+    const remaining = Math.max(0, tenMinutes - elapsed);
+    const expired = remaining === 0;
+
+    // Format MM:SS
+    const minutes = Math.floor(remaining / 60000);
+    const seconds = Math.floor((remaining % 60000) / 1000);
+    const formatted = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+    return { remaining, expired, formatted };
+  };
+
+  // ✅ Tự động hủy đơn hàng khi hết thời gian 10 phút
+  useEffect(() => {
+    if (!user?.id || bookings.length === 0) return;
+
+    // Tìm các đơn đã hết thời gian và chưa được hủy
+    const expiredBookings = bookings.filter(booking => {
+      // Bỏ qua nếu đã được hủy tự động trước đó
+      if (cancelledBookingIds.current.has(booking.id)) return false;
+      
+      if (!canPayDeposit(booking)) return false;
+      
+      const countdown = getDepositCountdown(booking);
+      const status = normalizeStatus(booking.status);
+      
+      // Chỉ hủy nếu đã hết thời gian VÀ vẫn còn ở trạng thái depositpending
+      return countdown.expired && status === 'depositpending';
+    });
+
+    // Tự động hủy các đơn đã hết thời gian (chỉ hủy một lần)
+    expiredBookings.forEach(async (booking) => {
+      // Đánh dấu đã hủy để tránh hủy nhiều lần
+      cancelledBookingIds.current.add(booking.id);
+      
+      console.log(`[MyBookings] Auto-cancelling expired booking ${booking.id}`);
+      try {
+        await handleCancelBooking(booking, true); // true = silent mode
+      } catch (error) {
+        console.error(`[MyBookings] Failed to auto-cancel booking ${booking.id}:`, error);
+        // Nếu hủy thất bại, remove khỏi set để có thể thử lại
+        cancelledBookingIds.current.delete(booking.id);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTime, bookings, user?.id]); // Re-check mỗi khi currentTime update
 
   // Tính số tiền deposit cần thanh toán
   const getDepositAmount = (booking: BookingWithDetails): number => {
@@ -725,41 +816,72 @@ export default function MyBookingsPage() {
                           </div>
                         </div>
 
-                        {/* ⚠️ Alert: Thông báo về thanh toán cọc trên từng card */}
-                        {canPayDeposit(booking) && (
-                          <Alert
-                            message={
-                              <div className="font-bold text-base text-red-600 flex items-center gap-2">
-                                <WarningOutlined className="text-lg" />
-                                CẦN THANH TOÁN CỌC NGAY
-                              </div>
-                            }
-                            description={
-                              <div className="text-sm space-y-1 mt-2">
-                                <p>• Đơn hàng của bạn <strong className="text-red-600">CHƯA ĐƯỢC XÁC NHẬN</strong></p>
-                                <p>• <strong className="text-red-600">BẠN BẮT BUỘC PHẢI thanh toán tiền đặt cọc</strong> để giữ đơn hàng</p>
-                                <p>• Số tiền cần thanh toán: <strong className="text-blue-600 text-base">{formatCurrency(getDepositAmount(booking))}</strong></p>
-                                <p className="mt-2 font-semibold">👉 Mở chi tiết đơn hàng và nhấn "Thanh toán cọc" để tiếp tục</p>
-                              </div>
-                            }
-                            type="error"
-                            showIcon
-                            icon={<WarningOutlined className="text-xl" />}
-                            className="mb-3 border-2 border-red-500"
-                            action={
-                              <Button
-                                type="primary"
-                                danger
-                                size="small"
-                                icon={<DollarOutlined />}
-                                onClick={() => showBookingDetail(booking)}
-                                className="mt-2"
-                              >
-                                Thanh toán ngay
-                              </Button>
-                            }
-                          />
-                        )}
+                        {/* ⚠️ Alert: Thông báo về thanh toán cọc trên từng card với countdown */}
+                        {canPayDeposit(booking) && (() => {
+                          const countdown = getDepositCountdown(booking);
+                          const isUrgent = countdown.remaining < 2 * 60 * 1000; // < 2 phút
+                          const isExpired = countdown.expired;
+                          
+                          return (
+                            <Alert
+                              message={
+                                <div className="font-bold text-base text-red-600 flex items-center gap-2">
+                                  <WarningOutlined className="text-lg" />
+                                  CẦN THANH TOÁN CỌC NGAY
+                                  {!isExpired && (
+                                    <span className={`ml-2 font-mono text-lg ${isUrgent ? 'text-red-700 animate-pulse' : 'text-orange-600'}`}>
+                                      ⏱️ {countdown.formatted}
+                                    </span>
+                                  )}
+                                  {isExpired && (
+                                    <span className="ml-2 font-mono text-lg text-red-700">
+                                      ⏱️ HẾT THỜI GIAN
+                                    </span>
+                                  )}
+                                </div>
+                              }
+                              description={
+                                <div className="text-sm space-y-1 mt-2">
+                                  {isExpired ? (
+                                    <>
+                                      <p className="font-bold text-red-700">⚠️ THỜI GIAN ĐÃ HẾT!</p>
+                                      <p>• Đơn hàng của bạn có thể bị hủy nếu không thanh toán cọc ngay</p>
+                                    </>
+                                  ) : isUrgent ? (
+                                    <>
+                                      <p className="font-bold text-red-700">⚠️ CÒN {countdown.formatted} - CẦN THANH TOÁN NGAY!</p>
+                                      <p>• Đơn hàng của bạn <strong className="text-red-600">CHƯA ĐƯỢC XÁC NHẬN</strong></p>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <p>• Đơn hàng của bạn <strong className="text-red-600">CHƯA ĐƯỢC XÁC NHẬN</strong></p>
+                                      
+                                    </>
+                                  )}
+                                  <p>• <strong className="text-red-600">BẠN BẮT BUỘC PHẢI thanh toán tiền đặt cọc</strong> để giữ đơn hàng</p>
+                                  <p>• Số tiền cần thanh toán: <strong className="text-blue-600 text-base">{formatCurrency(getDepositAmount(booking))}</strong></p>
+                                  <p className="mt-2 font-semibold">👉 Mở chi tiết đơn hàng và nhấn "Thanh toán cọc" để tiếp tục</p>
+                                </div>
+                              }
+                              type={isExpired ? "error" : isUrgent ? "error" : "warning"}
+                              showIcon
+                              icon={<WarningOutlined className="text-xl" />}
+                              className={`mb-3 border-2 ${isExpired || isUrgent ? 'border-red-500' : 'border-orange-500'}`}
+                              action={
+                                <Button
+                                  type="primary"
+                                  danger
+                                  size="small"
+                                  icon={<DollarOutlined />}
+                                  onClick={() => showBookingDetail(booking)}
+                                  className="mt-2"
+                                >
+                                  Thanh toán ngay
+                                </Button>
+                              }
+                            />
+                          );
+                        })()}
 
                         {/* Thông báo khi đơn hàng đã xác nhận */}
                         {normalizeStatus(booking.status) === 'confirmed' && (

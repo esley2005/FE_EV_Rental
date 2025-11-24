@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { CheckCircle2, XCircle } from "lucide-react";
-import { Button, Card, Spin, message } from "antd";
+import { Button, Card, Spin, message, Modal, Radio, Space, Tag } from "antd";
 import {
   CheckCircleOutlined, 
   HomeOutlined, 
@@ -12,12 +12,15 @@ import {
   DollarOutlined,
   CalendarOutlined,
   CarOutlined,
-  EnvironmentOutlined
+  EnvironmentOutlined,
+  ReloadOutlined,
+  SwapOutlined
 } from "@ant-design/icons";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { rentalOrderApi, carsApi, rentalLocationApi, paymentApi } from "@/services/api";
-import type { RentalOrderData, PaymentData } from "@/services/api";
+import { rentalOrderApi, carsApi, rentalLocationApi, paymentApi, PaymentGateway, authApi } from "@/services/api";
+import type { RentalOrderData, PaymentData, User } from "@/services/api";
+import { authUtils } from "@/utils/auth";
 import type { Car } from "@/types/car";
 import { formatDateTime } from "@/utils/dateFormat";
 import Image from "next/image";
@@ -40,13 +43,21 @@ export default function PaymentSuccessPage() {
   const [order, setOrder] = useState<OrderWithDetails | null>(null);
   const [payment, setPayment] = useState<PaymentData | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<'loading' | 'success' | 'failed' | 'unknown'>('loading');
+  const [retryingPayment, setRetryingPayment] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [showChangeGatewayModal, setShowChangeGatewayModal] = useState(false);
+  const [selectedNewGateway, setSelectedNewGateway] = useState<PaymentGateway>(PaymentGateway.MoMo);
+  const [changingGateway, setChangingGateway] = useState(false);
 
   // ✅ FIX: Extract ALL possible query params với nhiều tên khác nhau
   const allParams = Object.fromEntries(searchParams.entries());
   
+  // ✅ QUAN TRỌNG: orderId từ query params - KHÔNG lấy orderCode của PayOS
+  // PayOS orderCode sẽ được lấy riêng ở dưới
   const orderId = searchParams.get("orderId") || 
                   searchParams.get("partnerRefId") || 
                   searchParams.get("order_id");
+  // ⚠️ KHÔNG lấy orderCode từ PayOS làm orderId vì đây là mã PayOS, không phải rentalOrderId
   const amount = searchParams.get("amount");
   const transactionId = searchParams.get("transactionId") || 
                         searchParams.get("transId") || 
@@ -57,15 +68,24 @@ export default function PaymentSuccessPage() {
                       searchParams.get("requestId") || 
                       searchParams.get("request_id") ||
                       searchParams.get("momo_order_id");
+  // ✅ PayOS và MoMo đều có thể dùng resultCode/code
   const resultCode = searchParams.get("resultCode") || 
                      searchParams.get("result_code") ||
-                     searchParams.get("code");
+                     searchParams.get("code"); // PayOS dùng "code"
   const resultMessage = searchParams.get("message") || 
-                        searchParams.get("resultMessage");
+                        searchParams.get("resultMessage") ||
+                        searchParams.get("desc"); // PayOS dùng "desc"
   const partnerCode = searchParams.get("partnerCode") || 
                       searchParams.get("partner_code");
   const extraData = searchParams.get("extraData") || 
                     searchParams.get("extra_data");
+  // ✅ PayOS specific params
+  const payOSOrderCode = searchParams.get("orderCode") || 
+                         searchParams.get("order_code");
+  const payOSStatus = searchParams.get("status") || 
+                      searchParams.get("payOSStatus");
+  const cancelParam = searchParams.get("cancel") || 
+                      searchParams.get("canceled");
 
   // ✅ FIX: Debug logging chi tiết
   useEffect(() => {
@@ -82,7 +102,10 @@ export default function PaymentSuccessPage() {
       resultCode,
       resultMessage,
       partnerCode,
-      extraData
+      extraData,
+      payOSOrderCode,
+      payOSStatus,
+      cancelParam
     });
     console.log('[Payment Success] Current state:', {
       loading,
@@ -92,7 +115,7 @@ export default function PaymentSuccessPage() {
       error
     });
     console.log('[Payment Success] ========== DEBUG END ==========');
-  }, [allParams, orderId, amount, transactionId, paymentId, momoOrderId, resultCode, resultMessage, partnerCode, extraData, loading, paymentStatus, order, payment, error]);
+  }, [allParams, orderId, amount, transactionId, paymentId, momoOrderId, resultCode, resultMessage, partnerCode, extraData, payOSOrderCode, payOSStatus, cancelParam, loading, paymentStatus, order, payment, error]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -102,46 +125,7 @@ export default function PaymentSuccessPage() {
         
         console.log('[Payment Success] Starting loadData...');
 
-        // ✅ FIX: Check resultCode FIRST để set status ngay
-        if (resultCode !== null) {
-          const isSuccess = resultCode === '0';
-          console.log('[Payment Success] ResultCode found:', resultCode, 'isSuccess:', isSuccess);
-          setPaymentStatus(isSuccess ? 'success' : 'failed');
-          
-          if (isSuccess) {
-            message.success('Thanh toán thành công!');
-          } else {
-            message.error(resultMessage || 'Thanh toán thất bại');
-          }
-        }
-
-        // ✅ FIX: Kiểm tra nếu không có query params nào
-        const hasAnyParams = orderId || momoOrderId || paymentId || resultCode || transactionId || extraData;
-        if (!hasAnyParams) {
-          console.warn('[Payment Success] No query parameters found');
-          console.warn('[Payment Success] This might be due to:');
-          console.warn('  1. MoMo did not redirect with query params');
-          console.warn('  2. SSL error prevented redirect from completing');
-          console.warn('  3. Direct access to page without payment flow');
-          
-          // Kiểm tra nếu đang ở HTTPS nhưng nên là HTTP
-          if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
-            console.error('[Payment Success] ⚠️ WARNING: Page accessed via HTTPS but Next.js dev server runs on HTTP!');
-            console.error('[Payment Success] Solution: Update MoMo RedirectUrl to: http://localhost:3000/payment-success');
-            message.error('Lỗi SSL: Trang đang được truy cập qua HTTPS nhưng server chạy HTTP. Vui lòng cấu hình MoMo RedirectUrl thành: http://localhost:3000/payment-success (không dùng https)', 10);
-          } else {
-            message.warning('Không tìm thấy thông tin thanh toán. Đang chuyển về trang chủ...');
-          }
-          
-          setTimeout(() => {
-            router.push('/');
-          }, 2000);
-          setPaymentStatus('unknown');
-          setLoading(false);
-          return;
-        }
-
-        // ✅ FIX: Parse extraData để lấy rentalOrderId
+        // ✅ FIX: Parse extraData TRƯỚC để có thể dùng trong logic sau
         let rentalOrderIdFromExtraData: number | null = null;
         if (extraData) {
           try {
@@ -163,15 +147,189 @@ export default function PaymentSuccessPage() {
         }
 
         // ✅ FIX: Determine final orderId với priority
-        const finalOrderId = rentalOrderIdFromExtraData || 
-                           (orderId ? Number(orderId) : null) || 
-                           null;
+        // ⚠️ QUAN TRỌNG: payOSOrderCode KHÔNG phải là rentalOrderId!
+        // payOSOrderCode là mã đơn hàng của PayOS, không phải ID của rental order trong database
+        // Chỉ dùng rentalOrderIdFromExtraData, orderId từ query params, hoặc từ sessionStorage
+        let finalOrderId: number | null = null;
+        
+        // Priority 1: rentalOrderIdFromExtraData (từ extraData của MoMo/PayOS)
+        if (rentalOrderIdFromExtraData && !isNaN(rentalOrderIdFromExtraData) && rentalOrderIdFromExtraData > 0) {
+          finalOrderId = rentalOrderIdFromExtraData;
+          console.log('[Payment Success] Using rentalOrderIdFromExtraData:', finalOrderId);
+        }
+        // Priority 2: orderId từ query params (chỉ nếu là số hợp lệ, không phải UUID hoặc PayOS orderCode)
+        else if (orderId) {
+          const parsedOrderId = Number(orderId);
+          // ✅ QUAN TRỌNG: Kiểm tra kỹ để tránh nhầm với PayOS orderCode
+          // PayOS orderCode thường là số lớn (6-7 chữ số), rentalOrderId thường nhỏ hơn
+          // Chỉ dùng nếu là số hợp lệ và không phải PayOS orderCode
+          const isPayOSOrderCode = payOSOrderCode && parsedOrderId === Number(payOSOrderCode);
+          if (!isNaN(parsedOrderId) && parsedOrderId > 0 && parsedOrderId < 1000000 && !isPayOSOrderCode) {
+            // Giới hạn < 1 triệu để tránh nhầm với PayOS orderCode (thường 6-7 chữ số)
+            finalOrderId = parsedOrderId;
+            console.log('[Payment Success] Using parsed orderId from query:', finalOrderId);
+          } else {
+            console.warn('[Payment Success] orderId from query is not a valid rentalOrderId (might be UUID or PayOS code):', orderId, 'payOSOrderCode:', payOSOrderCode);
+          }
+        }
+        // Priority 3: Lấy từ sessionStorage (đã lưu trước khi redirect đến PayOS/MoMo)
+        if (!finalOrderId && typeof window !== 'undefined') {
+          const savedOrderId = sessionStorage.getItem('pendingPaymentOrderId');
+          if (savedOrderId) {
+            const parsedSavedOrderId = Number(savedOrderId);
+            if (!isNaN(parsedSavedOrderId) && parsedSavedOrderId > 0 && parsedSavedOrderId < 1000000) {
+              finalOrderId = parsedSavedOrderId;
+              console.log('[Payment Success] Using orderId from sessionStorage:', finalOrderId);
+              // Xóa sau khi dùng để tránh dùng lại
+              sessionStorage.removeItem('pendingPaymentOrderId');
+            }
+          }
+        }
+        
+        // ⚠️ KHÔNG dùng payOSOrderCode như rentalOrderId vì đây là mã của PayOS, không phải rental order ID
+        if (payOSOrderCode && !finalOrderId) {
+          console.log('[Payment Success] PayOS orderCode found:', payOSOrderCode, '- This is PayOS order code, not rentalOrderId. Will try to find payment/order from user orders.');
+        }
         
         console.log('[Payment Success] Final orderId to use:', finalOrderId);
 
-        // ✅ FIX: Load payment info với better error handling
+        // ✅ FIX: Check resultCode và cancel/status để set status ngay
+        // PayOS: code = 00 là thành công, code khác là thất bại/hủy
+        // MoMo: resultCode = '0' là thành công, khác là thất bại
+        // ✅ QUAN TRỌNG: Kiểm tra cancel và status TRƯỚC resultCode
+        const isCancelled = cancelParam === 'true' || cancelParam === '1' || 
+                            payOSStatus?.toUpperCase() === 'CANCELLED' ||
+                            payOSStatus?.toUpperCase() === 'CANCELED';
+        
+        // ✅ Khai báo loadedPayment trước để có thể dùng trong logic sau
         let loadedPayment: PaymentData | null = null;
+        
+        // ✅ Lưu finalOrderId vào biến để dùng sau này (có thể được cập nhật từ payment record)
+        let orderIdForRedirect: number | null = finalOrderId;
+        
+        // ✅ Load user info TRƯỚC để có thể tìm payment từ PayOS orderCode
+        try {
+          let currentUser = authUtils.getCurrentUser();
+          if (!currentUser) {
+            const userResponse = await authApi.getProfile();
+            if (userResponse.success && 'data' in userResponse && userResponse.data) {
+              currentUser = userResponse.data;
+            }
+          }
+          if (currentUser) {
+            setUser(currentUser);
+            
+            // ✅ Nếu có PayOS orderCode nhưng chưa có finalOrderId, cần tìm từ payment record TRƯỚC khi kiểm tra status
+            // Điều này đảm bảo có orderId để redirect khi payment failed/cancelled
+            if (payOSOrderCode && !orderIdForRedirect) {
+              try {
+                const userPaymentsResponse = await paymentApi.getAllByUserId(currentUser.id);
+                if (userPaymentsResponse.success && userPaymentsResponse.data) {
+                  const payments = Array.isArray(userPaymentsResponse.data)
+                    ? userPaymentsResponse.data
+                    : (userPaymentsResponse.data as { $values?: PaymentData[] })?.$values || [];
+                  
+                  const payOSOrderCodeNum = Number(payOSOrderCode);
+                  const foundPayment = payments.find((p: PaymentData) => {
+                    const paymentAny = p as PaymentData & { payOSOrderCode?: number; orderCode?: number };
+                    return paymentAny.payOSOrderCode === payOSOrderCodeNum ||
+                           (p.paymentMethod && p.paymentMethod.toLowerCase().includes('payos') && 
+                            paymentAny.orderCode === payOSOrderCodeNum);
+                  });
+                  
+                  if (foundPayment && foundPayment.rentalOrderId) {
+                    orderIdForRedirect = foundPayment.rentalOrderId;
+                    loadedPayment = foundPayment;
+                    setPayment(foundPayment);
+                    console.log('[Payment Success] Found rentalOrderId from PayOS payment (early):', orderIdForRedirect);
+                  }
+                }
+              } catch (error) {
+                console.warn('[Payment Success] Failed to find payment from PayOS orderCode (early):', error);
+              }
+            }
+          }
+        } catch (error) {
+          console.warn('[Payment Success] Failed to load user:', error);
+        }
+        
+        if (resultCode !== null || isCancelled) {
+          // ✅ Nếu có cancel hoặc status CANCELLED, luôn đánh dấu là thất bại
+          if (isCancelled) {
+            console.log('[Payment Success] Payment cancelled detected:', { cancelParam, payOSStatus });
+            
+            // ✅ QUAN TRỌNG: Khi hủy thanh toán (MoMo hoặc PayOS), redirect TRỰC TIẾP về checkout
+            // Không hiển thị payment-success page, chỉ redirect ngay
+            if (orderIdForRedirect && !isNaN(orderIdForRedirect) && orderIdForRedirect > 0) {
+              console.log('[Payment Success] Payment cancelled, redirecting immediately to checkout with orderId:', orderIdForRedirect);
+              setLoading(false);
+              // Redirect ngay lập tức, không delay
+              router.push(`/checkout?orderId=${orderIdForRedirect}`);
+              return; // Exit early để không load order details
+            } else {
+              // Nếu không có orderId, vẫn hiển thị thông báo
+              setPaymentStatus('failed');
+              message.error('Thanh toán đã bị hủy');
+            }
+          } else {
+            // PayOS success code: "00"
+            // MoMo success code: "0"
+            const isSuccess = resultCode === '0' || resultCode === '00';
+            console.log('[Payment Success] ResultCode found:', resultCode, 'isSuccess:', isSuccess);
+            
+            // ✅ QUAN TRỌNG: Set status dựa trên resultCode, không override sau này
+            if (isSuccess) {
+              setPaymentStatus('success');
+              message.success('Thanh toán thành công!');
+            } else {
+              // ✅ Hủy/thất bại: luôn set failed
+              // ✅ QUAN TRỌNG: Khi thanh toán thất bại (MoMo hoặc PayOS), redirect TRỰC TIẾP về checkout
+              if (orderIdForRedirect && !isNaN(orderIdForRedirect) && orderIdForRedirect > 0) {
+                console.log('[Payment Success] Payment failed, redirecting immediately to checkout with orderId:', orderIdForRedirect);
+                setLoading(false);
+                // Redirect ngay lập tức, không delay
+                router.push(`/checkout?orderId=${orderIdForRedirect}`);
+                return; // Exit early để không load order details
+              } else {
+                // Nếu không có orderId, vẫn hiển thị thông báo
+                setPaymentStatus('failed');
+                const errorMsg = resultMessage || 'Thanh toán thất bại hoặc đã hủy';
+                message.error(errorMsg);
+              }
+            }
+          }
+        }
 
+        // ✅ FIX: Kiểm tra nếu không có query params nào (bao gồm PayOS params)
+        const hasAnyParams = orderId || momoOrderId || paymentId || resultCode || transactionId || extraData || payOSOrderCode;
+        if (!hasAnyParams) {
+          console.warn('[Payment Success] No query parameters found');
+          console.warn('[Payment Success] This might be due to:');
+          console.warn('  1. MoMo/PayOS did not redirect with query params');
+          console.warn('  2. SSL error prevented redirect from completing');
+          console.warn('  3. Direct access to page without payment flow');
+          
+          // Kiểm tra nếu đang ở HTTPS nhưng nên là HTTP
+          if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+            console.error('[Payment Success] ⚠️ WARNING: Page accessed via HTTPS but Next.js dev server runs on HTTP!');
+            console.error('[Payment Success] Solution: Update Payment Gateway RedirectUrl to: http://localhost:3000/payment-success');
+            message.error('Lỗi SSL: Trang đang được truy cập qua HTTPS nhưng server chạy HTTP. Vui lòng cấu hình Payment Gateway RedirectUrl thành: http://localhost:3000/payment-success (không dùng https)', 10);
+          } else {
+            message.warning('Không tìm thấy thông tin thanh toán. Đang chuyển về trang chủ...');
+          }
+          
+          setTimeout(() => {
+            router.push('/');
+          }, 2000);
+          setPaymentStatus('unknown');
+          setLoading(false);
+          return;
+        }
+
+        // ✅ FIX: Load payment info với better error handling
+        // loadedPayment đã được khai báo ở trên, không cần khai báo lại
+
+        // Try to load payment by MoMo Order ID
         if (momoOrderId) {
           try {
             console.log('[Payment Success] Loading payment by momoOrderId:', momoOrderId);
@@ -184,11 +342,18 @@ export default function PaymentSuccessPage() {
               setPayment(loadedPayment);
               console.log('[Payment Success] Payment loaded:', loadedPayment);
               
-              // Update status based on payment
-              if (loadedPayment.status === 'Completed' || loadedPayment.status === 1 || loadedPayment.status === '1') {
-                setPaymentStatus('success');
-              } else if (loadedPayment.status === 'Cancelled' || loadedPayment.status === 2 || loadedPayment.status === '2') {
-                setPaymentStatus('failed');
+              // ✅ Update status based on payment - NHƯNG chỉ khi chưa có resultCode
+              // Nếu đã có resultCode từ query params, ưu tiên dùng resultCode (đã set ở trên)
+              if (resultCode === null) {
+                // Chỉ update nếu không có resultCode từ query params
+                if (loadedPayment.status === 'Completed' || loadedPayment.status === 1 || loadedPayment.status === '1') {
+                  setPaymentStatus('success');
+                } else if (loadedPayment.status === 'Cancelled' || loadedPayment.status === 2 || loadedPayment.status === '2' || loadedPayment.status === 'Failed') {
+                  setPaymentStatus('failed');
+                }
+              } else {
+                // Nếu đã có resultCode, chỉ log để debug, không override
+                console.log('[Payment Success] Payment status from DB:', loadedPayment.status, 'but using resultCode:', resultCode);
               }
             }
           } catch (error: unknown) {
@@ -198,10 +363,56 @@ export default function PaymentSuccessPage() {
           }
         }
 
-        // ✅ FIX: Load order details với error handling
-        if (finalOrderId) {
+        // ✅ Try to load payment by PayOS Order Code (nếu có và chưa có payment)
+        // PayOS orderCode không phải là rentalOrderId, nên cần tìm payment từ user's payments
+        if (payOSOrderCode && !loadedPayment && user) {
           try {
-            console.log('[Payment Success] Loading order details for ID:', finalOrderId);
+            console.log('[Payment Success] Trying to find payment by PayOS orderCode:', payOSOrderCode);
+            // Thử load tất cả payments của user và tìm payment có PayOS orderCode
+              const userPaymentsResponse = await paymentApi.getAllByUserId(user.id);
+              if (userPaymentsResponse.success && userPaymentsResponse.data) {
+                const payments = Array.isArray(userPaymentsResponse.data)
+                  ? userPaymentsResponse.data
+                  : (userPaymentsResponse.data as { $values?: PaymentData[] })?.$values || [];
+              
+              // Tìm payment có PayOS orderCode khớp
+              const payOSOrderCodeNum = Number(payOSOrderCode);
+              const foundPayment = payments.find((p: PaymentData) => {
+                // Kiểm tra các trường có thể chứa PayOS orderCode
+                const paymentAny = p as PaymentData & { payOSOrderCode?: number; orderCode?: number };
+                return paymentAny.payOSOrderCode === payOSOrderCodeNum ||
+                       (p.paymentMethod && p.paymentMethod.toLowerCase().includes('payos') && 
+                        paymentAny.orderCode === payOSOrderCodeNum);
+              });
+              
+              if (foundPayment) {
+                loadedPayment = foundPayment;
+                setPayment(foundPayment);
+                console.log('[Payment Success] Found payment by PayOS orderCode:', foundPayment);
+                
+                // Nếu có rentalOrderId từ payment, dùng nó làm finalOrderId
+                if (foundPayment.rentalOrderId && !finalOrderId) {
+                  finalOrderId = foundPayment.rentalOrderId;
+                  console.log('[Payment Success] Using rentalOrderId from payment:', finalOrderId);
+                }
+              } else {
+                console.warn('[Payment Success] Payment not found for PayOS orderCode:', payOSOrderCode);
+              }
+            }
+          } catch (error: unknown) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            console.error('[Payment Success] Error loading payment by payOSOrderCode:', errorMsg);
+            // Don't fail completely, continue
+          }
+        }
+
+        // ✅ User đã được load ở trên, không cần load lại
+
+        // ✅ FIX: Load order details với error handling
+        // Chỉ load nếu có finalOrderId hợp lệ (không phải PayOS orderCode)
+        if (finalOrderId && !isNaN(finalOrderId) && finalOrderId > 0) {
+          try {
+            console.log('[Payment Success] Loading order details for rentalOrderId:', finalOrderId);
             await loadOrderDetailsById(finalOrderId);
           } catch (error: unknown) {
             const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -209,22 +420,42 @@ export default function PaymentSuccessPage() {
             setError(`Không thể tải thông tin đơn hàng: ${errorMsg}`);
           }
         } else {
-          console.warn('[Payment Success] No orderId found, cannot load order details');
-        }
-
-        // ✅ FIX: Set default status nếu chưa có
-        if (paymentStatus === 'loading' && !resultCode) {
-          if (loadedPayment) {
-            // Already set above
+          // Nếu có PayOS orderCode nhưng không có rentalOrderId, thử load từ user orders
+          if (payOSOrderCode && user && !finalOrderId) {
+            console.warn('[Payment Success] No rentalOrderId found, but have PayOS orderCode. Will try to find order from user orders.');
+            try {
+              const userOrdersResponse = await rentalOrderApi.getByUserId(user.id);
+              if (userOrdersResponse.success && userOrdersResponse.data) {
+                const orders = Array.isArray(userOrdersResponse.data)
+                  ? userOrdersResponse.data
+                  : (userOrdersResponse.data as { $values?: RentalOrderData[] })?.$values || [];
+                
+                // Tìm order có payment với PayOS orderCode
+                // Hoặc lấy order gần nhất nếu không tìm thấy
+                const recentOrder = orders.length > 0 ? orders[orders.length - 1] : null;
+                if (recentOrder) {
+                  console.log('[Payment Success] Using most recent order:', recentOrder.id);
+                  await loadOrderDetailsById(recentOrder.id);
+                }
+              }
+            } catch (error) {
+              console.warn('[Payment Success] Failed to load order from user orders:', error);
+            }
           } else {
-            setPaymentStatus('unknown');
+            console.warn('[Payment Success] No valid rentalOrderId found, cannot load order details');
           }
         }
 
+        // ✅ FIX: Set default status nếu chưa có
+        // Chỉ set unknown nếu không có resultCode VÀ không có payment data
+        if (paymentStatus === 'loading' && !resultCode && !loadedPayment) {
+          setPaymentStatus('unknown');
+        }
+
         // ✅ FIX: Dispatch event để refresh danh sách xe
-        const isPaymentSuccess = resultCode === '0' || 
-                                loadedPayment?.status === 'Completed' || 
-                                loadedPayment?.status === 1;
+        // Chỉ dispatch khi THỰC SỰ thành công (resultCode = '0' hoặc '00')
+        const isPaymentSuccess = (resultCode === '0' || resultCode === '00') || 
+                                (resultCode === null && (loadedPayment?.status === 'Completed' || loadedPayment?.status === 1));
         
         if (isPaymentSuccess && typeof window !== 'undefined') {
           console.log('[Payment Success] Dispatching paymentSuccess event to refresh cars list...');
@@ -314,6 +545,149 @@ export default function PaymentSuccessPage() {
       style: 'currency', 
       currency: 'VND' 
     }).format(numAmount);
+  };
+
+  // ✅ Xử lý đổi phương thức thanh toán - gọi API ChangePaymentGateway
+  const handleChangePaymentGateway = async () => {
+    if (!payment?.id) {
+      message.error("Không tìm thấy thông tin thanh toán");
+      return;
+    }
+
+    setChangingGateway(true);
+    
+    try {
+      message.loading("Đang đổi phương thức thanh toán...", 1);
+      
+      const response = await paymentApi.changePaymentGateway(
+        payment.id,
+        selectedNewGateway
+      );
+
+      if (response.success && response.data) {
+        const paymentData = response.data;
+
+        // Xử lý theo gateway mới
+        if (selectedNewGateway === PaymentGateway.MoMo) {
+          const paymentUrl = paymentData.momoPayUrl;
+          if (paymentUrl) {
+            message.success("Đang chuyển đến trang thanh toán MoMo...", 2);
+            setShowChangeGatewayModal(false);
+            setTimeout(() => {
+              window.location.href = paymentUrl;
+            }, 1000);
+          } else {
+            throw new Error("Không nhận được payment URL từ MoMo");
+          }
+        } else if (selectedNewGateway === PaymentGateway.PayOS) {
+          if (paymentData.payOSCheckoutUrl) {
+            message.success("Đang chuyển đến trang thanh toán PayOS...", 2);
+            setShowChangeGatewayModal(false);
+            setTimeout(() => {
+              window.location.href = paymentData.payOSCheckoutUrl!;
+            }, 1000);
+          } else {
+            throw new Error("Không nhận được thông tin thanh toán từ PayOS");
+          }
+        } else if (selectedNewGateway === PaymentGateway.Cash || selectedNewGateway === PaymentGateway.BankTransfer) {
+          message.success("Đã đổi phương thức thanh toán. Vui lòng thanh toán trực tiếp khi nhận xe.", 5);
+          setShowChangeGatewayModal(false);
+          setChangingGateway(false);
+          // Reload page để cập nhật thông tin
+          setTimeout(() => {
+            window.location.reload();
+          }, 2000);
+        }
+      } else {
+        throw new Error(response.error || "Không thể đổi phương thức thanh toán");
+      }
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Có lỗi xảy ra khi đổi phương thức thanh toán";
+      
+      message.error(errorMessage);
+      setChangingGateway(false);
+    }
+  };
+
+  // ✅ Xử lý thanh toán lại - gọi API createPaymentWithGateway
+  const handleRetryPayment = async () => {
+    if (!order || !user) {
+      message.error("Không thể tải thông tin đơn hàng hoặc người dùng");
+      return;
+    }
+
+    setRetryingPayment(true);
+    
+    try {
+      // Tính amount dựa trên order data
+      const amount = (order.deposit && order.deposit > 0) 
+        ? order.deposit 
+        : Math.round((order.total || order.subTotal || 0) * 0.3);
+      
+      if (amount <= 0) {
+        message.warning("Không có số tiền cần thanh toán");
+        setRetryingPayment(false);
+        return;
+      }
+
+      // Xác định gateway đã dùng (từ payment data hoặc mặc định MoMo)
+      let gateway = PaymentGateway.MoMo; // Mặc định
+      if (payment?.paymentMethod) {
+        if (payment.paymentMethod.toLowerCase().includes('momo')) {
+          gateway = PaymentGateway.MoMo;
+        } else if (payment.paymentMethod.toLowerCase().includes('payos')) {
+          gateway = PaymentGateway.PayOS;
+        }
+      }
+
+      message.loading("Đang tạo yêu cầu thanh toán...", 1);
+      
+      const response = await paymentApi.createPaymentWithGateway(
+        order.id,
+        user.id,
+        amount,
+        gateway
+      );
+
+      if (response.success && response.data) {
+        const paymentData = response.data;
+
+        // Xử lý theo gateway
+        if (gateway === PaymentGateway.MoMo) {
+          const paymentUrl = paymentData.momoPayUrl;
+          if (paymentUrl) {
+            message.success("Đang chuyển đến trang thanh toán MoMo...", 2);
+            setTimeout(() => {
+              window.location.href = paymentUrl;
+            }, 1000);
+          } else {
+            throw new Error("Không nhận được payment URL từ MoMo");
+          }
+        } else if (gateway === PaymentGateway.PayOS) {
+          if (paymentData.payOSCheckoutUrl) {
+            message.success("Đang chuyển đến trang thanh toán PayOS...", 2);
+            setTimeout(() => {
+              window.location.href = paymentData.payOSCheckoutUrl!;
+            }, 1000);
+          } else {
+            throw new Error("Không nhận được thông tin thanh toán từ PayOS");
+          }
+        }
+      } else {
+        throw new Error(response.error || "Không thể tạo payment request");
+      }
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Có lỗi xảy ra khi tạo payment";
+      
+      message.error(errorMessage);
+      setRetryingPayment(false);
+    }
   };
 
   // ✅ FIX: Always show loading state
@@ -439,22 +813,7 @@ export default function PaymentSuccessPage() {
                 </div>
               )}
 
-              {/* Failed Message */}
-              {paymentStatus === 'failed' && (
-                <div className="bg-gradient-to-r from-red-50 to-pink-50 border-l-4 border-red-500 p-6 mb-6">
-                  <div className="flex items-start gap-4">
-                    <XCircle className="text-red-500 text-2xl mt-1" />
-                    <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-red-800 mb-2">
-                        Thanh toán thất bại
-                      </h3>
-                      <p className="text-red-700">
-                        {resultMessage || 'Thanh toán không thành công. Vui lòng thử lại hoặc liên hệ hỗ trợ.'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
+           
 
               {/* Unknown/Warning Message */}
               {paymentStatus === 'unknown' && (
@@ -699,36 +1058,156 @@ export default function PaymentSuccessPage() {
               )}
 
               {/* Action Buttons - ALWAYS SHOW */}
-              <div className="mt-8 pt-6 border-t flex flex-col sm:flex-row gap-4">
-                <Button
-                  type="default"
-                  size="large"
-                  icon={<HomeOutlined />}
-                  onClick={() => router.push("/")}
-                  className="flex-1 h-12"
-                >
-                  Về trang chủ
-                </Button>
-                {(orderId || order?.id) && (
-                  <Button
-                    type="primary"
-                    size="large"
-                    icon={<FileTextOutlined />}
-                    onClick={() => router.push(`/my-bookings?orderId=${orderId || order?.id}`)}
-                    className="flex-1 h-12 bg-blue-600 hover:bg-blue-700"
-                  >
-                    Xem đơn hàng
-                  </Button>
+              <div className="mt-8 pt-6 border-t">
+                {/* Payment Retry Buttons - chỉ hiển thị khi thanh toán thất bại hoặc chưa thành công */}
+                {(paymentStatus === 'failed' || paymentStatus === 'unknown') && (orderId || order?.id) && (
+                  <div className="mb-4 p-4 bg-red-50 rounded-lg border border-red-200">
+                    <h3 className="text-lg font-semibold text-red-800 mb-3 flex items-center gap-2">
+                      <ReloadOutlined className="text-red-600" />
+                      Thanh toán lại
+                    </h3>
+                    <p className="text-red-700 text-sm mb-4">
+                      Thanh toán không thành công hoặc đã bị hủy. Bạn có thể thử lại với cùng phương thức hoặc chọn phương thức thanh toán khác.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <Button
+                        type="primary"
+                        size="large"
+                        danger
+                        icon={<ReloadOutlined />}
+                        onClick={handleRetryPayment}
+                        loading={retryingPayment}
+                        disabled={retryingPayment || !order || !user}
+                        className="flex-1 h-12"
+                      >
+                        {retryingPayment ? "Đang xử lý..." : "Thanh toán lại"}
+                      </Button>
+                      <Button
+                        type="default"
+                        size="large"
+                        icon={<SwapOutlined />}
+                        onClick={() => {
+                          // ✅ Tìm orderId từ nhiều nguồn với priority:
+                          // 1. order?.id (từ database, đáng tin cậy nhất)
+                          // 2. payment?.rentalOrderId (từ payment record)
+                          // 3. orderId từ query params (có thể là UUID, cần parse)
+                          // 4. payOSOrderCode (PayOS order code)
+                          
+                          let finalOrderId: number | null = null;
+                          
+                          // Priority 1: order?.id
+                          if (order?.id && typeof order.id === 'number' && order.id > 0) {
+                            finalOrderId = order.id;
+                            console.log('[Payment Success] Using order.id:', finalOrderId);
+                          }
+                          // Priority 2: payment?.rentalOrderId
+                          else if (payment?.rentalOrderId && typeof payment.rentalOrderId === 'number' && payment.rentalOrderId > 0) {
+                            finalOrderId = payment.rentalOrderId;
+                            console.log('[Payment Success] Using payment.rentalOrderId:', finalOrderId);
+                          }
+                          // Priority 3: orderId từ query params (thử parse thành số)
+                          else if (orderId) {
+                            const parsedOrderId = Number(orderId);
+                            if (!isNaN(parsedOrderId) && parsedOrderId > 0) {
+                              finalOrderId = parsedOrderId;
+                              console.log('[Payment Success] Using parsed orderId from query:', finalOrderId);
+                            } else {
+                              console.warn('[Payment Success] orderId from query is not a valid number:', orderId);
+                            }
+                          }
+                          // Priority 4: payOSOrderCode
+                          else if (payOSOrderCode) {
+                            const parsedPayOSCode = Number(payOSOrderCode);
+                            if (!isNaN(parsedPayOSCode) && parsedPayOSCode > 0) {
+                              finalOrderId = parsedPayOSCode;
+                              console.log('[Payment Success] Using payOSOrderCode:', finalOrderId);
+                            }
+                          }
+                          
+                          // ✅ Kiểm tra finalOrderId hợp lệ
+                          if (!finalOrderId || isNaN(finalOrderId) || finalOrderId <= 0) {
+                            console.error('[Payment Success] No valid orderId found:', {
+                              'order?.id': order?.id,
+                              'payment?.rentalOrderId': payment?.rentalOrderId,
+                              'orderId': orderId,
+                              'payOSOrderCode': payOSOrderCode
+                            });
+                            message.error("Không tìm thấy thông tin đơn hàng. Vui lòng thử lại hoặc chọn đơn hàng từ danh sách.");
+                            router.push("/my-bookings");
+                            return;
+                          }
+                          
+                          // ✅ Khi thanh toán thất bại: luôn redirect về checkout để chọn phương thức mới
+                          // ✅ Tương tự như MoMo, không mở modal khi thanh toán thất bại
+                          if (paymentStatus === 'failed' || paymentStatus === 'unknown') {
+                            console.log('[Payment Success] Redirecting to checkout with orderId:', finalOrderId);
+                            router.push(`/checkout?orderId=${finalOrderId}`);
+                          } else {
+                            // ✅ Khi thanh toán thành công: nếu có payment.id thì mở modal để đổi gateway
+                            if (payment?.id) {
+                              // Xác định gateway hiện tại từ payment
+                              let currentGateway = PaymentGateway.MoMo; // Mặc định
+                              if (payment.paymentMethod) {
+                                if (payment.paymentMethod.toLowerCase().includes('momo')) {
+                                  currentGateway = PaymentGateway.MoMo;
+                                } else if (payment.paymentMethod.toLowerCase().includes('payos')) {
+                                  currentGateway = PaymentGateway.PayOS;
+                                }
+                              }
+                              
+                              // Set gateway mới là gateway khác với gateway hiện tại
+                              const newGateway = currentGateway === PaymentGateway.MoMo 
+                                ? PaymentGateway.PayOS 
+                                : PaymentGateway.MoMo;
+                              setSelectedNewGateway(newGateway);
+                              setShowChangeGatewayModal(true);
+                            } else {
+                              // Fallback: về checkout để chọn phương thức mới
+                              console.log('[Payment Success] No payment.id, redirecting to checkout with orderId:', finalOrderId);
+                              router.push(`/checkout?orderId=${finalOrderId}`);
+                            }
+                          }
+                        }}
+                        className="flex-1 h-12 border-red-300 text-red-600 hover:bg-red-50"
+                      >
+                        Đổi phương thức thanh toán
+                      </Button>
+                    </div>
+                  </div>
                 )}
-                <Button
-                  type="default"
-                  size="large"
-                  icon={<CarOutlined />}
-                  onClick={() => router.push("/cars/all")}
-                  className="flex-1 h-12"
-                >
-                  Thuê thêm xe
-                </Button>
+
+                {/* Standard Action Buttons */}
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <Button
+                    type="default"
+                    size="large"
+                    icon={<HomeOutlined />}
+                    onClick={() => router.push("/")}
+                    className="flex-1 h-12"
+                  >
+                    Về trang chủ
+                  </Button>
+                  {(orderId || order?.id) && (
+                    <Button
+                      type="primary"
+                      size="large"
+                      icon={<FileTextOutlined />}
+                      onClick={() => router.push(`/my-bookings?orderId=${orderId || order?.id}`)}
+                      className="flex-1 h-12 bg-blue-600 hover:bg-blue-700"
+                    >
+                      Xem đơn hàng
+                    </Button>
+                  )}
+                  <Button
+                    type="default"
+                    size="large"
+                    icon={<CarOutlined />}
+                    onClick={() => router.push("/cars/all")}
+                    className="flex-1 h-12"
+                  >
+                    Thuê thêm xe
+                  </Button>
+                </div>
               </div>
 
               {/* Additional Info */}
@@ -776,6 +1255,126 @@ export default function PaymentSuccessPage() {
           </motion.div>
         </div>
       </div>
+      {/* Modal đổi phương thức thanh toán */}
+      <Modal
+        title={
+          <div className="flex items-center gap-2">
+            <SwapOutlined className="text-blue-600" />
+            <span>Đổi phương thức thanh toán</span>
+          </div>
+        }
+        open={showChangeGatewayModal}
+        onCancel={() => {
+          setShowChangeGatewayModal(false);
+          // Reset về gateway mặc định khi đóng
+          if (payment?.paymentMethod?.toLowerCase().includes('momo')) {
+            setSelectedNewGateway(PaymentGateway.PayOS);
+          } else {
+            setSelectedNewGateway(PaymentGateway.MoMo);
+          }
+        }}
+        footer={[
+          <Button
+            key="cancel"
+            onClick={() => {
+              setShowChangeGatewayModal(false);
+              // Reset về gateway mặc định khi đóng
+              if (payment?.paymentMethod?.toLowerCase().includes('momo')) {
+                setSelectedNewGateway(PaymentGateway.PayOS);
+              } else {
+                setSelectedNewGateway(PaymentGateway.MoMo);
+              }
+            }}
+          >
+            Hủy
+          </Button>,
+          <Button
+            key="confirm"
+            type="primary"
+            onClick={handleChangePaymentGateway}
+            loading={changingGateway}
+            disabled={!payment?.id || changingGateway}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            {changingGateway ? "Đang xử lý..." : "Xác nhận và thanh toán"}
+          </Button>,
+        ]}
+        width={500}
+      >
+        <div className="space-y-4">
+          {/* Hiển thị phương thức hiện tại */}
+          {payment?.paymentMethod && (
+            <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <p className="text-sm text-gray-600 mb-1">Phương thức hiện tại:</p>
+              <p className="font-semibold text-blue-700">
+                {payment.paymentMethod.toLowerCase().includes('momo') ? 'MoMo' : 
+                 payment.paymentMethod.toLowerCase().includes('payos') ? 'PayOS' : 
+                 payment.paymentMethod}
+              </p>
+            </div>
+          )}
+
+          <p className="text-gray-700 font-medium">
+            Chọn phương thức thanh toán mới cho đơn hàng #{order?.id || orderId}:
+          </p>
+          
+          {/* ✅ Chỉ hiển thị phương thức khác với phương thức hiện tại */}
+          {(() => {
+            const currentIsMoMo = payment?.paymentMethod?.toLowerCase().includes('momo');
+            const availableGateways = currentIsMoMo 
+              ? [PaymentGateway.PayOS] // Nếu đang dùng MoMo, chỉ hiển thị PayOS
+              : [PaymentGateway.MoMo]; // Nếu đang dùng PayOS, chỉ hiển thị MoMo
+
+            return (
+              <Radio.Group
+                value={selectedNewGateway}
+                onChange={(e) => setSelectedNewGateway(e.target.value)}
+                className="w-full"
+              >
+                <Space direction="vertical" className="w-full" size="middle">
+                  {availableGateways.includes(PaymentGateway.MoMo) && (
+                    <Radio value={PaymentGateway.MoMo} className="w-full py-3 px-4 border rounded-lg hover:bg-gray-50">
+                      <div className="flex items-center gap-3">
+                        <span className="font-semibold text-lg">MoMo</span>
+                        <Tag color="pink">Ví điện tử</Tag>
+                        <span className="text-sm text-gray-500">Thanh toán nhanh chóng</span>
+                      </div>
+                    </Radio>
+                  )}
+                  {availableGateways.includes(PaymentGateway.PayOS) && (
+                    <Radio value={PaymentGateway.PayOS} className="w-full py-3 px-4 border rounded-lg hover:bg-gray-50">
+                      <div className="flex items-center gap-3">
+                        <span className="font-semibold text-lg">PayOS</span>
+                        <Tag color="blue">QR Code</Tag>
+                        <Tag color="green">Ngân hàng</Tag>
+                        <span className="text-sm text-gray-500">Nhiều phương thức</span>
+                      </div>
+                    </Radio>
+                  )}
+                </Space>
+              </Radio.Group>
+            );
+          })()}
+
+          {order && (
+            <div className="mt-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+              <div className="text-sm text-gray-700">
+                <p className="font-semibold mb-1">Số tiền cần thanh toán:</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {formatCurrency(order.deposit || Math.round((order.total || order.subTotal || 0) * 0.3))}
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+            <p className="text-sm text-yellow-800">
+              <strong>Lưu ý:</strong> Sau khi đổi phương thức, bạn sẽ được chuyển đến trang thanh toán mới ngay lập tức.
+            </p>
+          </div>
+        </div>
+      </Modal>
+
       <Footer />
     </>
   );

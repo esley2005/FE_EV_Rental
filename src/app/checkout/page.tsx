@@ -53,16 +53,33 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (orderId) {
-      loadOrderAndUser();
+      // ✅ Validate orderId là số hợp lệ
+      const parsedOrderId = Number(orderId);
+      if (isNaN(parsedOrderId) || parsedOrderId <= 0) {
+        console.error('[Checkout] Invalid orderId:', orderId);
+        message.error("ID đơn hàng không hợp lệ");
+        router.push("/my-bookings");
+        return;
+      }
+      loadOrderAndUser(parsedOrderId);
     } else {
       message.error("Không tìm thấy đơn hàng");
       router.push("/");
     }
-  }, [orderId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderId, router]);
 
 
-  const loadOrderAndUser = async () => {
-    if (!orderId) return;
+  const loadOrderAndUser = async (parsedOrderId?: number) => {
+    // ✅ Sử dụng parsedOrderId từ parameter hoặc parse từ orderId
+    const orderIdToUse = parsedOrderId ?? (orderId ? Number(orderId) : null);
+    
+    if (!orderIdToUse || isNaN(orderIdToUse) || orderIdToUse <= 0) {
+      console.error('[Checkout] Invalid orderId in loadOrderAndUser:', orderId, parsedOrderId);
+      message.error("ID đơn hàng không hợp lệ");
+      router.push("/my-bookings");
+      return;
+    }
 
     try {
       setLoading(true);
@@ -84,7 +101,7 @@ export default function CheckoutPage() {
       setUser(currentUser);
 
       // Load order details - thử getById trước
-      const orderResponse = await rentalOrderApi.getById(Number(orderId));
+      const orderResponse = await rentalOrderApi.getById(orderIdToUse);
 
       let orderData: RentalOrderData | null = null;
 
@@ -100,7 +117,7 @@ export default function CheckoutPage() {
               ? userOrdersResponse.data
               : (userOrdersResponse.data as any)?.$values || [];
             
-            const foundOrder = orders.find((o: RentalOrderData) => o.id === Number(orderId));
+            const foundOrder = orders.find((o: RentalOrderData) => o.id === orderIdToUse);
             if (foundOrder) {
               orderData = foundOrder;
             }
@@ -257,6 +274,12 @@ export default function CheckoutPage() {
       if (response.success && response.data) {
         const paymentData = response.data;
 
+        // ✅ Lưu orderId vào sessionStorage TRƯỚC khi redirect để có thể lấy lại khi hủy
+        if (order?.id) {
+          sessionStorage.setItem('pendingPaymentOrderId', String(order.id));
+          console.log('[Checkout] Saved orderId to sessionStorage:', order.id);
+        }
+
         // Xử lý theo gateway
         if (selectedGateway === PaymentGateway.MoMo) {
           const paymentUrl = paymentData.momoPayUrl;
@@ -269,17 +292,18 @@ export default function CheckoutPage() {
             throw new Error("Không nhận được payment URL từ MoMo");
           }
         } else if (selectedGateway === PaymentGateway.PayOS) {
-          // Hiển thị QR code hoặc redirect
-          if (paymentData.payOSQrCode) {
-            setPayOSQrCode(paymentData.payOSQrCode);
-            setPayOSCheckoutUrl(paymentData.payOSCheckoutUrl || null);
-            setShowPayOSModal(true);
-            message.success("Quét mã QR để thanh toán", 3);
-          } else if (paymentData.payOSCheckoutUrl) {
+          // ✅ Chuyển thẳng đến trang thanh toán PayOS
+          if (paymentData.payOSCheckoutUrl) {
             message.success("Đang chuyển đến trang thanh toán PayOS...", 2);
             setTimeout(() => {
               window.location.href = paymentData.payOSCheckoutUrl!;
             }, 1000);
+          } else if (paymentData.payOSQrCode) {
+            // Fallback: nếu không có checkoutUrl, mới hiển thị QR code
+            setPayOSQrCode(paymentData.payOSQrCode);
+            setPayOSCheckoutUrl(paymentData.payOSCheckoutUrl || null);
+            setShowPayOSModal(true);
+            message.success("Quét mã QR để thanh toán", 3);
           } else {
             throw new Error("Không nhận được thông tin thanh toán từ PayOS");
           }
@@ -306,17 +330,8 @@ export default function CheckoutPage() {
     }
   };
 
-  // Auto pay nếu autoPay = true và đã load xong order/user
-  useEffect(() => {
-    if (autoPay && order && user && selectedGateway === PaymentGateway.MoMo && !isProcessingPayment && !loading) {
-      // Tự động thanh toán sau 1 giây để đảm bảo UI đã render
-      const timer = setTimeout(() => {
-        handleConfirmPayment();
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoPay, order, user, selectedGateway, loading]);
+  // ✅ REMOVED: Không tự động thanh toán nữa
+  // Người dùng phải tự chọn phương thức thanh toán và nhấn nút xác nhận
 
   const paymentAmount = getPaymentAmount();
 
