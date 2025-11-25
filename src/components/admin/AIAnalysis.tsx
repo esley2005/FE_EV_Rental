@@ -11,17 +11,26 @@ const { TextArea } = Input;
 
 // Dynamic import Chart.js components
 const Pie = dynamic(
-  () => import('react-chartjs-2').then((mod: any) => mod.Pie),
+  async () => {
+    const mod = await import('react-chartjs-2');
+    return { default: mod.Pie };
+  },
   { ssr: false }
 ) as any;
 
 const Bar = dynamic(
-  () => import('react-chartjs-2').then((mod: any) => mod.Bar),
+  async () => {
+    const mod = await import('react-chartjs-2');
+    return { default: mod.Bar };
+  },
   { ssr: false }
 ) as any;
 
 const Doughnut = dynamic(
-  () => import('react-chartjs-2').then((mod: any) => mod.Doughnut),
+  async () => {
+    const mod = await import('react-chartjs-2');
+    return { default: mod.Doughnut };
+  },
   { ssr: false }
 ) as any;
 

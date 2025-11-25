@@ -54,7 +54,7 @@ const mainMenu = [
   { key: "tasks", label: "Giao / Nhận xe", icon: <Hand size={16} /> },
   { key: "customers", label: "Xác thực khách hàng", icon: <TeamOutlined /> },
   { key: "payments", label: "Thanh toán tại điểm", icon: <DollarOutlined /> },
-  { key: "vehicles", label: "Xe tại điểm", icon: <EnvironmentOutlined /> },
+  { key: "vehicles", label: "Báo cáo sự cố cho admin", icon: <EnvironmentOutlined /> },
 ];
 
 /* =========================================================

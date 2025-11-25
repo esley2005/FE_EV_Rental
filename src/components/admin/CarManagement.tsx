@@ -20,11 +20,12 @@ import {
   Image
 } from "antd";
 import { Plus, Edit, Trash2, CheckCircle, Upload as UploadIcon, Car as CarIcon, MapPin } from "lucide-react";
-import { carsApi, rentalLocationApi } from "@/services/api";
+import { carsApi, rentalLocationApi, rentalOrderApi, authApi } from "@/services/api";
 import type { Car } from "@/types/car";
-import type { RentalLocationData } from "@/services/api";
+import type { RentalLocationData, RentalOrderData, User } from "@/services/api";
 import type { UploadRequestOption as RcCustomRequestOptions } from "rc-upload/lib/interface";
 import { getValidImageUrl } from "@/utils/imageUtils";
+import dayjs from "dayjs";
 
 type DotNetList<T> = {
   $values?: T[];
@@ -116,11 +117,18 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
   const [uploading, setUploading] = useState(false);
   const [rentalLocations, setRentalLocations] = useState<RentalLocationData[]>([]);
   const [loadingLocations, setLoadingLocations] = useState(false);
+  // State để lưu đơn hàng và users (chỉ dùng khi staffMode)
+  const [rentalOrders, setRentalOrders] = useState<RentalOrderData[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
 
   useEffect(() => {
     loadCars();
     // Luôn load rental locations để admin có thể set location
     loadRentalLocations();
+    // Nếu staffMode, load đơn hàng và users để hiển thị tên khách hàng
+    if (staffMode) {
+      loadRentalOrdersAndUsers();
+    }
   }, [staffMode]);
 
   const loadCars = async () => {
@@ -158,6 +166,28 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
       console.error('Load rental locations error:', error);
     } finally {
       setLoadingLocations(false);
+    }
+  };
+
+  // Load đơn hàng và users để hiển thị tên khách hàng (chỉ khi staffMode)
+  const loadRentalOrdersAndUsers = async () => {
+    try {
+      const [ordersResponse, usersResponse] = await Promise.all([
+        rentalOrderApi.getAll(),
+        authApi.getAllUsers(),
+      ]);
+
+      if (ordersResponse.success && ordersResponse.data) {
+        const ordersData = normalizeDotNetList<RentalOrderData>(ordersResponse.data);
+        setRentalOrders(ordersData);
+      }
+
+      if (usersResponse.success && usersResponse.data) {
+        const usersData = normalizeDotNetList<User>(usersResponse.data);
+        setUsers(usersData);
+      }
+    } catch (error) {
+      console.error('Load rental orders and users error:', error);
     }
   };
 
@@ -751,10 +781,33 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
       key: 'locations',
       width: 280,
       render: (_value: unknown, record: Car) => {
-        // Lấy rentalLocationId trực tiếp từ Car object
+        // Ưu tiên: Lấy rentalLocation object trực tiếp từ Car (nếu API trả về nested object)
+        const nestedLocation = (record as any).rentalLocation ?? (record as any).RentalLocation;
+        
+        if (nestedLocation && nestedLocation.id && nestedLocation.name) {
+          // Có nested location object, dùng trực tiếp
+          const locationName = nestedLocation.name || nestedLocation.Name || '';
+          const locationAddress = nestedLocation.address || nestedLocation.Address || '';
+          
+          return (
+            <div className="flex items-start gap-1.5 bg-blue-50 border border-blue-200 rounded-lg px-2 py-1.5 max-w-[250px]">
+              <MapPin size={12} className="flex-shrink-0 text-blue-600 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                {locationName && (
+                  <div className="text-xs font-medium text-gray-800 leading-tight">{locationName}</div>
+                )}
+                {locationAddress && (
+                  <div className="text-xs text-gray-600 leading-tight mt-0.5">{locationAddress}</div>
+                )}
+              </div>
+            </div>
+          );
+        }
+        
+        // Fallback: Lấy rentalLocationId và tìm trong rentalLocations state
         const locationId = (record as any).rentalLocationId ?? (record as any).RentalLocationId;
         
-        if (!locationId) {
+        if (!locationId || locationId === 0) {
           return (
             <Tag color="default" className="text-xs">
               <span className="text-gray-400">Chưa gán</span>
@@ -791,6 +844,110 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
         );
       },
     },
+    // Cột "Khách hàng" chỉ hiển thị khi staffMode
+    ...(staffMode ? [
+      {
+        title: 'Khách hàng',
+        key: 'customer',
+        width: 150,
+        render: (_value: unknown, record: Car) => {
+          // Tìm đơn hàng đã thanh toán (status >= OrderDepositConfirmed) cho xe này
+          const activeOrder = rentalOrders.find((order) => {
+            // Đơn hàng phải thuộc xe này
+            if (order.carId !== record.id) return false;
+            
+            // Đơn hàng phải đã được xác nhận cọc hoặc đang thuê (đã thanh toán)
+            // Status: 1 = OrderDepositConfirmed, 2 = CheckedIn, 3 = Renting, 4 = Returned, 5 = PaymentPending, 9 = Completed
+            const statusValue = order.status ?? (order as any).Status ?? 0;
+            const status = typeof statusValue === 'string' ? parseInt(statusValue, 10) : Number(statusValue);
+            return status >= 1 && status !== 7; // >= 1 và không phải Cancelled (7)
+          });
+
+          if (!activeOrder) {
+            return <span className="text-gray-400">Chưa có đơn</span>;
+          }
+
+          // Tìm user từ userId
+          const customer = users.find((u) => u.id === activeOrder.userId);
+          if (customer) {
+            return (
+              <div className="text-sm font-medium text-gray-800">
+                {customer.fullName || customer.email || `User #${customer.id}`}
+              </div>
+            );
+          }
+
+          return <span className="text-gray-400">Chưa có đơn</span>;
+        },
+      },
+      {
+        title: 'Thời gian thuê',
+        key: 'rentalTime',
+        width: 180,
+        render: (_value: unknown, record: Car) => {
+          // Tìm đơn hàng đang active cho xe này
+          const activeOrder = rentalOrders.find((order) => {
+            if (order.carId !== record.id) return false;
+            const statusValue = order.status ?? (order as any).Status ?? 0;
+            const status = typeof statusValue === 'string' ? parseInt(statusValue, 10) : Number(statusValue);
+            return status >= 1 && status !== 7;
+          });
+
+          if (!activeOrder) {
+            return <span className="text-gray-400">Chưa cập nhật</span>;
+          }
+
+          // Hiển thị thời gian thuê: từ pickupTime đến expectedReturnTime
+          const pickupTime = activeOrder.pickupTime;
+          const expectedReturnTime = activeOrder.expectedReturnTime;
+          
+          if (pickupTime && expectedReturnTime) {
+            try {
+              const pickup = dayjs(pickupTime);
+              const returnTime = dayjs(expectedReturnTime);
+              return (
+                <div className="text-xs">
+                  <div>{pickup.format('DD/MM/YYYY HH:mm')}</div>
+                  <div className="text-gray-500">→ {returnTime.format('DD/MM/YYYY HH:mm')}</div>
+                </div>
+              );
+            } catch {
+              return <span className="text-gray-400">Chưa cập nhật</span>;
+            }
+          }
+
+          return <span className="text-gray-400">Chưa cập nhật</span>;
+        },
+      },
+      {
+        title: 'Thanh toán',
+        key: 'payment',
+        width: 120,
+        render: (_value: unknown, record: Car) => {
+          // Tìm đơn hàng đã thanh toán cho xe này
+          const activeOrder = rentalOrders.find((order) => {
+            if (order.carId !== record.id) return false;
+            const statusValue = order.status ?? (order as any).Status ?? 0;
+            const status = typeof statusValue === 'string' ? parseInt(statusValue, 10) : Number(statusValue);
+            return status >= 1 && status !== 7;
+          });
+
+          if (!activeOrder) {
+            return <span className="text-gray-400">Chưa có đơn</span>;
+          }
+
+          // Kiểm tra xem đã thanh toán chưa (status >= OrderDepositConfirmed = 1)
+          const statusValue = activeOrder.status ?? (activeOrder as any).Status ?? 0;
+          const status = typeof statusValue === 'string' ? parseInt(statusValue, 10) : Number(statusValue);
+          
+          if (status >= 1) {
+            return <Tag color="green">Đã thanh toán</Tag>;
+          }
+
+          return <span className="text-gray-400">Chưa có đơn</span>;
+        },
+      },
+    ] : []),
     ...(staffMode ? [] : [
       {
         title: 'Thao tác',
