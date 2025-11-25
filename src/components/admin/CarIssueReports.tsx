@@ -25,8 +25,6 @@ import {
   CheckCircleOutlined,
   ClockCircleOutlined,
   CloseCircleOutlined,
-  ReloadOutlined,
-  UserOutlined,
 } from "@ant-design/icons";
 import { carsApi } from "@/services/api";
 import type { Car } from "@/types/car";
@@ -75,7 +73,6 @@ export default function CarIssueReports() {
   };
 
   const loadIssueReports = () => {
-    setLoading(true);
     try {
       const stored = localStorage.getItem("carIssueReports");
       if (stored) {
@@ -87,21 +84,10 @@ export default function CarIssueReports() {
             console.log(`[CarIssueReports] Report #${report.id} has ${report.images.length} images:`, report.images);
           }
         });
-        // Sắp xếp theo ngày báo cáo (mới nhất trước)
-        const sortedReports = reports.sort((a: CarIssueReport, b: CarIssueReport) => {
-          const dateA = a.reportedAt ? new Date(a.reportedAt).getTime() : 0;
-          const dateB = b.reportedAt ? new Date(b.reportedAt).getTime() : 0;
-          return dateB - dateA;
-        });
-        setIssueReports(sortedReports);
-      } else {
-        setIssueReports([]);
+        setIssueReports(reports);
       }
     } catch (error) {
       console.error("Load issue reports error:", error);
-      message.error("Không thể tải danh sách báo cáo!");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -254,29 +240,10 @@ export default function CarIssueReports() {
       ),
     },
     {
-      title: "Người báo cáo",
-      dataIndex: "reportedBy",
-      key: "reportedBy",
-      width: 150,
-      render: (reportedBy: string) => (
-        reportedBy ? (
-          <Space>
-            <UserOutlined />
-            <span>{reportedBy}</span>
-          </Space>
-        ) : "-"
-      ),
-    },
-    {
       title: "Ngày báo cáo",
       dataIndex: "reportedAt",
       key: "reportedAt",
-      width: 180,
-      sorter: (a: CarIssueReport, b: CarIssueReport) => {
-        const dateA = a.reportedAt ? new Date(a.reportedAt).getTime() : 0;
-        const dateB = b.reportedAt ? new Date(b.reportedAt).getTime() : 0;
-        return dateA - dateB;
-      },
+      width: 150,
       render: (date: string) =>
         date ? new Date(date).toLocaleString("vi-VN") : "-",
     },
@@ -318,36 +285,15 @@ export default function CarIssueReports() {
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: "bold" }}>
               Báo cáo sự cố từ staff
             </h2>
-            <Space wrap>
-              <Badge count={pendingCount} showZero offset={[10, 0]}>
-                <Tag 
-                  color="orange" 
-                  icon={<ClockCircleOutlined />}
-                  style={{ padding: "4px 12px", fontSize: "14px", cursor: "pointer" }}
-                  onClick={() => setStatusFilter("pending")}
-                >
-                  Chờ xử lý: {pendingCount}
-                </Tag>
+            <Space>
+              <Badge count={pendingCount} showZero>
+                <Tag color="orange">Chờ xử lý: {pendingCount}</Tag>
               </Badge>
-              <Badge count={inProgressCount} showZero offset={[10, 0]}>
-                <Tag 
-                  color="blue" 
-                  icon={<ExclamationCircleOutlined />}
-                  style={{ padding: "4px 12px", fontSize: "14px", cursor: "pointer" }}
-                  onClick={() => setStatusFilter("in_progress")}
-                >
-                  Đang xử lý: {inProgressCount}
-                </Tag>
+              <Badge count={inProgressCount} showZero>
+                <Tag color="blue">Đang xử lý: {inProgressCount}</Tag>
               </Badge>
-              <Badge count={resolvedCount} showZero offset={[10, 0]}>
-                <Tag 
-                  color="green" 
-                  icon={<CheckCircleOutlined />}
-                  style={{ padding: "4px 12px", fontSize: "14px", cursor: "pointer" }}
-                  onClick={() => setStatusFilter("resolved")}
-                >
-                  Đã xử lý: {resolvedCount}
-                </Tag>
+              <Badge count={resolvedCount} showZero>
+                <Tag color="green">Đã xử lý: {resolvedCount}</Tag>
               </Badge>
             </Space>
           </div>
@@ -373,13 +319,7 @@ export default function CarIssueReports() {
               onChange={(e) => setSearchText(e.target.value)}
               onSearch={(value) => setSearchText(value)}
             />
-            <Button 
-              icon={<ReloadOutlined />} 
-              onClick={loadIssueReports}
-              loading={loading}
-            >
-              Làm mới
-            </Button>
+            <Button onClick={loadIssueReports}>Làm mới</Button>
           </Space>
         </div>
 
@@ -456,14 +396,6 @@ export default function CarIssueReports() {
               <Descriptions.Item label="Mô tả chi tiết">
                 <div style={{ whiteSpace: "pre-wrap" }}>{selectedReport.description}</div>
               </Descriptions.Item>
-              {selectedReport.reportedBy && (
-                <Descriptions.Item label="Người báo cáo">
-                  <Space>
-                    <UserOutlined />
-                    <span>{selectedReport.reportedBy}</span>
-                  </Space>
-                </Descriptions.Item>
-              )}
               <Descriptions.Item label="Ngày báo cáo">
                 {selectedReport.reportedAt
                   ? new Date(selectedReport.reportedAt).toLocaleString("vi-VN")
