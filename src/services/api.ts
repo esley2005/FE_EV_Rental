@@ -1812,19 +1812,28 @@ export const paymentApi = {
     userId: number,
     amount: number
   ): Promise<ApiResponse<CreateMomoPaymentResponse>> => {
+    // Xác định ReturnUrl dựa trên môi trường
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+    const returnUrl = `${baseUrl}/checkout/payment-callback-momo`;
+    
     console.log('[Payment API] Creating MoMo payment:', {
       rentalOrderId,
       userId,
       amount,
+      returnUrl,
       endpoint: `/Payment/CreateMomoPayment?rentalOrderId=${rentalOrderId}&userId=${userId}&amount=${amount}`
     });
     
     // Backend trả về format: { isSuccess, data, message }
     // apiCall sẽ tự động parse và trả về format ApiResponse
+    // Thêm ReturnUrl vào request body
     const response = await apiCall<CreateMomoPaymentResponse>(
       `/Payment/CreateMomoPayment?rentalOrderId=${rentalOrderId}&userId=${userId}&amount=${amount}`,
       {
         method: "POST",
+        body: JSON.stringify({
+          ReturnUrl: returnUrl
+        }),
       }
     );
 
