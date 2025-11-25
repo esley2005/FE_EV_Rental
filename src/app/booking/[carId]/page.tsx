@@ -39,6 +39,10 @@ export default function BookingPage() {
   const [withDriver, setWithDriver] = useState<boolean>(false);
   const [dateRangeValue, setDateRangeValue] = useState<[Dayjs, Dayjs] | null>(null);
   const [bookedDates, setBookedDates] = useState<Array<{ start: Dayjs; end: Dayjs }>>([]);
+  const [paymentMethodModalOpen, setPaymentMethodModalOpen] = useState(false);
+  const [pendingOrderId, setPendingOrderId] = useState<number | null>(null);
+  const [pendingVnpayUrl, setPendingVnpayUrl] = useState<string | null>(null);
+  const [creatingMomoPayment, setCreatingMomoPayment] = useState(false);
 
   // Helper functions tương tự trang chi tiết xe
   const extractCarRentalLocationList = (source: any): any[] => {
@@ -561,6 +565,205 @@ export default function BookingPage() {
     return calculateTotal() - calculateDepositOrder();
   };
 
+  const handleSelectVnpay = () => {
+    if (pendingVnpayUrl) {
+      // Thông báo và redirect đến VNPay
+      api.success({
+        message: "Đang chuyển đến trang thanh toán VNPay...",
+        placement: "topRight",
+        duration: 2,
+      });
+      
+      setPaymentMethodModalOpen(false);
+      setTimeout(() => {
+        window.location.href = pendingVnpayUrl;
+      }, 500);
+    } else {
+      api.error({
+        message: "Không tìm thấy link thanh toán VNPay",
+        description: "Vui lòng thử lại hoặc liên hệ hỗ trợ.",
+        placement: "topRight",
+        duration: 4,
+      });
+    }
+  };
+
+  const handleSelectMomo = async () => {
+    if (!pendingOrderId || !user) {
+      api.error({
+        message: "Thông tin không đầy đủ",
+        description: "Vui lòng thử lại.",
+        placement: "topRight",
+        duration: 4,
+      });
+      return;
+    }
+
+    try {
+      setCreatingMomoPayment(true);
+      
+      // Lấy userId và amount (phí giữ chỗ)
+      // Kiểm tra nhiều trường hợp để lấy userId
+      const userIdValue = (user as any).id || 
+                         (user as any).Id || 
+                         (user as any).userId || 
+                         (user as any).UserId ||
+                         user.id;
+      const userId = Number(userIdValue);
+      const amount = calculateDepositOrder();
+      
+      console.log('[Booking] User data for MoMo payment:', {
+        user,
+        userIdValue,
+        userId,
+        isValid: !isNaN(userId) && userId > 0,
+        amount
+      });
+      
+      if (!userId || isNaN(userId) || userId <= 0) {
+        console.error('[Booking] Invalid userId:', { userId, user });
+        throw new Error("Không tìm thấy ID người dùng. Vui lòng đăng nhập lại.");
+      }
+      
+      if (amount <= 0) {
+        throw new Error("Số tiền thanh toán không hợp lệ");
+      }
+
+      // Gọi API tạo MoMo payment
+      console.log('[Booking] Creating MoMo payment:', {
+        orderId: pendingOrderId,
+        userId,
+        amount
+      });
+
+      const momoResponse = await paymentApi.createMomoPayment(
+        pendingOrderId,
+        userId,
+        amount
+      );
+
+      console.log('[Booking] MoMo payment response:', {
+        success: momoResponse.success,
+        hasData: !!momoResponse.data,
+        data: momoResponse.data,
+        error: momoResponse.error,
+        fullResponse: JSON.stringify(momoResponse, null, 2)
+      });
+
+      // Kiểm tra các loại lỗi đặc biệt
+      const errorMessage = momoResponse.error || '';
+      const isDuplicateOrderError = errorMessage.includes('trùng orderId') || 
+                                   errorMessage.includes('duplicate') ||
+                                   errorMessage.includes('trùng') ||
+                                   errorMessage.toLowerCase().includes('orderid');
+      
+      const isUserIdError = errorMessage.includes('userId') || 
+                           errorMessage.includes('User') ||
+                           errorMessage.includes('undefined');
+
+      if (isDuplicateOrderError) {
+        // Lỗi trùng orderId - có thể đơn hàng đã có payment MoMo rồi
+        // Không hiển thị lỗi, chỉ log và redirect đến my-bookings
+        console.log('[Booking] MoMo payment already exists for this order, redirecting to my-bookings');
+        setPaymentMethodModalOpen(false);
+        setTimeout(() => {
+          router.push('/my-bookings');
+        }, 500);
+        return;
+      }
+      
+      if (isUserIdError) {
+        // Lỗi về userId - có thể token không hợp lệ hoặc user chưa đăng nhập đúng cách
+        console.error('[Booking] UserId error in MoMo payment:', errorMessage);
+        api.error({
+          message: "Lỗi xác thực người dùng",
+          description: "Vui lòng đăng xuất và đăng nhập lại để tiếp tục thanh toán.",
+          placement: "topRight",
+          duration: 5,
+        });
+        return;
+      }
+
+      if (momoResponse.success) {
+        // Lấy paymentUrl từ response (có thể ở nhiều vị trí)
+        let paymentUrl: string | null = null;
+        
+        // Kiểm tra trong response.data
+        if (momoResponse.data) {
+          const data = momoResponse.data as any;
+          paymentUrl = data.paymentUrl || 
+                      data.momoPayUrl || 
+                      data.payUrl ||
+                      data.PaymentUrl ||
+                      data.MomoPayUrl ||
+                      data.PayUrl ||
+                      null;
+        }
+        
+        // Nếu không có trong data, kiểm tra trong response trực tiếp
+        if (!paymentUrl) {
+          const responseAny = momoResponse as any;
+          paymentUrl = responseAny.paymentUrl || 
+                      responseAny.momoPayUrl || 
+                      responseAny.payUrl ||
+                      null;
+        }
+        
+        console.log('[Booking] Extracted paymentUrl:', paymentUrl);
+        
+        if (paymentUrl) {
+          api.success({
+            message: "Đang chuyển đến trang thanh toán MoMo...",
+            placement: "topRight",
+            duration: 2,
+          });
+          
+          setPaymentMethodModalOpen(false);
+          setTimeout(() => {
+            window.location.href = paymentUrl!;
+          }, 500);
+        } else {
+          console.error('[Booking] No paymentUrl found in MoMo response:', momoResponse);
+          throw new Error("Không nhận được payment URL từ MoMo. Vui lòng thử lại.");
+        }
+      } else {
+        console.error('[Booking] MoMo payment failed:', momoResponse.error);
+        throw new Error(momoResponse.error || "Không thể tạo payment request. Vui lòng thử lại.");
+      }
+    } catch (error) {
+      console.error("Create MoMo payment error:", error);
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : "Có lỗi xảy ra khi tạo payment";
+      
+      // Kiểm tra nếu lỗi là về trùng orderId - không hiển thị lỗi cho user
+      const isDuplicateOrderError = errorMessage.includes('trùng orderId') || 
+                                   errorMessage.includes('duplicate') ||
+                                   errorMessage.includes('trùng') ||
+                                   errorMessage.toLowerCase().includes('orderid');
+      
+      if (isDuplicateOrderError) {
+        // Lỗi trùng orderId - có thể đơn hàng đã có payment MoMo rồi
+        // Không hiển thị lỗi, chỉ log và redirect đến my-bookings
+        console.log('[Booking] MoMo payment already exists for this order, redirecting to my-bookings');
+        setPaymentMethodModalOpen(false);
+        setTimeout(() => {
+          router.push('/my-bookings');
+        }, 500);
+      } else {
+        // Các lỗi khác - hiển thị cho user
+        api.error({
+          message: "Lỗi thanh toán MoMo",
+          description: errorMessage,
+          placement: "topRight",
+          duration: 5,
+        });
+      }
+    } finally {
+      setCreatingMomoPayment(false);
+    }
+  };
+
   const handleSubmit = async (values: any) => {
     if (!user) {
       api.error({
@@ -703,25 +906,72 @@ export default function BookingPage() {
 
       const response = await rentalOrderApi.create(orderData);
 
-      if (response.success && response.data) {
-        const responseData = response.data as any;
-        const orderId = responseData.id || responseData.Id;
+      console.log('[Booking] Full API response:', {
+        success: response.success,
+        hasData: !!response.data,
+        dataType: typeof response.data,
+        isArray: Array.isArray(response.data),
+        dataKeys: response.data ? Object.keys(response.data as any) : [],
+        fullResponse: JSON.stringify(response, null, 2)
+      });
+
+      if (response.success) {
+        // Xử lý nhiều trường hợp response structure
+        let responseData: any = response.data;
         
-        // Lấy vnpayPaymentUrl từ response
-        const vnpayPaymentUrl = responseData.vnpayPaymentUrl || 
-                               responseData.VnpayPaymentUrl || 
-                               responseData.vnPayPaymentUrl ||
-                               responseData.VnPayPaymentUrl ||
+        // Nếu response.data là array, lấy phần tử đầu tiên
+        if (Array.isArray(responseData) && responseData.length > 0) {
+          responseData = responseData[0];
+        }
+        
+        // Nếu có $values, lấy từ $values
+        if (responseData?.$values && Array.isArray(responseData.$values) && responseData.$values.length > 0) {
+          responseData = responseData.$values[0];
+        }
+        
+        // Kiểm tra nhiều trường hợp để lấy orderId
+        const orderId = responseData?.id || 
+                       responseData?.Id || 
+                       responseData?.orderId || 
+                       responseData?.OrderId ||
+                       responseData?.rentalOrderId ||
+                       responseData?.RentalOrderId ||
+                       (responseData as any)?.$id ? Number((responseData as any).$id) : null;
+        
+        // Lấy vnpayPaymentUrl từ response (có thể ở nhiều level)
+        const vnpayPaymentUrl = responseData?.vnpayPaymentUrl || 
+                               responseData?.VnpayPaymentUrl || 
+                               responseData?.vnPayPaymentUrl ||
+                               responseData?.VnPayPaymentUrl ||
+                               responseData?.paymentUrl ||
+                               responseData?.PaymentUrl ||
+                               (response as any)?.vnpayPaymentUrl ||
+                               (response as any)?.VnpayPaymentUrl ||
                                null;
         
-        console.log('[Booking] Order created successfully:', {
+        console.log('[Booking] Parsed order data:', {
           orderId,
+          orderIdType: typeof orderId,
+          isValidOrderId: orderId && !isNaN(Number(orderId)),
           vnpayPaymentUrl,
-          responseData
+          responseDataKeys: responseData ? Object.keys(responseData) : [],
+          responseDataType: typeof responseData,
+          responseData: responseData
         });
 
-        if (vnpayPaymentUrl) {
-          // Thông báo đặt xe thành công và chuyển đến thanh toán VNPay
+        // Lưu thông tin đơn hàng và hiển thị modal chọn phương thức thanh toán
+        const validOrderId = orderId && !isNaN(Number(orderId)) ? Number(orderId) : null;
+        
+        if (validOrderId) {
+          setPendingOrderId(validOrderId);
+          setPendingVnpayUrl(vnpayPaymentUrl);
+          
+          console.log('[Booking] ✅ Order created successfully, showing payment modal:', {
+            orderId: validOrderId,
+            hasVnpayUrl: !!vnpayPaymentUrl
+          });
+          
+          // Thông báo đặt xe thành công
           api.success({
             message: (
               <span className="font-bold text-lg">
@@ -734,7 +984,7 @@ export default function BookingPage() {
                   Đơn hàng của bạn đã được tạo thành công!
                 </p>
                 <p className="mt-2 text-sm font-semibold text-blue-600">
-                  Đang chuyển đến trang thanh toán VNPay...
+                  Vui lòng chọn phương thức thanh toán.
                 </p>
               </div>
             ),
@@ -742,18 +992,24 @@ export default function BookingPage() {
             duration: 3,
           });
           
-          // Redirect đến VNPay payment URL ở trang mới
-          setTimeout(() => {
-            window.location.href = vnpayPaymentUrl;
-          }, 1000);
+          // Hiển thị modal chọn phương thức thanh toán
+          setPaymentMethodModalOpen(true);
           setSubmitting(false);
-          return; // Dừng ở đây, không chạy code phía dưới
+          return;
         } else {
-          // Không có payment URL trong response
-          console.warn('[Booking] Order created but no vnpayPaymentUrl in response');
+          // Không có orderId trong response hoặc orderId không hợp lệ
+          console.error('[Booking] ❌ Order created but no valid orderId found:', {
+            orderId,
+            validOrderId,
+            responseData,
+            responseDataKeys: responseData ? Object.keys(responseData) : [],
+            fullResponse: response,
+            responseString: JSON.stringify(response, null, 2)
+          });
+          
           api.warning({
-            message: "Cảnh báo: Không tìm thấy link thanh toán",
-            description: "Đơn hàng đã được tạo nhưng không có link thanh toán. Vui lòng kiểm tra đơn hàng của bạn.",
+            message: "Cảnh báo: Không tìm thấy thông tin đơn hàng",
+            description: "Đơn hàng đã được tạo nhưng không có thông tin đơn hàng. Vui lòng kiểm tra đơn hàng của bạn trong trang 'Đơn hàng của tôi'.",
             placement: "topRight",
             duration: 5,
           });
@@ -763,6 +1019,8 @@ export default function BookingPage() {
           }, 2000);
         }
       } else {
+        // Response không thành công
+        console.error('[Booking] ❌ Order creation failed:', response);
         api.error({
           message: "Đặt xe thất bại",
           description: response.error || "Không thể tạo đơn hàng. Vui lòng thử lại.",
@@ -1282,6 +1540,94 @@ export default function BookingPage() {
 
       <Footer />
     </div>
+
+    {/* Modal chọn phương thức thanh toán */}
+    <Modal
+      open={paymentMethodModalOpen}
+      onCancel={() => {
+        setPaymentMethodModalOpen(false);
+        // Redirect đến trang my-bookings nếu user đóng modal
+        router.push('/my-bookings');
+      }}
+      footer={null}
+      closable={true}
+      width={600}
+      title={
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Chọn phương thức thanh toán</h2>
+          <p className="text-sm text-gray-600">Vui lòng chọn phương thức thanh toán để tiếp tục</p>
+        </div>
+      }
+    >
+      <div className="space-y-4 mt-6">
+        {/* VNPay Option */}
+        <button
+          onClick={handleSelectVnpay}
+          disabled={!pendingVnpayUrl}
+          className={`w-full p-6 border-2 rounded-lg transition-all ${
+            pendingVnpayUrl
+              ? 'border-blue-500 hover:border-blue-600 hover:bg-blue-50 cursor-pointer'
+              : 'border-gray-300 bg-gray-100 cursor-not-allowed opacity-50'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 bg-blue-500 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-xl">VNPay</span>
+              </div>
+              <div className="text-left">
+                <h3 className="font-bold text-lg text-gray-900">Thanh toán qua VNPay</h3>
+                <p className="text-sm text-gray-600 mt-1">Thanh toán an toàn qua cổng VNPay</p>
+              </div>
+            </div>
+            {pendingVnpayUrl && (
+              <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            )}
+          </div>
+        </button>
+
+        {/* MoMo Option */}
+        <button
+          onClick={handleSelectMomo}
+          disabled={creatingMomoPayment || !pendingOrderId}
+          className={`w-full p-6 border-2 rounded-lg transition-all ${
+            !creatingMomoPayment && pendingOrderId
+              ? 'border-pink-500 hover:border-pink-600 hover:bg-pink-50 cursor-pointer'
+              : 'border-gray-300 bg-gray-100 cursor-not-allowed opacity-50'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 bg-pink-500 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-xl">MoMo</span>
+              </div>
+              <div className="text-left">
+                <h3 className="font-bold text-lg text-gray-900">Thanh toán qua MoMo</h3>
+                <p className="text-sm text-gray-600 mt-1">Thanh toán nhanh chóng qua ví MoMo</p>
+              </div>
+            </div>
+            {creatingMomoPayment ? (
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-pink-500"></div>
+            ) : pendingOrderId ? (
+              <svg className="w-6 h-6 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            ) : null}
+          </div>
+        </button>
+
+        {/* Thông tin số tiền */}
+        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+          <div className="flex justify-between items-center">
+            <span className="text-gray-700 font-semibold">Số tiền cần thanh toán:</span>
+            <span className="text-xl font-bold text-blue-600">{formatCurrency(calculateDepositOrder())}</span>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">Đây là phí giữ chỗ khi đặt hàng</p>
+        </div>
+      </div>
+    </Modal>
     </>
   );
 }

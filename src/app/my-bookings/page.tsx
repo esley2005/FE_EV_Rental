@@ -126,22 +126,109 @@ export default function MyBookingsPage() {
 
 
       const userResponse = await authApi.getProfile();
+      let userId: number | null = null;
+      
       if (userResponse.success && 'data' in userResponse && userResponse.data) {
-        setUser(userResponse.data);
-        await loadBookings(userResponse.data.id);
-        // Check GPLX status từ DB
-        await checkLicenseStatus(userResponse.data.id);
+        const userData = userResponse.data;
+        setUser(userData);
+        
+        // Lấy userId từ nhiều trường hợp
+        userId = (userData as any).id || 
+                 (userData as any).Id || 
+                 (userData as any).userId || 
+                 (userData as any).UserId ||
+                 userData.id ||
+                 null;
+        
+        userId = userId ? Number(userId) : null;
+        
+        if (userId && !isNaN(userId) && userId > 0) {
+          await loadBookings(userId);
+          await checkLicenseStatus(userId);
+        } else {
+          console.error('[MyBookings] Invalid userId from getProfile:', { userData, userId });
+          // Thử lấy từ localStorage
+          const userStr = localStorage.getItem('user');
+          if (userStr) {
+            try {
+              const localUserData = JSON.parse(userStr);
+              const localUserId = (localUserData as any).id || 
+                                 (localUserData as any).Id || 
+                                 (localUserData as any).userId || 
+                                 (localUserData as any).UserId ||
+                                 null;
+              const validLocalUserId = localUserId ? Number(localUserId) : null;
+              
+              if (validLocalUserId && !isNaN(validLocalUserId) && validLocalUserId > 0) {
+                setUser(localUserData);
+                await loadBookings(validLocalUserId);
+                await checkLicenseStatus(validLocalUserId);
+              } else {
+                throw new Error('Invalid userId');
+              }
+            } catch (parseError) {
+              console.error('[MyBookings] Error parsing user from localStorage:', parseError);
+              api.error({
+                message: 'Lỗi xác thực',
+                description: 'Không thể lấy thông tin người dùng. Vui lòng đăng nhập lại.',
+                placement: 'topRight',
+              });
+              router.push('/login');
+            }
+          } else {
+            api.error({
+              message: 'Lỗi xác thực',
+              description: 'Không thể lấy thông tin người dùng. Vui lòng đăng nhập lại.',
+              placement: 'topRight',
+            });
+            router.push('/login');
+          }
+        }
       } else {
-
+        // Thử lấy từ localStorage
         const userStr = localStorage.getItem('user');
         if (userStr) {
-          const userData = JSON.parse(userStr);
-          setUser(userData);
-          await loadBookings(userData.id);
-          // Check GPLX status từ DB
-          if (userData.id) {
-            await checkLicenseStatus(userData.id);
+          try {
+            const userData = JSON.parse(userStr);
+            setUser(userData);
+            
+            // Lấy userId từ nhiều trường hợp
+            userId = (userData as any).id || 
+                     (userData as any).Id || 
+                     (userData as any).userId || 
+                     (userData as any).UserId ||
+                     null;
+            
+            userId = userId ? Number(userId) : null;
+            
+            if (userId && !isNaN(userId) && userId > 0) {
+              await loadBookings(userId);
+              await checkLicenseStatus(userId);
+            } else {
+              console.error('[MyBookings] Invalid userId from localStorage:', { userData, userId });
+              api.error({
+                message: 'Lỗi xác thực',
+                description: 'Không thể lấy thông tin người dùng. Vui lòng đăng nhập lại.',
+                placement: 'topRight',
+              });
+              router.push('/login');
+            }
+          } catch (parseError) {
+            console.error('[MyBookings] Error parsing user from localStorage:', parseError);
+            api.error({
+              message: 'Lỗi xác thực',
+              description: 'Không thể lấy thông tin người dùng. Vui lòng đăng nhập lại.',
+              placement: 'topRight',
+            });
+            router.push('/login');
           }
+        } else {
+          api.error({
+            message: 'Lỗi xác thực',
+            description: 'Không thể lấy thông tin người dùng. Vui lòng đăng nhập lại.',
+            placement: 'topRight',
+          });
+          router.push('/login');
         }
       }
     } catch (error) {
@@ -160,6 +247,13 @@ export default function MyBookingsPage() {
   // Check GPLX status từ DB
   const checkLicenseStatus = async (userId: number) => {
     try {
+      // Validate userId trước khi gọi API
+      if (!userId || isNaN(userId) || userId <= 0) {
+        console.error('[MyBookings] Invalid userId passed to checkLicenseStatus:', userId);
+        setLicenseStatus(null);
+        return;
+      }
+      
       const licenseResponse = await driverLicenseApi.getByUserId(userId);
       if (licenseResponse.success && licenseResponse.data) {
         const licenseData = licenseResponse.data as any;
@@ -187,7 +281,20 @@ export default function MyBookingsPage() {
 
   const loadBookings = async (userId: number) => {
     try {
+      // Validate userId trước khi gọi API
+      if (!userId || isNaN(userId) || userId <= 0) {
+        console.error('[MyBookings] Invalid userId passed to loadBookings:', userId);
+        api.error({
+          message: 'Lỗi xác thực',
+          description: 'Mã người dùng không hợp lệ. Vui lòng đăng nhập lại.',
+          placement: 'topRight',
+        });
+        setBookings([]);
+        setLoading(false);
+        return;
+      }
 
+      console.log('[MyBookings] Loading bookings for userId:', userId);
       const ordersResponse = await rentalOrderApi.getByUserId(userId);
       
       if (!ordersResponse.success) {

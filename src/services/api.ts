@@ -1636,12 +1636,15 @@ export enum PaymentGateway {
 
 // MoMo Payment Response Interface
 export interface CreateMomoPaymentResponse {
+  paymentUrl?: string; // URL để redirect user đến MoMo (từ backend response)
   momoPayUrl?: string; // URL để redirect user đến MoMo
   payUrl?: string; // Alias cho momoPayUrl
   momoOrderId?: string;
   momoRequestId?: string;
   requestId?: string; // Alias cho momoRequestId
   status?: string;
+  message?: string; // Message từ backend
+  $id?: string; // Backend có thể trả về $id
 }
 
 // Create Payment with Gateway Response Interface
@@ -1704,16 +1707,21 @@ export const paymentApi = {
   createMomoPayment: async (
     rentalOrderId: number,
     userId: number,
-    amount: number
+    amount: number,
+    orderInfo?: string
   ): Promise<ApiResponse<CreateMomoPaymentResponse>> => {
+    // Backend API yêu cầu body format: { orderId, amount, orderInfo, userId }
     // Backend trả về format: { isSuccess, data, message }
     // apiCall sẽ tự động parse và trả về format ApiResponse
     const response = await apiCall<CreateMomoPaymentResponse>(
-      `/Payment/CreateMomoPayment?rentalOrderId=${rentalOrderId}&userId=${userId}&amount=${amount}`,
+      `/Payment/CreateMomoPayment`,
       {
         method: "POST",
         body: JSON.stringify({
-          ReturnUrl: "http://localhost:3000/checkout/payment-callback-momo",
+          orderId: rentalOrderId,
+          amount: amount,
+          orderInfo: orderInfo || `Thanh toán đơn hàng #${rentalOrderId}`,
+          userId: userId, // Thêm userId vào body request
         }),
       }
     );
