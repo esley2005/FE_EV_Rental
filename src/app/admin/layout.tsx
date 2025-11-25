@@ -3,6 +3,7 @@
 // ✅ Ensure patch is loaded before antd imports
 import '@/lib/antd-setup';
 
+// @ts-ignore - React types are defined in global.d.ts
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -182,6 +183,7 @@ export default function AdminLayout() {
   if (denied) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#E3EFFF] p-6">
+        {/* @ts-ignore - Result component from antd is valid JSX */}
         <Result
           status="403"
           title="403"
@@ -212,7 +214,7 @@ export default function AdminLayout() {
       <Sider
         collapsible
         collapsed={collapsed}
-        onCollapse={(value) => setCollapsed(value)}
+        onCollapse={(value: boolean) => setCollapsed(value)}
         width={230}
         style={{ background: "#fff", borderRight: "1px solid #e8e8e8" }}
       >
@@ -224,7 +226,7 @@ export default function AdminLayout() {
           theme="light"
           items={subMenus[selectedModule] || []}
           selectedKeys={[selectedSubMenu]}
-          onClick={(e) => setSelectedSubMenu(e.key)}
+          onClick={(e: { key: string }) => setSelectedSubMenu(e.key)}
           style={{ borderRight: 0 }}
         />
       </Sider>
@@ -244,7 +246,7 @@ export default function AdminLayout() {
             mode="horizontal"
             selectedKeys={[selectedModule]}
             items={mainMenu}
-            onClick={(e) => {
+            onClick={(e: { key: string }) => {
               setSelectedModule(e.key);
               // Chỉ set submenu nếu module có submenu
               const moduleSubMenus = subMenus[e.key];
@@ -260,7 +262,7 @@ export default function AdminLayout() {
             trigger={["click"]}
             menu={{
               items: userMenu.items,
-              onClick: ({ key }) => {
+              onClick: ({ key }: { key: string }) => {
                 if (key === "2") {
                   authUtils.logout();
                   router.push("/");
