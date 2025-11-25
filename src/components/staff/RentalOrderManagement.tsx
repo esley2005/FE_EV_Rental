@@ -17,7 +17,8 @@ import {
   InputNumber,
   Form,
   Upload,
-  Alert
+  Alert,
+  Radio
 } from "antd";
 import type { UploadFile } from "antd/es/upload/interface";
 import { 
@@ -32,7 +33,9 @@ import {
   MailOutlined,
   DollarOutlined,
   EditOutlined,
-  EnvironmentOutlined
+  EnvironmentOutlined,
+  FileTextOutlined,
+  ExclamationCircleOutlined
 } from "@ant-design/icons";
 import { rentalOrderApi, carsApi, authApi, driverLicenseApi, citizenIdApi, paymentApi, carDeliveryHistoryApi, carReturnHistoryApi, rentalLocationApi, carRentalLocationApi } from "@/services/api";
 import type { RentalOrderData, User, DriverLicenseData, CitizenIdData, RentalLocationData } from "@/services/api";
@@ -75,26 +78,28 @@ interface OrderWithDetails extends Omit<RentalOrderData, 'citizenId'> {
 // Status enum mapping
 const RentalOrderStatus = {
   Pending: 0,
-  DocumentsSubmitted: 1,
-  DepositPending: 2,
-  Confirmed: 3,
-  Renting: 4,
-  Returned: 5,
-  PaymentPending: 6,
+  OrderDepositConfirmed: 1,
+  CheckedIn: 2,
+  Renting: 3,
+  Returned: 4,
+  PaymentPending: 5,
+  RefundDepositCar: 6,
   Cancelled: 7,
-  Completed: 8,
+  RefundDepositOrder: 8,
+  Completed: 9,
 } as const;
 
 const statusLabels: Record<number, { text: string; color: string; icon: any }> = {
   0: { text: 'Chờ xác nhận', color: 'gold', icon: <ClockCircleOutlined /> },
-  1: { text: 'Đã nộp giấy tờ', color: 'blue', icon: <IdcardOutlined /> },
-  2: { text: 'Chờ tiền cọc', color: 'orange', icon: <DollarOutlined /> },
-  3: { text: 'Đã xác nhận', color: 'cyan', icon: <CheckCircleOutlined /> },
-  4: { text: 'Đang thuê', color: 'green', icon: <CarOutlined /> },
-  5: { text: 'Đã trả xe', color: 'purple', icon: <CarOutlined /> },
-  6: { text: 'Chờ thanh toán', color: 'orange', icon: <DollarOutlined /> },
+  1: { text: 'Đã xác nhận cọc đơn', color: 'blue', icon: <DollarOutlined /> },
+  2: { text: 'Đã check-in', color: 'cyan', icon: <CheckCircleOutlined /> },
+  3: { text: 'Đang thuê', color: 'green', icon: <CarOutlined /> },
+  4: { text: 'Đã trả xe', color: 'purple', icon: <CarOutlined /> },
+  5: { text: 'Chờ thanh toán', color: 'orange', icon: <DollarOutlined /> },
+  6: { text: 'Hoàn tiền cọc xe', color: 'blue', icon: <DollarOutlined /> },
   7: { text: 'Đã hủy', color: 'red', icon: <CloseCircleOutlined /> },
-  8: { text: 'Hoàn thành', color: 'green', icon: <CheckCircleOutlined /> },
+  8: { text: 'Hoàn tiền cọc đơn', color: 'blue', icon: <DollarOutlined /> },
+  9: { text: 'Hoàn thành', color: 'green', icon: <CheckCircleOutlined /> },
 };
 
 export default function RentalOrderManagement() {
@@ -126,6 +131,23 @@ export default function RentalOrderManagement() {
   const [form] = Form.useForm();
   const [rentalLocations, setRentalLocations] = useState<RentalLocationData[]>([]);
   const [deliveryImageFileList, setDeliveryImageFileList] = useState<UploadFile[]>([]);
+  const [depositReceiptModalVisible, setDepositReceiptModalVisible] = useState(false);
+  const [depositReceiptImageFileList, setDepositReceiptImageFileList] = useState<UploadFile[]>([]);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'bank_transfer'>('cash');
+  const [returnImageFileList, setReturnImageFileList] = useState<UploadFile[]>([]);
+  const [paymentReceiptModalVisible, setPaymentReceiptModalVisible] = useState(false);
+  const [paymentReceiptImageFileList, setPaymentReceiptImageFileList] = useState<UploadFile[]>([]);
+  const [paymentMethodForPayment, setPaymentMethodForPayment] = useState<'cash' | 'bank_transfer'>('cash');
+  const [refundDepositModalVisible, setRefundDepositModalVisible] = useState(false);
+  const [refundDepositImageFileList, setRefundDepositImageFileList] = useState<UploadFile[]>([]);
+  const [paymentMethodForRefund, setPaymentMethodForRefund] = useState<'cash' | 'bank_transfer'>('cash');
+  const [refundDepositForm] = Form.useForm();
+  const [historyModalVisible, setHistoryModalVisible] = useState(false);
+  const [orderHistory, setOrderHistory] = useState<{
+    deliveryHistory?: any;
+    returnHistory?: any;
+    payments?: any[];
+  } | null>(null);
 
   useEffect(() => {
     loadOrders();
@@ -268,13 +290,14 @@ export default function RentalOrderManagement() {
     if (!status) return RentalOrderStatus.Pending;
     const statusLower = status.toLowerCase();
     if (statusLower.includes('pending') && !statusLower.includes('deposit') && !statusLower.includes('payment')) return RentalOrderStatus.Pending;
-    if (statusLower.includes('documentssubmitted') || statusLower.includes('đã nộp giấy tờ')) return RentalOrderStatus.DocumentsSubmitted;
-    if (statusLower.includes('depositpending') || statusLower.includes('chờ tiền cọc')) return RentalOrderStatus.DepositPending;
-    if (statusLower.includes('confirmed') || statusLower.includes('đã xác nhận')) return RentalOrderStatus.Confirmed;
+    if (statusLower.includes('orderdepositconfirmed') || statusLower.includes('đã xác nhận cọc đơn')) return RentalOrderStatus.OrderDepositConfirmed;
+    if (statusLower.includes('checkedin') || statusLower.includes('đã check-in') || statusLower.includes('check-in')) return RentalOrderStatus.CheckedIn;
     if (statusLower.includes('renting') || statusLower.includes('đang thuê')) return RentalOrderStatus.Renting;
     if (statusLower.includes('returned') || statusLower.includes('đã trả xe')) return RentalOrderStatus.Returned;
     if (statusLower.includes('paymentpending') || statusLower.includes('chờ thanh toán')) return RentalOrderStatus.PaymentPending;
+    if (statusLower.includes('refunddepositcar') || statusLower.includes('hoàn tiền cọc xe')) return RentalOrderStatus.RefundDepositCar;
     if (statusLower.includes('cancelled') || statusLower.includes('hủy')) return RentalOrderStatus.Cancelled;
+    if (statusLower.includes('refunddepositorder') || statusLower.includes('hoàn tiền cọc đơn')) return RentalOrderStatus.RefundDepositOrder;
     if (statusLower.includes('completed') || statusLower.includes('hoàn thành')) return RentalOrderStatus.Completed;
     return RentalOrderStatus.Pending;
   };
@@ -286,19 +309,16 @@ export default function RentalOrderManagement() {
   };
 
   const getDocumentStatusTag = (status?: string | number) => {
-    // Xử lý cả string và number
-    const statusStr = status?.toString() || '';
-    const statusLower = statusStr.toLowerCase();
+    // Status là number: 0 = Chờ xác thực, 1 = Đã xác thực, 2 = Đã từ chối
+    const statusNum = typeof status === 'number' ? status : (status === '1' ? 1 : status === '2' ? 2 : status === '0' ? 0 : undefined);
     
-    // Kiểm tra approved: 'approved', '1', hoặc 1
-    if (statusLower === 'approved' || statusLower === '1' || status === 1) {
+    if (statusNum === 1) {
       return <Tag color="success">Đã xác thực</Tag>;
     }
-    // Kiểm tra rejected: 'rejected', '2', hoặc 2
-    if (statusLower === 'rejected' || statusLower === '2' || status === 2) {
+    if (statusNum === 2) {
       return <Tag color="error">Đã từ chối</Tag>;
     }
-    // Mặc định: pending, '0', 0, hoặc null/undefined -> Chờ xác thực
+    // Mặc định: 0, null, undefined -> Chờ xác thực
     return <Tag color="warning">Chờ xác thực</Tag>;
   };
 
@@ -307,16 +327,18 @@ export default function RentalOrderManagement() {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
-    // Nếu chọn "Bắt đầu thuê" (Confirmed = 3), mở modal nhập thông tin giao xe
-    // Chỉ mở modal nếu đang ở trạng thái Confirmed (3) và chọn "Bắt đầu thuê" (cũng là 3)
+    // Nếu chọn "Xe đang thuê" từ CheckedIn (2) -> Renting (3)
+    // Status sẽ được cập nhật tự động bởi backend hoặc các API khác
     const currentStatusNum = getStatusNumber(order.status);
-    if (newStatus === RentalOrderStatus.Confirmed && currentStatusNum === RentalOrderStatus.Confirmed) {
-      setSelectedOrderForAction(order);
-      setDeliveryModalVisible(true);
+    if (newStatus === RentalOrderStatus.Renting && currentStatusNum === RentalOrderStatus.CheckedIn) {
+      // Có thể cần gọi API cụ thể để bắt đầu thuê, hoặc backend tự động xử lý
+      // Hiện tại chỉ reload để lấy status mới từ backend
+      message.info('Đang xử lý...');
+      await loadOrders();
       return;
     }
 
-    // Nếu chọn "Trả xe" (Returned), mở modal nhập thông tin trả xe
+    // Nếu chọn "Trả xe" (Returned = 4), mở modal nhập thông tin trả xe
     if (newStatus === RentalOrderStatus.Returned) {
       setSelectedOrderForAction(order);
       setReturnModalVisible(true);
@@ -343,23 +365,9 @@ export default function RentalOrderManagement() {
       return;
     }
 
-    // Các status khác thì cập nhật trực tiếp
-    try {
-      setLoading(true);
-      const response = await rentalOrderApi.updateStatus(orderId, newStatus);
-      
-      if (response.success) {
-        message.success('Cập nhật trạng thái đơn hàng thành công!');
-        await loadOrders();
-      } else {
-        message.error(response.error || 'Cập nhật trạng thái thất bại');
-      }
-    } catch (error) {
-      console.error('Update status error:', error);
-      message.error('Có lỗi xảy ra khi cập nhật trạng thái');
-    } finally {
-      setLoading(false);
-    }
+    // Các status khác sẽ được xử lý bởi các API cụ thể (cancelOrder, confirmPayment, etc.)
+    // Không dùng updateStatus nữa
+    message.warning('Vui lòng sử dụng các chức năng cụ thể để cập nhật trạng thái đơn hàng.');
   };
 
   // Xử lý giao xe (Bắt đầu thuê)
@@ -401,44 +409,91 @@ export default function RentalOrderManagement() {
 
       // Backend DTO chỉ yêu cầu: OdometerStart, BatteryLevelStart, VehicleConditionStart, ImageUrl (1-6), OrderId
       // DeliveryDate, UpdateAt, CarId, UserId được backend tự động set từ OrderId
-      const response = await carDeliveryHistoryApi.create({
-        odometerStart: Number(values.odometerStart),
-        batteryLevelStart: Number(values.batteryLevelStart),
-        vehicleConditionStart: values.vehicleConditionStart || '',
-        imageUrl: imageUrls[0] || undefined,
-        imageUrl2: imageUrls[1] || undefined,
-        imageUrl3: imageUrls[2] || undefined,
-        imageUrl4: imageUrls[3] || undefined,
-        imageUrl5: imageUrls[4] || undefined,
-        imageUrl6: imageUrls[5] || undefined,
+      
+      // Validate dữ liệu
+      const odometerStart = Number(values.odometerStart);
+      const batteryLevelStart = Number(values.batteryLevelStart);
+      
+      if (isNaN(odometerStart) || odometerStart < 0) {
+        message.error('Số km không hợp lệ');
+        setLoading(false);
+        return;
+      }
+      
+      if (isNaN(batteryLevelStart) || batteryLevelStart < 0 || batteryLevelStart > 100) {
+        message.error('% Pin không hợp lệ (phải từ 0-100)');
+        setLoading(false);
+        return;
+      }
+      
+      if (!values.vehicleConditionStart || values.vehicleConditionStart.trim() === '') {
+        message.error('Vui lòng nhập tình trạng xe');
+        setLoading(false);
+        return;
+      }
+      
+      const requestData = {
+        odometerStart: odometerStart,
+        batteryLevelStart: batteryLevelStart,
+        vehicleConditionStart: values.vehicleConditionStart.trim(),
         orderId: selectedOrderForAction.id,
-      });
+        ...(imageUrls[0] && { imageUrl: imageUrls[0] }),
+        ...(imageUrls[1] && { imageUrl2: imageUrls[1] }),
+        ...(imageUrls[2] && { imageUrl3: imageUrls[2] }),
+        ...(imageUrls[3] && { imageUrl4: imageUrls[3] }),
+        ...(imageUrls[4] && { imageUrl5: imageUrls[4] }),
+        ...(imageUrls[5] && { imageUrl6: imageUrls[5] }),
+      };
+      
+      console.log('[DEBUG] CarDeliveryHistory request:', requestData);
+      
+      const response = await carDeliveryHistoryApi.create(requestData);
 
-      if (response.success) {
-        // Cập nhật status đơn hàng sang "Đang thuê" (status = 3)
-        try {
-          const statusResponse = await rentalOrderApi.updateStatus(selectedOrderForAction.id, RentalOrderStatus.Confirmed);
-          if (statusResponse.success) {
-            message.success('Giao xe thành công! Đơn hàng đã chuyển sang trạng thái đang thuê.');
-          } else {
-            message.warning('Đã tạo lịch sử giao xe nhưng không thể cập nhật trạng thái đơn hàng.');
-          }
-        } catch (statusError) {
-          console.error('Error updating order status:', statusError);
-          message.warning('Đã tạo lịch sử giao xe nhưng có lỗi khi cập nhật trạng thái.');
-        }
-        
+      console.log('[DEBUG] CarDeliveryHistory full response:', JSON.stringify(response, null, 2));
+
+      // Xử lý trường hợp response là empty object {} - có thể là success nhưng không có data
+      if (response && typeof response === 'object' && !('success' in response) && Object.keys(response).length === 0) {
+        // Nếu response rỗng nhưng không có error, coi như success
+        console.log('[INFO] CarDeliveryHistory: Empty response treated as success');
+        message.success('Xác nhận tình trạng xe thành công!');
         setDeliveryModalVisible(false);
         deliveryForm.resetFields();
         setDeliveryImageFileList([]);
         setSelectedOrderForAction(null);
         await loadOrders();
-      } else {
-        message.error(response.error || 'Giao xe thất bại');
+        return;
       }
-    } catch (error) {
+
+      // Xử lý response có success property
+      if (response && typeof response === 'object' && 'success' in response) {
+        if (response.success) {
+          message.success('Xác nhận tình trạng xe thành công!');
+          setDeliveryModalVisible(false);
+          deliveryForm.resetFields();
+          setDeliveryImageFileList([]);
+          setSelectedOrderForAction(null);
+          await loadOrders();
+        } else {
+          const errorMsg = response.error || (response as any).message || 'Giao xe thất bại';
+          console.error('[ERROR] CarDeliveryHistory response:', response);
+          console.error('[ERROR] Request data was:', requestData);
+          message.error(`Giao xe thất bại: ${errorMsg}`);
+        }
+      } else {
+        // Response không có format đúng, nhưng không có error property
+        // Có thể là success nhưng format khác
+        console.warn('[WARN] CarDeliveryHistory: Unexpected response format:', response);
+        message.success('Xác nhận tình trạng xe thành công!');
+        setDeliveryModalVisible(false);
+        deliveryForm.resetFields();
+        setDeliveryImageFileList([]);
+        setSelectedOrderForAction(null);
+        await loadOrders();
+      }
+    } catch (error: any) {
       console.error('Delivery error:', error);
-      message.error('Có lỗi xảy ra khi giao xe');
+      const errorMsg = error?.message || error?.error || 'Có lỗi xảy ra khi giao xe';
+      message.error(`Giao xe thất bại: ${errorMsg}`);
     } finally {
       setLoading(false);
     }
@@ -450,11 +505,45 @@ export default function RentalOrderManagement() {
 
     try {
       setLoading(true);
+      
+      // Upload ảnh lên Cloudinary (tối đa 6 ảnh)
+      const imageUrls: string[] = [];
+      const maxImages = Math.min(returnImageFileList.length, 6);
+      
+      for (let i = 0; i < maxImages; i++) {
+        const file = returnImageFileList[i];
+        if (file.originFileObj) {
+          try {
+            const formData = new FormData();
+            formData.append('file', file.originFileObj);
+            formData.append('upload_preset', process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'ev_rental_cars');
+            const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'your-cloud-name';
+            const uploadResponse = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+              method: 'POST',
+              body: formData,
+            });
+            const uploadData = await uploadResponse.json();
+            if (uploadData.secure_url) {
+              imageUrls.push(uploadData.secure_url);
+            }
+          } catch (uploadError) {
+            console.error(`Error uploading return image ${i + 1}:`, uploadError);
+            message.warning(`Không thể upload ảnh ${i + 1}`);
+          }
+        }
+      }
+
+      // Gọi API với đầy đủ thông tin
       const response = await carReturnHistoryApi.create({
-        returnDate: new Date().toISOString(),
-        odometerEnd: values.odometerEnd,
-        batteryLevelEnd: values.batteryLevelEnd,
+        odometerEnd: Number(values.odometerEnd),
+        batteryLevelEnd: Number(values.batteryLevelEnd),
         vehicleConditionEnd: values.vehicleConditionEnd || '',
+        imageUrl: imageUrls[0] || undefined,
+        imageUrl2: imageUrls[1] || undefined,
+        imageUrl3: imageUrls[2] || undefined,
+        imageUrl4: imageUrls[3] || undefined,
+        imageUrl5: imageUrls[4] || undefined,
+        imageUrl6: imageUrls[5] || undefined,
         orderId: selectedOrderForAction.id,
       });
 
@@ -462,6 +551,7 @@ export default function RentalOrderManagement() {
         message.success('Nhận lại xe thành công! Đơn hàng đã chuyển sang trạng thái đã trả xe.');
         setReturnModalVisible(false);
         returnForm.resetFields();
+        setReturnImageFileList([]);
         setSelectedOrderForAction(null);
         await loadOrders();
       } else {
@@ -475,11 +565,17 @@ export default function RentalOrderManagement() {
     }
   };
 
-  // Xác nhận tiền cọc
-  const handleConfirmDeposit = async (orderId: number) => {
+  // Xác nhận tiền cọc (có thể không dùng nữa, vì đã chuyển sang xác nhận thế chấp với upload hình)
+  // Giữ lại để tương thích nếu có chỗ khác dùng
+  const handleConfirmDeposit = async (orderId: number, billingImageUrl?: string) => {
     try {
       setLoading(true);
-      const response = await paymentApi.confirmDepositPayment(orderId);
+      // Nếu không có billingImageUrl, yêu cầu upload hình
+      if (!billingImageUrl) {
+        message.warning('Vui lòng upload hình ảnh hóa đơn trước khi xác nhận');
+        return;
+      }
+      const response = await paymentApi.confirmDepositPayment(orderId, billingImageUrl);
       
       if (response.success) {
         message.success('Xác nhận thanh toán đặt cọc thành công!');
@@ -493,6 +589,14 @@ export default function RentalOrderManagement() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Xác nhận thế chấp (từ CheckedIn) - mở modal upload hình trước
+  const handleConfirmDepositCollateral = (order: OrderWithDetails) => {
+    setSelectedOrderForAction(order);
+    setPaymentMethod('cash'); // Reset về tiền mặt mặc định
+    setDepositReceiptImageFileList([]); // Reset file list
+    setDepositReceiptModalVisible(true);
   };
 
   // Cập nhật tổng tiền
@@ -560,24 +664,12 @@ export default function RentalOrderManagement() {
     }
   };
 
-  // Xác nhận thanh toán
-  const handleConfirmPayment = async (orderId: number) => {
-    try {
-      setLoading(true);
-      const response = await rentalOrderApi.confirmPayment(orderId);
-      
-      if (response.success) {
-        message.success('Xác nhận thanh toán thành công!');
-        await loadOrders();
-      } else {
-        message.error(response.error || 'Xác nhận thanh toán thất bại');
-      }
-    } catch (error) {
-      console.error('Confirm payment error:', error);
-      message.error('Có lỗi xảy ra khi xác nhận thanh toán');
-    } finally {
-      setLoading(false);
-    }
+  // Xác nhận thanh toán - mở modal upload hóa đơn
+  const handleConfirmPayment = (order: OrderWithDetails) => {
+    setSelectedOrderForAction(order);
+    setPaymentMethodForPayment('cash'); // Reset về tiền mặt mặc định
+    setPaymentReceiptImageFileList([]); // Reset file list
+    setPaymentReceiptModalVisible(true);
   };
 
   // Hiển thị modal xác thực giấy tờ
@@ -835,43 +927,6 @@ export default function RentalOrderManagement() {
     }
   };
 
-  // Lấy các status có thể chuyển từ status hiện tại
-  const getAvailableStatuses = (currentStatus: number): Array<{ value: number; label: string }> => {
-    const available: Array<{ value: number; label: string }> = [];
-    
-    switch (currentStatus) {
-      case RentalOrderStatus.Pending:
-        available.push({ value: RentalOrderStatus.Cancelled, label: 'Hủy đơn' });
-        break;
-      case RentalOrderStatus.DocumentsSubmitted:
-        available.push({ value: RentalOrderStatus.Cancelled, label: 'Hủy đơn' });
-        break;
-      case RentalOrderStatus.DepositPending:
-        available.push({ value: RentalOrderStatus.Cancelled, label: 'Hủy đơn' });
-        break;
-      case RentalOrderStatus.Confirmed:
-        available.push(
-          { value: RentalOrderStatus.Confirmed, label: 'Bắt đầu thuê' },
-          { value: RentalOrderStatus.Cancelled, label: 'Hủy đơn' }
-        );
-        break;
-      case RentalOrderStatus.Renting:
-        available.push({ value: RentalOrderStatus.Returned, label: 'Xác nhận trả xe' });
-        break;
-      case RentalOrderStatus.Returned:
-        // Không thể chuyển status trực tiếp, phải cập nhật total
-        break;
-      case RentalOrderStatus.PaymentPending:
-        available.push(
-          { value: RentalOrderStatus.Completed, label: 'Hoàn thành' },
-          { value: RentalOrderStatus.Cancelled, label: 'Hủy đơn' }
-        );
-        break;
-    }
-    
-    return available;
-  };
-
   const filtered = useMemo(() => {
     return orders.filter((order) => {
       const matchText = search
@@ -900,9 +955,34 @@ export default function RentalOrderManagement() {
     {
       title: "Trạng thái",
       key: "status",
-      width: 150,
+      width: 200,
       fixed: 'left' as const,
-      render: (_: any, record: OrderWithDetails) => getOrderStatusTag(record),
+      render: (_: any, record: OrderWithDetails) => {
+        const statusTag = getOrderStatusTag(record);
+        
+        // Kiểm tra nếu GPLX chưa được xác nhận
+        // Status là number: 0 = Chờ xác thực, 1 = Đã xác thực, 2 = Đã từ chối
+        const driverLicenseStatus = record.driverLicense?.status;
+        const statusNum = typeof driverLicenseStatus === 'number' 
+          ? driverLicenseStatus 
+          : (driverLicenseStatus === '1' ? 1 : driverLicenseStatus === '0' ? 0 : driverLicenseStatus === '2' ? 2 : undefined);
+        
+        // Chưa xác nhận nếu không có GPLX hoặc status không phải 1 (đã xác thực)
+        const isGPLXNotApproved = !record.driverLicense || statusNum !== 1;
+        
+        if (isGPLXNotApproved) {
+          return (
+            <Space direction="vertical" size={4}>
+              {statusTag}
+              <Tag color="warning" icon={<ExclamationCircleOutlined />}>
+                Chưa xác nhận GPLX
+              </Tag>
+            </Space>
+          );
+        }
+        
+        return statusTag;
+      },
     },
     {
       title: "Ngày đặt",
@@ -1019,7 +1099,6 @@ export default function RentalOrderManagement() {
       fixed: 'right' as const,
       render: (_: any, record: OrderWithDetails) => {
         const statusNum = getStatusNumber(record.status);
-        const availableStatuses = getAvailableStatuses(statusNum);
         
         return (
           <Space size="small">
@@ -1044,19 +1123,76 @@ export default function RentalOrderManagement() {
                 Giấy tờ
               </Button>
             )}
-            {availableStatuses.length > 0 && (
-              <Select
+            {/* Nút Cập nhật tình trạng xe - chỉ hiển thị khi status là OrderDepositConfirmed (1) */}
+            {statusNum === RentalOrderStatus.OrderDepositConfirmed && (
+              <Button
+                type="primary"
                 size="small"
-                style={{ width: 140 }}
-                placeholder="Cập nhật"
-                onChange={(value) => handleStatusChange(record.id, value)}
-                options={availableStatuses.map(s => ({
-                  value: s.value,
-                  label: s.label,
-                }))}
-              />
+                icon={<CarOutlined />}
+                onClick={() => {
+                  setSelectedOrderForAction(record);
+                  setDeliveryModalVisible(true);
+                }}
+              >
+                Cập nhật tình trạng xe
+              </Button>
+            )}
+            {/* Nút Xác nhận thế chấp - chỉ hiển thị khi status là CheckedIn (2) */}
+            {statusNum === RentalOrderStatus.CheckedIn && (
+              <Button
+                type="primary"
+                size="small"
+                icon={<DollarOutlined />}
+                onClick={() => handleConfirmDepositCollateral(record)}
+              >
+                Xác nhận thế chấp
+              </Button>
+            )}
+            {/* Nút Trả xe - chỉ hiển thị khi status là Renting (3) -> chuyển sang Returned (4) */}
+            {statusNum === RentalOrderStatus.Renting && (
+              <Button
+                type="primary"
+                size="small"
+                icon={<CarOutlined />}
+                onClick={() => handleStatusChange(record.id, RentalOrderStatus.Returned)}
+              >
+                Trả xe
+              </Button>
+            )}
+            {/* Nút Hoàn thành - chỉ hiển thị khi status là PaymentPending (5) */}
+            {statusNum === RentalOrderStatus.PaymentPending && (
+              <Button
+                type="primary"
+                size="small"
+                icon={<CheckCircleOutlined />}
+                onClick={() => handleStatusChange(record.id, RentalOrderStatus.Completed)}
+              >
+                Hoàn thành
+              </Button>
+            )}
+            {/* Nút Hủy đơn - hiển thị khi có thể hủy */}
+            {(statusNum === RentalOrderStatus.Pending ||
+              statusNum === RentalOrderStatus.OrderDepositConfirmed ||
+              statusNum === RentalOrderStatus.CheckedIn ||
+              statusNum === RentalOrderStatus.PaymentPending) && (
+              <Popconfirm
+                title="Xác nhận hủy đơn"
+                description="Bạn có chắc chắn muốn hủy đơn hàng này?"
+                onConfirm={() => handleStatusChange(record.id, RentalOrderStatus.Cancelled)}
+                okText="Hủy đơn"
+                cancelText="Không"
+              >
+                <Button
+                  danger
+                  size="small"
+                  icon={<CloseCircleOutlined />}
+                >
+                  Hủy đơn
+                </Button>
+              </Popconfirm>
             )}
             {statusNum === RentalOrderStatus.Returned && (
+              <>
               <Button
                 type="link"
                 size="small"
@@ -1067,14 +1203,77 @@ export default function RentalOrderManagement() {
               >
                 Cập nhật tổng
               </Button>
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => handleConfirmTotal(record.id)}
+                >
+                  Xác nhận Chi phí
+                </Button>
+              </>
             )}
             {statusNum === RentalOrderStatus.PaymentPending && (
               <Button
-                type="link"
+                type="primary"
                 size="small"
-                onClick={() => handleConfirmPayment(record.id)}
+                icon={<CheckCircleOutlined />}
+                onClick={() => handleConfirmPayment(record)}
               >
                 Xác nhận TT
+              </Button>
+            )}
+            {/* Nút Trả tiền thế chấp - chỉ hiển thị khi status là RefundDepositCar (6) */}
+            {statusNum === RentalOrderStatus.RefundDepositCar && (
+              <Button
+                type="primary"
+                size="small"
+                icon={<DollarOutlined />}
+                onClick={() => {
+                  setSelectedOrderForAction(record);
+                  setPaymentMethodForRefund('cash');
+                  setRefundDepositImageFileList([]);
+                  refundDepositForm.resetFields();
+                  setRefundDepositModalVisible(true);
+                }}
+              >
+                Trả tiền thế chấp
+              </Button>
+            )}
+            {/* Nút Xem lịch sử - chỉ hiển thị khi status là Completed (9) */}
+            {statusNum === RentalOrderStatus.Completed && (
+              <Button
+                type="primary"
+                size="small"
+                icon={<FileTextOutlined />}
+                onClick={async () => {
+                  setSelectedOrder(record);
+                  setHistoryModalVisible(true);
+                  // Load lịch sử payments, delivery và return history
+                  try {
+                    setLoading(true);
+                    const [paymentsResponse, deliveryResponse, returnResponse] = await Promise.all([
+                      rentalOrderApi.getByOrderWithPayments(record.id),
+                      carDeliveryHistoryApi.getByOrderId(record.id),
+                      carReturnHistoryApi.getByOrderId(record.id)
+                    ]);
+                    
+                    setOrderHistory({
+                      deliveryHistory: deliveryResponse.success ? deliveryResponse.data : null,
+                      returnHistory: returnResponse.success ? returnResponse.data : null,
+                      payments: paymentsResponse.success && paymentsResponse.data?.payments?.$values 
+                        ? paymentsResponse.data.payments.$values 
+                        : []
+                    });
+                  } catch (error) {
+                    console.error('Error loading order history:', error);
+                    message.error('Không thể tải lịch sử đơn hàng');
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+              >
+                Xem lịch sử
               </Button>
             )}
           </Space>
@@ -1100,14 +1299,15 @@ export default function RentalOrderManagement() {
           options={[
             { value: "all", label: "Tất cả" },
             { value: "0", label: "Chờ xác nhận" },
-            { value: "1", label: "Đã nộp giấy tờ" },
-            { value: "2", label: "Chờ tiền cọc" },
-            { value: "3", label: "Đã xác nhận" },
-            { value: "4", label: "Đang thuê" },
-            { value: "5", label: "Đã trả xe" },
-            { value: "6", label: "Chờ thanh toán" },
+            { value: "1", label: "Đã xác nhận cọc đơn" },
+            { value: "2", label: "Đã check-in" },
+            { value: "3", label: "Đang thuê" },
+            { value: "4", label: "Đã trả xe" },
+            { value: "5", label: "Chờ thanh toán" },
+            { value: "6", label: "Hoàn tiền cọc xe" },
             { value: "7", label: "Đã hủy" },
-            { value: "8", label: "Hoàn thành" },
+            { value: "8", label: "Hoàn tiền cọc đơn" },
+            { value: "9", label: "Hoàn thành" },
           ]}
         />
       </Space>
@@ -1782,13 +1982,23 @@ export default function RentalOrderManagement() {
             name="batteryLevelStart"
             rules={[{ required: true, message: 'Vui lòng nhập % pin' }]}
           >
-            <InputNumber
-              style={{ width: '100%' }}
-              min={0}
-              max={100}
-              addonAfter="%"
-              placeholder="Nhập % pin"
-            />
+            <Space.Compact style={{ width: '100%' }}>
+              <InputNumber
+                style={{ width: '100%' }}
+                min={0}
+                max={100}
+                placeholder="Nhập % pin"
+              />
+              <span style={{ 
+                display: 'inline-flex', 
+                alignItems: 'center', 
+                padding: '0 11px', 
+                background: '#fafafa', 
+                border: '1px solid #d9d9d9',
+                borderLeft: 'none',
+                borderRadius: '0 6px 6px 0'
+              }}>%</span>
+            </Space.Compact>
           </Form.Item>
           <Form.Item
             label="Tình trạng xe"
@@ -1851,10 +2061,11 @@ export default function RentalOrderManagement() {
         onCancel={() => {
           setReturnModalVisible(false);
           returnForm.resetFields();
+          setReturnImageFileList([]);
           setSelectedOrderForAction(null);
         }}
         footer={null}
-        width={600}
+        width={700}
       >
         <Form
           form={returnForm}
@@ -1883,13 +2094,23 @@ export default function RentalOrderManagement() {
             name="batteryLevelEnd"
             rules={[{ required: true, message: 'Vui lòng nhập % pin' }]}
           >
-            <InputNumber
-              style={{ width: '100%' }}
-              min={0}
-              max={100}
-              addonAfter="%"
-              placeholder="Nhập % pin khi trả xe"
-            />
+            <Space.Compact style={{ width: '100%' }}>
+              <InputNumber
+                style={{ width: '100%' }}
+                min={0}
+                max={100}
+                placeholder="Nhập % pin khi trả xe"
+              />
+              <span style={{ 
+                display: 'inline-flex', 
+                alignItems: 'center', 
+                padding: '0 11px', 
+                background: '#fafafa', 
+                border: '1px solid #d9d9d9',
+                borderLeft: 'none',
+                borderRadius: '0 6px 6px 0'
+              }}>%</span>
+            </Space.Compact>
           </Form.Item>
           <Form.Item
             label="Tình trạng xe"
@@ -1901,6 +2122,32 @@ export default function RentalOrderManagement() {
               placeholder="Mô tả tình trạng xe khi trả: hư hỏng, vết xước, phụ kiện..."
             />
           </Form.Item>
+          <Form.Item
+            label="Ảnh tình trạng xe (tối đa 6 ảnh)"
+            help="Chụp ảnh tình trạng xe khi trả: mặt ngoài, nội thất, vết xước, hư hỏng (nếu có)"
+          >
+            <Upload
+              beforeUpload={() => false}
+              maxCount={6}
+              multiple
+              listType="picture-card"
+              fileList={returnImageFileList}
+              onChange={({ fileList }) => setReturnImageFileList(fileList)}
+              onRemove={(file) => {
+                const newList = returnImageFileList.filter(item => item.uid !== file.uid);
+                setReturnImageFileList(newList);
+              }}
+            >
+              {returnImageFileList.length < 6 && (
+                <div>
+                  <div>+ Upload</div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {returnImageFileList.length}/6
+                  </div>
+                </div>
+              )}
+            </Upload>
+          </Form.Item>
           <Form.Item>
             <Space>
               <Button type="primary" htmlType="submit" loading={loading}>
@@ -1909,6 +2156,7 @@ export default function RentalOrderManagement() {
               <Button onClick={() => {
                 setReturnModalVisible(false);
                 returnForm.resetFields();
+                setReturnImageFileList([]);
                 setSelectedOrderForAction(null);
               }}>
                 Hủy
@@ -1917,6 +2165,830 @@ export default function RentalOrderManagement() {
           </Form.Item>
         </Form>
       </Modal>
+
+      {/* Deposit Receipt Modal - Upload hình ảnh hóa đơn thế chấp */}
+      <Modal
+        title="Upload hình ảnh hóa đơn thế chấp"
+        open={depositReceiptModalVisible}
+        onCancel={() => {
+          setDepositReceiptModalVisible(false);
+          setDepositReceiptImageFileList([]);
+          setSelectedOrderForAction(null);
+        }}
+        footer={null}
+        width={700}
+      >
+        <Form
+          layout="vertical"
+          onFinish={async () => {
+            if (!selectedOrderForAction) return;
+            
+            try {
+              setLoading(true);
+              
+              let billingImageUrl: string | null = null;
+              
+              // Nếu chọn chuyển khoản, cần upload ảnh
+              if (paymentMethod === 'bank_transfer') {
+                if (depositReceiptImageFileList.length === 0) {
+                  message.warning('Vui lòng upload hình ảnh chứng từ chuyển khoản');
+                  return;
+                }
+
+                const file = depositReceiptImageFileList[0];
+                if (!file.originFileObj) {
+                  message.warning('Vui lòng upload hình ảnh chứng từ chuyển khoản');
+                  return;
+                }
+              
+                // Upload ảnh lên Cloudinary
+                try {
+                message.loading({ content: 'Đang upload hình ảnh lên Cloudinary...', key: 'upload' });
+                
+                const formData = new FormData();
+                formData.append('file', file.originFileObj);
+                formData.append('upload_preset', process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'ev_rental_cars');
+                
+                const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'your-cloud-name';
+                if (!cloudName || cloudName === 'your-cloud-name') {
+                  message.error({ content: 'Chưa cấu hình Cloudinary. Vui lòng kiểm tra biến môi trường NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME', key: 'upload' });
+                  return;
+                }
+                
+                const uploadResponse = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+                  method: 'POST',
+                  body: formData,
+                });
+                
+                if (!uploadResponse.ok) {
+                  const errorText = await uploadResponse.text();
+                  console.error('Cloudinary upload error:', errorText);
+                  message.error({ content: `Lỗi upload: ${uploadResponse.status} ${uploadResponse.statusText}`, key: 'upload' });
+                  return;
+                }
+                
+                const uploadData = await uploadResponse.json();
+                if (uploadData.secure_url) {
+                  billingImageUrl = uploadData.secure_url;
+                  message.success({ content: 'Upload hình ảnh thành công!', key: 'upload' });
+                } else if (uploadData.error) {
+                  message.error({ content: `Lỗi Cloudinary: ${uploadData.error.message || uploadData.error}`, key: 'upload' });
+                  return;
+                } else {
+                  message.error({ content: 'Không thể lấy URL hình ảnh từ Cloudinary', key: 'upload' });
+                  return;
+                }
+              } catch (uploadError: any) {
+                console.error('Error uploading receipt image to Cloudinary:', uploadError);
+                message.error({ 
+                  content: `Không thể upload hình ảnh: ${uploadError.message || 'Lỗi không xác định'}`, 
+                  key: 'upload' 
+                });
+                return;
+              }
+              }
+
+              // Nếu chuyển khoản nhưng không có billingImageUrl thì báo lỗi
+              if (paymentMethod === 'bank_transfer' && !billingImageUrl) {
+                message.error('Không thể lấy URL hình ảnh chứng từ chuyển khoản');
+                return;
+              }
+
+              // Gọi API ConfirmDepositPayment với rentalOrderId và billingImageUrl
+              // Nếu tiền mặt thì billingImageUrl có thể là null hoặc empty string
+              try {
+                const response = await paymentApi.confirmDepositPayment(
+                  selectedOrderForAction.id,
+                  billingImageUrl || '' // Nếu tiền mặt thì gửi empty string
+                );
+
+                if (response.success) {
+                  const successMsg = paymentMethod === 'bank_transfer' 
+                    ? 'Xác nhận thế chấp thành công! Đã upload hình ảnh chứng từ chuyển khoản.'
+                    : 'Xác nhận thế chấp thành công! (Thanh toán bằng tiền mặt)';
+                  message.success(successMsg);
+                  setDepositReceiptModalVisible(false);
+                  setDepositReceiptImageFileList([]);
+                  setPaymentMethod('cash');
+                  setSelectedOrderForAction(null);
+                  await loadOrders();
+                } else {
+                  message.error(response.error || 'Xác nhận thế chấp thất bại');
+                }
+              } catch (apiError) {
+                console.error('Confirm deposit payment error:', apiError);
+                message.error('Có lỗi xảy ra khi xác nhận thế chấp');
+              }
+            } catch (error) {
+              console.error('Upload receipt error:', error);
+              message.error('Có lỗi xảy ra khi upload hình ảnh hóa đơn');
+            } finally {
+              setLoading(false);
+            }
+          }}
+        >
+          <Form.Item label="Mã đơn hàng">
+            <Input value={selectedOrderForAction?.id} disabled />
+          </Form.Item>
+          <Form.Item label="Khách hàng">
+            <Input value={selectedOrderForAction?.user?.fullName || selectedOrderForAction?.user?.email || '-'} disabled />
+          </Form.Item>
+          <Form.Item
+            label="Phương thức thanh toán"
+            rules={[{ required: true, message: 'Vui lòng chọn phương thức thanh toán' }]}
+          >
+            <Radio.Group 
+              value={paymentMethod} 
+              onChange={(e) => {
+                setPaymentMethod(e.target.value);
+                // Reset file list khi đổi phương thức
+                if (e.target.value === 'cash') {
+                  setDepositReceiptImageFileList([]);
+                }
+              }}
+            >
+              <Radio value="cash">Tiền mặt</Radio>
+              <Radio value="bank_transfer">Chuyển khoản</Radio>
+            </Radio.Group>
+          </Form.Item>
+          {paymentMethod === 'bank_transfer' && (
+            <Form.Item
+              label="Hình ảnh chứng từ chuyển khoản"
+              help="Upload hình ảnh chứng từ chuyển khoản đã được xác nhận"
+              rules={[{ required: true, message: 'Vui lòng upload hình ảnh chứng từ chuyển khoản' }]}
+            >
+              <Upload
+                beforeUpload={() => false}
+                maxCount={1}
+                listType="picture-card"
+                fileList={depositReceiptImageFileList}
+                onChange={({ fileList }) => setDepositReceiptImageFileList(fileList)}
+                onRemove={() => setDepositReceiptImageFileList([])}
+              >
+                {depositReceiptImageFileList.length < 1 && (
+                  <div>
+                    <div>+ Upload</div>
+    </div>
+                )}
+              </Upload>
+            </Form.Item>
+          )}
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit" loading={loading}>
+                Xác nhận
+              </Button>
+              <Button onClick={() => {
+                setDepositReceiptModalVisible(false);
+                setDepositReceiptImageFileList([]);
+                setPaymentMethod('cash');
+                setSelectedOrderForAction(null);
+              }}>
+                Hủy
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Payment Receipt Modal - Upload hình ảnh hóa đơn thanh toán */}
+      <Modal
+        title="Upload hình ảnh hóa đơn thanh toán"
+        open={paymentReceiptModalVisible}
+        onCancel={() => {
+          setPaymentReceiptModalVisible(false);
+          setPaymentReceiptImageFileList([]);
+          setPaymentMethodForPayment('cash');
+          setSelectedOrderForAction(null);
+        }}
+        footer={null}
+        width={700}
+      >
+        <Form
+          layout="vertical"
+          onFinish={async () => {
+            if (!selectedOrderForAction) return;
+            
+            try {
+              setLoading(true);
+              
+              let billingImageUrl: string | null = null;
+              
+              // Nếu chọn chuyển khoản, cần upload ảnh
+              if (paymentMethodForPayment === 'bank_transfer') {
+                if (paymentReceiptImageFileList.length === 0) {
+                  message.warning('Vui lòng upload hình ảnh chứng từ chuyển khoản');
+                  return;
+                }
+
+                const file = paymentReceiptImageFileList[0];
+                if (!file.originFileObj) {
+                  message.warning('Vui lòng upload hình ảnh chứng từ chuyển khoản');
+                  return;
+                }
+              
+                // Upload ảnh lên Cloudinary
+                try {
+                  message.loading({ content: 'Đang upload hình ảnh lên Cloudinary...', key: 'upload-payment' });
+                  
+                  const formData = new FormData();
+                  formData.append('file', file.originFileObj);
+                  formData.append('upload_preset', process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'ev_rental_cars');
+                  
+                  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'your-cloud-name';
+                  if (!cloudName || cloudName === 'your-cloud-name') {
+                    message.error({ content: 'Chưa cấu hình Cloudinary. Vui lòng kiểm tra biến môi trường NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME', key: 'upload-payment' });
+                    return;
+                  }
+                  
+                  const uploadResponse = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+                    method: 'POST',
+                    body: formData,
+                  });
+                  
+                  if (!uploadResponse.ok) {
+                    const errorText = await uploadResponse.text();
+                    console.error('Cloudinary upload error:', errorText);
+                    message.error({ content: `Lỗi upload: ${uploadResponse.status} ${uploadResponse.statusText}`, key: 'upload-payment' });
+                    return;
+                  }
+                  
+                  const uploadData = await uploadResponse.json();
+                  if (uploadData.secure_url) {
+                    billingImageUrl = uploadData.secure_url;
+                    message.success({ content: 'Upload hình ảnh thành công!', key: 'upload-payment' });
+                  } else if (uploadData.error) {
+                    message.error({ content: `Lỗi Cloudinary: ${uploadData.error.message || uploadData.error}`, key: 'upload-payment' });
+                    return;
+                  } else {
+                    message.error({ content: 'Không thể lấy URL hình ảnh từ Cloudinary', key: 'upload-payment' });
+                    return;
+                  }
+                } catch (uploadError: any) {
+                  console.error('Error uploading payment receipt image to Cloudinary:', uploadError);
+                  message.error({ 
+                    content: `Không thể upload hình ảnh: ${uploadError.message || 'Lỗi không xác định'}`, 
+                    key: 'upload-payment' 
+                  });
+                  return;
+                }
+              }
+
+              // Nếu chuyển khoản nhưng không có billingImageUrl thì báo lỗi
+              if (paymentMethodForPayment === 'bank_transfer' && !billingImageUrl) {
+                message.error('Không thể lấy URL hình ảnh chứng từ chuyển khoản');
+                return;
+              }
+
+              // Gọi API confirmOrderPayment với rentalOrderId và billingImageUrl
+              try {
+                const response = await rentalOrderApi.confirmOrderPayment(
+                  selectedOrderForAction.id,
+                  billingImageUrl || '' // Nếu tiền mặt thì gửi empty string
+                );
+
+                if (response.success) {
+                  const successMsg = paymentMethodForPayment === 'bank_transfer' 
+                    ? 'Xác nhận thanh toán thành công! Đã upload hình ảnh chứng từ chuyển khoản.'
+                    : 'Xác nhận thanh toán thành công! (Thanh toán bằng tiền mặt)';
+                  message.success(successMsg);
+                  setPaymentReceiptModalVisible(false);
+                  setPaymentReceiptImageFileList([]);
+                  setPaymentMethodForPayment('cash');
+                  setSelectedOrderForAction(null);
+                  await loadOrders();
+                } else {
+                  message.error(response.error || 'Xác nhận thanh toán thất bại');
+                }
+              } catch (apiError) {
+                console.error('Confirm order payment error:', apiError);
+                message.error('Có lỗi xảy ra khi xác nhận thanh toán');
+              }
+            } catch (error) {
+              console.error('Upload payment receipt error:', error);
+              message.error('Có lỗi xảy ra khi upload hình ảnh hóa đơn thanh toán');
+            } finally {
+              setLoading(false);
+            }
+          }}
+        >
+          <Form.Item label="Mã đơn hàng">
+            <Input value={selectedOrderForAction?.id} disabled />
+          </Form.Item>
+          <Form.Item label="Khách hàng">
+            <Input value={selectedOrderForAction?.user?.fullName || selectedOrderForAction?.user?.email || '-'} disabled />
+          </Form.Item>
+          <Form.Item
+            label="Phương thức thanh toán"
+            rules={[{ required: true, message: 'Vui lòng chọn phương thức thanh toán' }]}
+          >
+            <Radio.Group 
+              value={paymentMethodForPayment} 
+              onChange={(e) => {
+                setPaymentMethodForPayment(e.target.value);
+                // Reset file list khi đổi phương thức
+                if (e.target.value === 'cash') {
+                  setPaymentReceiptImageFileList([]);
+                }
+              }}
+            >
+              <Radio value="cash">Tiền mặt</Radio>
+              <Radio value="bank_transfer">Chuyển khoản</Radio>
+            </Radio.Group>
+          </Form.Item>
+          {paymentMethodForPayment === 'bank_transfer' && (
+            <Form.Item
+              label="Hình ảnh chứng từ chuyển khoản"
+              help="Upload hình ảnh chứng từ chuyển khoản đã được xác nhận"
+              rules={[{ required: true, message: 'Vui lòng upload hình ảnh chứng từ chuyển khoản' }]}
+            >
+              <Upload
+                beforeUpload={() => false}
+                maxCount={1}
+                listType="picture-card"
+                fileList={paymentReceiptImageFileList}
+                onChange={({ fileList }) => setPaymentReceiptImageFileList(fileList)}
+                onRemove={() => setPaymentReceiptImageFileList([])}
+              >
+                {paymentReceiptImageFileList.length < 1 && (
+                  <div>
+                    <div>+ Upload</div>
+                  </div>
+                )}
+              </Upload>
+            </Form.Item>
+          )}
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit" loading={loading}>
+                Xác nhận
+              </Button>
+              <Button onClick={() => {
+                setPaymentReceiptModalVisible(false);
+                setPaymentReceiptImageFileList([]);
+                setPaymentMethodForPayment('cash');
+                setSelectedOrderForAction(null);
+              }}>
+                Hủy
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Refund Deposit Modal - Upload hình ảnh hóa đơn trả tiền thế chấp */}
+      <Modal
+        title="Trả tiền thế chấp"
+        open={refundDepositModalVisible}
+        onCancel={() => {
+          setRefundDepositModalVisible(false);
+          setRefundDepositImageFileList([]);
+          setPaymentMethodForRefund('cash');
+          refundDepositForm.resetFields();
+          setSelectedOrderForAction(null);
+        }}
+        footer={null}
+        width={700}
+      >
+        <Form
+          form={refundDepositForm}
+          layout="vertical"
+          onFinish={async () => {
+            if (!selectedOrderForAction) return;
+            
+            try {
+              setLoading(true);
+              
+              let billingImageUrl: string | null = null;
+              
+              // Nếu chọn chuyển khoản, cần upload ảnh
+              if (paymentMethodForRefund === 'bank_transfer') {
+                if (refundDepositImageFileList.length === 0) {
+                  message.warning('Vui lòng upload hình ảnh chứng từ chuyển khoản');
+                  return;
+                }
+
+                const file = refundDepositImageFileList[0];
+                if (!file.originFileObj) {
+                  message.warning('Vui lòng upload hình ảnh chứng từ chuyển khoản');
+                  return;
+                }
+              
+                // Upload ảnh lên Cloudinary
+                try {
+                  message.loading({ content: 'Đang upload hình ảnh lên Cloudinary...', key: 'upload-refund' });
+                  
+                  const formData = new FormData();
+                  formData.append('file', file.originFileObj);
+                  formData.append('upload_preset', process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'ev_rental_cars');
+                  
+                  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'your-cloud-name';
+                  if (!cloudName || cloudName === 'your-cloud-name') {
+                    message.error({ content: 'Chưa cấu hình Cloudinary. Vui lòng kiểm tra biến môi trường NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME', key: 'upload-refund' });
+                    return;
+                  }
+                  
+                  const uploadResponse = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+                    method: 'POST',
+                    body: formData,
+                  });
+                  
+                  if (!uploadResponse.ok) {
+                    const errorText = await uploadResponse.text();
+                    console.error('Cloudinary upload error:', errorText);
+                    message.error({ content: `Lỗi upload: ${uploadResponse.status} ${uploadResponse.statusText}`, key: 'upload-refund' });
+                    return;
+                  }
+                  
+                  const uploadData = await uploadResponse.json();
+                  if (uploadData.secure_url) {
+                    billingImageUrl = uploadData.secure_url;
+                    message.success({ content: 'Upload hình ảnh thành công!', key: 'upload-refund' });
+                  } else if (uploadData.error) {
+                    message.error({ content: `Lỗi Cloudinary: ${uploadData.error.message || uploadData.error}`, key: 'upload-refund' });
+                    return;
+                  } else {
+                    message.error({ content: 'Không thể lấy URL hình ảnh từ Cloudinary', key: 'upload-refund' });
+                    return;
+                  }
+                } catch (uploadError: any) {
+                  console.error('Error uploading refund receipt image to Cloudinary:', uploadError);
+                  message.error({ 
+                    content: `Không thể upload hình ảnh: ${uploadError.message || 'Lỗi không xác định'}`, 
+                    key: 'upload-refund' 
+                  });
+                  return;
+                }
+              }
+
+              // Nếu chuyển khoản nhưng không có billingImageUrl thì báo lỗi
+              if (paymentMethodForRefund === 'bank_transfer' && !billingImageUrl) {
+                message.error('Không thể lấy URL hình ảnh chứng từ chuyển khoản');
+                return;
+              }
+
+              // Lấy note từ form
+              const note = refundDepositForm.getFieldValue('note') || '';
+
+              // Gọi API ConfirmRefundDepositCarPayment với rentalOrderId, billingImageUrl và note
+              try {
+                const response = await paymentApi.confirmRefundDepositCarPayment(
+                  selectedOrderForAction.id,
+                  billingImageUrl || '', // Nếu tiền mặt thì gửi empty string
+                  note
+                );
+
+                if (response.success) {
+                  const successMsg = paymentMethodForRefund === 'bank_transfer' 
+                    ? 'Trả tiền thế chấp thành công! Đã upload hình ảnh chứng từ chuyển khoản.'
+                    : 'Trả tiền thế chấp thành công! (Thanh toán bằng tiền mặt)';
+                  message.success(successMsg);
+                  setRefundDepositModalVisible(false);
+                  setRefundDepositImageFileList([]);
+                  setPaymentMethodForRefund('cash');
+                  refundDepositForm.resetFields();
+                  setSelectedOrderForAction(null);
+                  await loadOrders();
+                } else {
+                  message.error(response.error || 'Trả tiền thế chấp thất bại');
+                }
+              } catch (apiError) {
+                console.error('Confirm refund deposit car payment error:', apiError);
+                message.error('Có lỗi xảy ra khi trả tiền thế chấp');
+              }
+            } catch (error) {
+              console.error('Upload refund receipt error:', error);
+              message.error('Có lỗi xảy ra khi upload hình ảnh hóa đơn trả tiền thế chấp');
+            } finally {
+              setLoading(false);
+            }
+          }}
+        >
+          <Form.Item label="Mã đơn hàng">
+            <Input value={selectedOrderForAction?.id} disabled />
+          </Form.Item>
+          <Form.Item label="Khách hàng">
+            <Input value={selectedOrderForAction?.user?.fullName || selectedOrderForAction?.user?.email || '-'} disabled />
+          </Form.Item>
+          <Form.Item
+            label="Phương thức thanh toán"
+            rules={[{ required: true, message: 'Vui lòng chọn phương thức thanh toán' }]}
+          >
+            <Radio.Group 
+              value={paymentMethodForRefund} 
+              onChange={(e) => {
+                setPaymentMethodForRefund(e.target.value);
+                // Reset file list khi đổi phương thức
+                if (e.target.value === 'cash') {
+                  setRefundDepositImageFileList([]);
+                }
+              }}
+            >
+              <Radio value="cash">Tiền mặt</Radio>
+              <Radio value="bank_transfer">Chuyển khoản</Radio>
+            </Radio.Group>
+          </Form.Item>
+          {paymentMethodForRefund === 'bank_transfer' && (
+            <Form.Item
+              label="Hình ảnh chứng từ chuyển khoản"
+              help="Upload hình ảnh chứng từ chuyển khoản đã được xác nhận"
+              rules={[{ required: true, message: 'Vui lòng upload hình ảnh chứng từ chuyển khoản' }]}
+            >
+              <Upload
+                beforeUpload={() => false}
+                maxCount={1}
+                listType="picture-card"
+                fileList={refundDepositImageFileList}
+                onChange={({ fileList }) => setRefundDepositImageFileList(fileList)}
+                onRemove={() => setRefundDepositImageFileList([])}
+              >
+                {refundDepositImageFileList.length < 1 && (
+                  <div>
+                    <div>+ Upload</div>
+                  </div>
+                )}
+              </Upload>
+            </Form.Item>
+          )}
+          <Form.Item
+            label="Ghi chú"
+            name="note"
+          >
+            <Input.TextArea
+              rows={4}
+              placeholder="Nhập ghi chú về việc trả tiền thế chấp (nếu có)"
+            />
+          </Form.Item>
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit" loading={loading}>
+                Xác nhận
+              </Button>
+              <Button onClick={() => {
+                setRefundDepositModalVisible(false);
+                setRefundDepositImageFileList([]);
+                setPaymentMethodForRefund('cash');
+                refundDepositForm.resetFields();
+                setSelectedOrderForAction(null);
+              }}>
+                Hủy
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* History Modal - Xem lịch sử đơn hàng */}
+      {selectedOrder && (
+        <Modal
+          title={
+            <Space>
+              <FileTextOutlined /> Lịch sử đơn hàng #{selectedOrder.id}
+            </Space>
+          }
+          open={historyModalVisible}
+          onCancel={() => {
+            setHistoryModalVisible(false);
+            setOrderHistory(null);
+            setSelectedOrder(null);
+          }}
+          footer={[
+            <Button key="close" onClick={() => {
+              setHistoryModalVisible(false);
+              setOrderHistory(null);
+              setSelectedOrder(null);
+            }}>
+              Đóng
+            </Button>
+          ]}
+          width={1000}
+        >
+          <div className="space-y-4">
+            {/* Thông tin đơn hàng */}
+            <Card title="Thông tin đơn hàng" size="small">
+              <Descriptions column={2} size="small">
+                <Descriptions.Item label="Mã đơn hàng">#{selectedOrder.id}</Descriptions.Item>
+                <Descriptions.Item label="Trạng thái">{getOrderStatusTag(selectedOrder)}</Descriptions.Item>
+                <Descriptions.Item label="Ngày đặt">{formatVietnamTime(selectedOrder.orderDate || selectedOrder.createdAt)}</Descriptions.Item>
+                <Descriptions.Item label="Ngày nhận xe">{formatVietnamTime(selectedOrder.pickupTime)}</Descriptions.Item>
+                <Descriptions.Item label="Ngày trả xe (dự kiến)">{formatVietnamTime(selectedOrder.expectedReturnTime)}</Descriptions.Item>
+                {selectedOrder.actualReturnTime && (
+                  <Descriptions.Item label="Ngày trả xe (thực tế)">{formatVietnamTime(selectedOrder.actualReturnTime)}</Descriptions.Item>
+                )}
+                {selectedOrder.car && (
+                  <>
+                    <Descriptions.Item label="Xe">{selectedOrder.car.name} - {selectedOrder.car.model}</Descriptions.Item>
+                    <Descriptions.Item label="Giá/ngày">{selectedOrder.car.rentPricePerDay?.toLocaleString('vi-VN')} VNĐ</Descriptions.Item>
+                  </>
+                )}
+                {selectedOrder.user && (
+                  <>
+                    <Descriptions.Item label="Khách hàng">{selectedOrder.user.fullName || selectedOrder.user.email}</Descriptions.Item>
+                    <Descriptions.Item label="Email">{selectedOrder.user.email}</Descriptions.Item>
+                  </>
+                )}
+                {selectedOrder.location && (
+                  <Descriptions.Item label="Địa điểm nhận xe" span={2}>
+                    {selectedOrder.location.name} - {selectedOrder.location.address}
+                  </Descriptions.Item>
+                )}
+                {selectedOrder.subTotal && (
+                  <Descriptions.Item label="Tổng phụ">
+                    {selectedOrder.subTotal.toLocaleString('vi-VN')} VNĐ
+                  </Descriptions.Item>
+                )}
+                {selectedOrder.deposit && (
+                  <Descriptions.Item label="Tiền cọc">
+                    {selectedOrder.deposit.toLocaleString('vi-VN')} VNĐ
+                  </Descriptions.Item>
+                )}
+                {selectedOrder.extraFee && (
+                  <Descriptions.Item label="Phí phát sinh">
+                    {selectedOrder.extraFee.toLocaleString('vi-VN')} VNĐ
+                  </Descriptions.Item>
+                )}
+                {selectedOrder.damageFee && (
+                  <Descriptions.Item label="Phí hư hỏng">
+                    {selectedOrder.damageFee.toLocaleString('vi-VN')} VNĐ
+                  </Descriptions.Item>
+                )}
+                {selectedOrder.total && (
+                  <Descriptions.Item label="Tổng tiền">
+                    <span className="font-semibold text-green-600">
+                      {selectedOrder.total.toLocaleString('vi-VN')} VNĐ
+                    </span>
+                  </Descriptions.Item>
+                )}
+              </Descriptions>
+            </Card>
+
+            {/* Lịch sử thanh toán */}
+            {orderHistory?.payments && orderHistory.payments.length > 0 && (
+              <Card title="Lịch sử thanh toán" size="small">
+                <Table
+                  dataSource={orderHistory.payments}
+                  rowKey="paymentId"
+                  pagination={false}
+                  size="small"
+                  columns={[
+                    {
+                      title: 'Loại thanh toán',
+                      dataIndex: 'paymentType',
+                      key: 'paymentType',
+                      render: (text: string) => {
+                        const typeMap: Record<string, string> = {
+                          'OrderDeposit': 'Tiền giữ chỗ',
+                          'CarDeposit': 'Cọc xe',
+                          'RentalFee': 'Tiền thuê',
+                          'RefundDepositCar': 'Hoàn cọc xe',
+                          'RefundDepositOrder': 'Hoàn cọc đơn',
+                        };
+                        return typeMap[text] || text;
+                      }
+                    },
+                    {
+                      title: 'Số tiền',
+                      dataIndex: 'amount',
+                      key: 'amount',
+                      render: (amount: number) => (
+                        <span className="font-semibold">
+                          {amount?.toLocaleString('vi-VN')} VNĐ
+                        </span>
+                      )
+                    },
+                    {
+                      title: 'Phương thức',
+                      dataIndex: 'paymentMethod',
+                      key: 'paymentMethod',
+                    },
+                    {
+                      title: 'Ngày thanh toán',
+                      dataIndex: 'paymentDate',
+                      key: 'paymentDate',
+                      render: (date: string) => formatVietnamTime(date)
+                    },
+                    {
+                      title: 'Trạng thái',
+                      dataIndex: 'status',
+                      key: 'status',
+                      render: (status: string) => {
+                        const statusMap: Record<string, { text: string; color: string }> = {
+                          'Pending': { text: 'Chờ xử lý', color: 'orange' },
+                          'Completed': { text: 'Hoàn thành', color: 'green' },
+                          'Failed': { text: 'Thất bại', color: 'red' },
+                        };
+                        const config = statusMap[status] || { text: status, color: 'default' };
+                        return <Tag color={config.color}>{config.text}</Tag>;
+                      }
+                    },
+                  ]}
+                />
+              </Card>
+            )}
+
+            {/* Hình ảnh từ delivery và return history */}
+            <Card title="Hình ảnh" size="small">
+              <div className="space-y-4">
+                {/* Hình ảnh giao xe */}
+                <div>
+                  <h4 className="font-semibold mb-2">Hình ảnh khi giao xe</h4>
+                  {orderHistory?.deliveryHistory ? (() => {
+                    const delivery = orderHistory.deliveryHistory;
+                    // Xử lý cả camelCase và PascalCase
+                    const odometerStart = delivery.odometerStart || delivery.OdometerStart || '-';
+                    const batteryLevelStart = delivery.batteryLevelStart || delivery.BatteryLevelStart || '-';
+                    const vehicleConditionStart = delivery.vehicleConditionStart || delivery.VehicleConditionStart || '-';
+                    const images = [
+                      delivery.imageUrl || delivery.ImageUrl,
+                      delivery.imageUrl2 || delivery.ImageUrl2,
+                      delivery.imageUrl3 || delivery.ImageUrl3,
+                      delivery.imageUrl4 || delivery.ImageUrl4,
+                      delivery.imageUrl5 || delivery.ImageUrl5,
+                      delivery.imageUrl6 || delivery.ImageUrl6,
+                    ].filter(Boolean);
+                    
+                    return (
+                      <div>
+                        <div className="mb-2 text-sm text-gray-600">
+                          <div>Số km: {odometerStart} km</div>
+                          <div>% Pin: {batteryLevelStart}%</div>
+                          <div>Tình trạng: {vehicleConditionStart}</div>
+                        </div>
+                        {images.length > 0 ? (
+                          <Space wrap>
+                            {images.map((img, index) => (
+                              <Image
+                                key={index}
+                                src={img}
+                                alt={`Giao xe ${index + 1}`}
+                                width={150}
+                                height={100}
+                                style={{ objectFit: 'cover', borderRadius: 8 }}
+                              />
+                            ))}
+                          </Space>
+                        ) : (
+                          <div className="text-gray-500 text-sm">Không có hình ảnh</div>
+                        )}
+                      </div>
+                    );
+                  })() : (
+                    <div className="text-gray-500 text-sm">Chưa có lịch sử giao xe</div>
+                  )}
+                </div>
+                
+                {/* Hình ảnh trả xe */}
+                <div>
+                  <h4 className="font-semibold mb-2">Hình ảnh khi trả xe</h4>
+                  {orderHistory?.returnHistory ? (() => {
+                    const returnHistory = orderHistory.returnHistory;
+                    // Xử lý cả camelCase và PascalCase
+                    const odometerEnd = returnHistory.odometerEnd || returnHistory.OdometerEnd || '-';
+                    const batteryLevelEnd = returnHistory.batteryLevelEnd || returnHistory.BatteryLevelEnd || '-';
+                    const vehicleConditionEnd = returnHistory.vehicleConditionEnd || returnHistory.VehicleConditionEnd || '-';
+                    const images = [
+                      returnHistory.imageUrl || returnHistory.ImageUrl,
+                      returnHistory.imageUrl2 || returnHistory.ImageUrl2,
+                      returnHistory.imageUrl3 || returnHistory.ImageUrl3,
+                      returnHistory.imageUrl4 || returnHistory.ImageUrl4,
+                      returnHistory.imageUrl5 || returnHistory.ImageUrl5,
+                      returnHistory.imageUrl6 || returnHistory.ImageUrl6,
+                    ].filter(Boolean);
+                    
+                    return (
+                      <div>
+                        <div className="mb-2 text-sm text-gray-600">
+                          <div>Số km: {odometerEnd} km</div>
+                          <div>% Pin: {batteryLevelEnd}%</div>
+                          <div>Tình trạng: {vehicleConditionEnd}</div>
+                        </div>
+                        {images.length > 0 ? (
+                          <Space wrap>
+                            {images.map((img, index) => (
+                              <Image
+                                key={index}
+                                src={img}
+                                alt={`Trả xe ${index + 1}`}
+                                width={150}
+                                height={100}
+                                style={{ objectFit: 'cover', borderRadius: 8 }}
+                              />
+                            ))}
+                          </Space>
+                        ) : (
+                          <div className="text-gray-500 text-sm">Không có hình ảnh</div>
+                        )}
+                      </div>
+                    );
+                  })() : (
+                    <div className="text-gray-500 text-sm">Chưa có lịch sử trả xe</div>
+                  )}
+                </div>
+              </div>
+            </Card>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

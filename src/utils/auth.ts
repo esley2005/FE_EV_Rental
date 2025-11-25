@@ -30,6 +30,31 @@ export const authUtils = {
   // Đăng xuất
   logout: () => {
     if (typeof window !== 'undefined') {
+      // Lưu thông tin user vào key riêng trước khi xóa
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        try {
+          const userData = JSON.parse(userStr);
+          // Lưu thông tin profile quan trọng (email, phone, citizenIdNumber, fullName)
+          const profileData = {
+            id: userData.id || userData.userId,
+            email: userData.email || userData.Email,
+            fullName: userData.fullName || userData.FullName,
+            phone: userData.phone || userData.phoneNumber || userData.PhoneNumber,
+            phoneNumber: userData.phoneNumber || userData.PhoneNumber || userData.phone,
+            PhoneNumber: userData.PhoneNumber || userData.phoneNumber || userData.phone,
+            citizenIdNumber: userData.citizenIdNumber || userData.CitizenIdNumber,
+            CitizenIdNumber: userData.CitizenIdNumber || userData.citizenIdNumber,
+            role: userData.role || userData.Role,
+            createdAt: userData.createdAt || userData.CreatedAt,
+          };
+          localStorage.setItem('userProfile', JSON.stringify(profileData));
+        } catch (e) {
+          console.warn('Failed to save user profile on logout:', e);
+        }
+      }
+      
+      // Chỉ xóa token, giữ lại user profile
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';

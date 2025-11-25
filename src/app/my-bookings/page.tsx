@@ -39,7 +39,8 @@ import {
   Alert,
   notification as antdNotification,
   Popconfirm,
-  message
+  message,
+  Form
 } from "antd";
 import { rentalOrderApi, carsApi, rentalLocationApi, authApi, driverLicenseApi, citizenIdApi, paymentApi } from "@/services/api";
 import type { RentalOrderData, RentalLocationData, User, DriverLicenseData, CitizenIdData } from "@/services/api";
@@ -128,19 +129,23 @@ export default function MyBookingsPage() {
       const userResponse = await authApi.getProfile();
       if (userResponse.success && 'data' in userResponse && userResponse.data) {
         setUser(userResponse.data);
-        await loadBookings(userResponse.data.id);
-        // Check GPLX status từ DB
-        await checkLicenseStatus(userResponse.data.id);
+        const userId = userResponse.data.id || userResponse.data.userId;
+        if (userId && typeof userId === 'number' && !isNaN(userId)) {
+          await loadBookings(userId);
+          // Check GPLX status từ DB
+          await checkLicenseStatus(userId);
+        }
       } else {
 
         const userStr = localStorage.getItem('user');
         if (userStr) {
           const userData = JSON.parse(userStr);
           setUser(userData);
-          await loadBookings(userData.id);
-          // Check GPLX status từ DB
-          if (userData.id) {
-            await checkLicenseStatus(userData.id);
+          const userId = userData.id || userData.userId;
+          if (userId && typeof userId === 'number' && !isNaN(userId)) {
+            await loadBookings(userId);
+            // Check GPLX status từ DB
+            await checkLicenseStatus(userId);
           }
         }
       }
@@ -159,6 +164,10 @@ export default function MyBookingsPage() {
 
   // Check GPLX status từ DB
   const checkLicenseStatus = async (userId: number) => {
+    if (!userId || typeof userId !== 'number' || isNaN(userId)) {
+      console.warn('Invalid userId for checkLicenseStatus:', userId);
+      return;
+    }
     try {
       const licenseResponse = await driverLicenseApi.getByUserId(userId);
       if (licenseResponse.success && licenseResponse.data) {
@@ -186,8 +195,13 @@ export default function MyBookingsPage() {
   };
 
   const loadBookings = async (userId: number) => {
+    if (!userId || typeof userId !== 'number' || isNaN(userId)) {
+      console.warn('Invalid userId for loadBookings:', userId);
+      setBookings([]);
+      setLoading(false);
+      return;
+    }
     try {
-
       const ordersResponse = await rentalOrderApi.getByUserId(userId);
       
       if (!ordersResponse.success) {
@@ -513,13 +527,27 @@ export default function MyBookingsPage() {
     }
   };
 
-  const handleCancelBooking = async (booking: BookingWithDetails, silent: boolean = false) => {
+  const handleCancelBooking = async (booking: BookingWithDetails, silent: boolean = false, withRefund: boolean = false) => {
+    // Nếu có thể hoàn tiền (dưới 1 giờ), chuyển đến trang nhập thông tin ngân hàng trước
+    if (withRefund && canCancelWithRefund(booking)) {
+      // Close detail modal if open
+      if (selectedBooking?.id === booking.id) {
+        setDetailModalOpen(false);
+      }
+      
+      // Chuyển đến trang nhập thông tin ngân hàng (sẽ hủy đơn sau khi điền xong)
+      router.push(`/refund-banking?orderId=${booking.id}`);
+      return;
+    }
+
+    // Nếu không phải hoàn tiền, hủy đơn ngay
     try {
       setLoading(true);
       // Gọi API CancelOrder
       const response = await rentalOrderApi.cancelOrder(booking.id);
       
       if (response.success) {
+        
         // Reload bookings
         if (user) {
           await loadBookings(user.id);
@@ -577,6 +605,7 @@ export default function MyBookingsPage() {
     }
   };
 
+
   const canCancelBooking = (booking: BookingWithDetails): boolean => {
     const status = normalizeStatus(booking.status);
 
@@ -585,6 +614,41 @@ export default function MyBookingsPage() {
            status === 'depositpending';
           //   || 
           //  status === 'confirmed';
+  };
+
+  // Kiểm tra nếu đơn hàng được đặt dưới 1 giờ (có thể hủy và hoàn tiền)
+  // Chỉ áp dụng cho đơn hàng đã xác nhận (OrderDepositConfirmed = 1)
+  const canCancelWithRefund = (booking: BookingWithDetails): boolean => {
+    // Kiểm tra status phải là OrderDepositConfirmed (1) - đã xác nhận
+    const status = booking.status;
+    let statusNum: number | null = null;
+    
+    if (typeof status === 'number') {
+      statusNum = status;
+    } else if (typeof status === 'string') {
+      const statusLower = status.toLowerCase();
+      // OrderDepositConfirmed = 1 (đã xác nhận đặt cọc)
+      if (statusLower === 'orderdepositconfirmed' || status === '1') {
+        statusNum = 1;
+      } else {
+        const parsed = parseInt(status);
+        if (!isNaN(parsed)) statusNum = parsed;
+      }
+    }
+    
+    // Chỉ cho phép hủy và hoàn tiền nếu status = 1 (OrderDepositConfirmed - đã xác nhận)
+    if (statusNum !== 1) return false;
+    
+    // Kiểm tra thời gian đặt đơn dưới 1 giờ
+    const orderDate = booking.orderDate || booking.createdAt;
+    if (!orderDate) return false;
+    
+    const orderTime = new Date(orderDate).getTime();
+    const now = currentTime;
+    const elapsed = now - orderTime; // milliseconds
+    const oneHour = 60 * 60 * 1000; // 1 giờ = 3600000ms
+    
+    return elapsed < oneHour; // Dưới 1 giờ
   };
 
   // Tính countdown 10 phút từ thời điểm tạo đơn hàng
@@ -762,6 +826,7 @@ export default function MyBookingsPage() {
 
   // Sử dụng utility function từ dateFormat.ts để đảm bảo timezone đúng
   const formatDate = (dateStr?: string) => formatDateTime(dateStr);
+  const formatDateTimeFull = (dateStr?: string) => formatDateTime(dateStr, "DD/MM/YYYY HH:mm");
 
   const calculateDays = (startDate?: string, endDate?: string) => {
     if (!startDate || !endDate) return 0;
@@ -826,7 +891,7 @@ export default function MyBookingsPage() {
               description={
                 <div>
                   <p className="mb-2">
-                    GPLX của bạn đã được upload và đang chờ admin xác thực. Vui lòng chờ trong giây lát.
+                    GPLX của bạn đã được upload và đang chờ staff xác thực. Vui lòng chờ trong giây lát.
                   </p>
                   <Button
                     type="link"
@@ -988,10 +1053,10 @@ export default function MyBookingsPage() {
                                 </p>
                             
                                 <p className="mb-2">
-                                  <strong>Thời gian nhận xe:</strong> {formatDate(booking.pickupTime)}
+                                  <strong>Thời gian nhận xe:</strong> {formatDateTimeFull(booking.pickupTime)}
                                 </p>
                                 <p className="mb-2">
-                                  <strong>Thời gian trả xe:</strong> {formatDate(booking.expectedReturnTime)}
+                                  <strong>Thời gian trả xe:</strong> {formatDateTimeFull(booking.expectedReturnTime)}
                                 </p>
                                 <Link href="/guides/terms" className="text-blue-600 hover:text-blue-700 underline">
                                   Xem điều khoản cầm giấy tờ →
@@ -1010,14 +1075,14 @@ export default function MyBookingsPage() {
                             <CalendarOutlined className="text-blue-600" />
                             <div>
                               <div className="text-gray-500">Nhận xe</div>
-                              <div className="font-medium">{formatDate(booking.pickupTime)}</div>
+                              <div className="font-medium">{formatDateTimeFull(booking.pickupTime)}</div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 text-sm">
                             <CalendarOutlined className="text-red-600" />
                             <div>
                               <div className="text-gray-500">Trả xe</div>
-                              <div className="font-medium">{formatDate(booking.expectedReturnTime)}</div>
+                              <div className="font-medium">{formatDateTimeFull(booking.expectedReturnTime)}</div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 text-sm">
@@ -1044,7 +1109,27 @@ export default function MyBookingsPage() {
                             </span>
                           </div>
                           <Space>
-                            {canCancelBooking(booking) && (
+                            {canCancelWithRefund(booking) && (
+                              <Popconfirm
+                                title="Hủy đơn và hoàn tiền"
+                                description="Đơn hàng này được đặt dưới 1 giờ, bạn có thể hủy và nhận hoàn tiền. Bạn có chắc chắn muốn hủy đơn hàng này không?"
+                                onConfirm={() => handleCancelBooking(booking, false, true)}
+                                okText="Có, hủy và hoàn tiền"
+                                cancelText="Không"
+                                okButtonProps={{ danger: true }}
+                                icon={<WarningOutlined style={{ color: '#ff4d4f' }} />}
+                              >
+                                <Button
+                                  danger
+                                  icon={<DeleteOutlined />}
+                                  loading={loading}
+                                  type="primary"
+                                >
+                                  Hủy và hoàn tiền
+                                </Button>
+                              </Popconfirm>
+                            )}
+                            {canCancelBooking(booking) && !canCancelWithRefund(booking) && (
                               <Popconfirm
                                 title="Hủy đơn hàng"
                                 description="Bạn có chắc chắn muốn hủy đơn hàng này không?"
@@ -1118,7 +1203,28 @@ export default function MyBookingsPage() {
               💳 Thanh toán cọc ngay
             </Button>
           ),
-          selectedBooking && canCancelBooking(selectedBooking) && (
+          selectedBooking && canCancelWithRefund(selectedBooking) && (
+            <Popconfirm
+              key="cancel-refund"
+              title="Hủy đơn và hoàn tiền"
+              description="Đơn hàng này được đặt dưới 1 giờ, bạn có thể hủy và nhận hoàn tiền. Bạn có chắc chắn muốn hủy đơn hàng này không?"
+              onConfirm={() => selectedBooking && handleCancelBooking(selectedBooking, false, true)}
+              okText="Có, hủy và hoàn tiền"
+              cancelText="Không"
+              okButtonProps={{ danger: true }}
+              icon={<WarningOutlined style={{ color: '#ff4d4f' }} />}
+            >
+              <Button
+                danger
+                icon={<DeleteOutlined />}
+                loading={loading}
+                type="primary"
+              >
+                Hủy và hoàn tiền
+              </Button>
+            </Popconfirm>
+          ),
+          selectedBooking && canCancelBooking(selectedBooking) && !canCancelWithRefund(selectedBooking) && (
             <Popconfirm
               key="cancel"
               title="Hủy đơn hàng"
@@ -1168,7 +1274,7 @@ export default function MyBookingsPage() {
                       <strong>Địa điểm nhận xe:</strong> {selectedBooking.location?.name || selectedBooking.location?.address || 'Không xác định'}
                     </p>
                     <p className="mb-2">
-                      <strong>Thời gian nhận xe:</strong> {formatDate(selectedBooking.pickupTime)}
+                      <strong>Thời gian nhận xe:</strong> {formatDateTimeFull(selectedBooking.pickupTime)}
                     </p>
                     <Link href="/guides/terms" className="text-blue-600 hover:text-blue-700 underline">
                       Xem điều khoản cầm giấy tờ →
@@ -1259,14 +1365,14 @@ export default function MyBookingsPage() {
               <Descriptions column={2} size="small" bordered>
                 <Descriptions.Item label="Mã đơn hàng">#{selectedBooking.id}</Descriptions.Item>
                 {/* <Descriptions.Item label="Số điện thoại">{selectedBooking.phoneNumber || '-'}</Descriptions.Item> */}
-                {/* <Descriptions.Item label="Ngày đặt">{formatDate(selectedBooking.orderDate || selectedBooking.createdAt)}</Descriptions.Item> */}
+                <Descriptions.Item label="Ngày đặt">{formatDate(selectedBooking.orderDate || selectedBooking.createdAt)}</Descriptions.Item>
                 <Descriptions.Item label="Có tài xế">
                   {selectedBooking.withDriver ? <Tag color="blue">Có</Tag> : <Tag color="default">Không</Tag>}
                 </Descriptions.Item>
-                <Descriptions.Item label="Ngày nhận xe">{formatDate(selectedBooking.pickupTime)}</Descriptions.Item>
-                <Descriptions.Item label="Ngày trả xe (dự kiến)">{formatDate(selectedBooking.expectedReturnTime)}</Descriptions.Item>
+                <Descriptions.Item label="Thời gian nhận xe">{formatDateTimeFull(selectedBooking.pickupTime)}</Descriptions.Item>
+                <Descriptions.Item label="Thời gian trả xe (dự kiến)">{formatDateTimeFull(selectedBooking.expectedReturnTime)}</Descriptions.Item>
                 {selectedBooking.actualReturnTime && (
-                  <Descriptions.Item label="Ngày trả xe (thực tế)">{formatDate(selectedBooking.actualReturnTime)}</Descriptions.Item>
+                  <Descriptions.Item label="Thời gian trả xe (thực tế)">{formatDateTimeFull(selectedBooking.actualReturnTime)}</Descriptions.Item>
                 )}
                 <Descriptions.Item label="Số ngày thuê">
                   {calculateDays(selectedBooking.pickupTime, selectedBooking.expectedReturnTime)} ngày

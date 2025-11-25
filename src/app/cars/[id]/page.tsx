@@ -5,6 +5,9 @@ import { notFound, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Spin, message, notification, Modal, Button, DatePicker } from "antd";
 import dayjs, { Dayjs } from "dayjs";
+import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
+
+dayjs.extend(isSameOrBefore);
 
 const { RangePicker } = DatePicker;
 // Removed @ant-design/icons to standardize on lucide-react icons
@@ -223,6 +226,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   const [checkingReviewEligibility, setCheckingReviewEligibility] = useState(false);
   const [selectedLocationFromUrl, setSelectedLocationFromUrl] = useState<{ id: number; name: string; address: string } | null>(null);
   const [dateRangeValue, setDateRangeValue] = useState<[Dayjs, Dayjs] | null>(null);
+  const [bookedDates, setBookedDates] = useState<Set<string>>(new Set()); // Lưu các ngày đã được đặt (format: YYYY-MM-DD)
 
   // Load location from URL if locationId exists
   useEffect(() => {
@@ -799,6 +803,113 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             console.warn('[Car Detail] ⚠️ No coordinates found for car');
           }
 
+          // Load các đơn hàng đã xác nhận và đang thuê cho xe này để disable các ngày đã được đặt
+          // Chỉ load nếu user đã đăng nhập (vì API yêu cầu authentication)
+          try {
+            // Kiểm tra xem user đã đăng nhập chưa
+            const currentUser = authUtils.getCurrentUser();
+            if (!currentUser) {
+              console.log('[Car Detail] User not logged in, skipping booked dates check');
+              // Không set bookedDates, để user vẫn có thể chọn ngày
+              return;
+            }
+            
+            // Gọi API với authentication (user đã đăng nhập)
+            const ordersResponse = await rentalOrderApi.getAll();
+            
+            // Nếu bị 401/403, có thể token hết hạn hoặc không có quyền
+            if (!ordersResponse.success) {
+              const errorMsg = ordersResponse.error || '';
+              if (errorMsg.includes('401') || errorMsg.includes('403') || errorMsg.includes('Unauthorized') || errorMsg.includes('Forbidden')) {
+                console.warn('[Car Detail] API GetAll requires authentication. Booked dates will not be disabled.');
+                // Không set bookedDates, để user vẫn có thể chọn ngày
+                return;
+              }
+            }
+            
+            if (ordersResponse.success && ordersResponse.data) {
+              const orders = Array.isArray(ordersResponse.data)
+                ? ordersResponse.data
+                : (ordersResponse.data as any)?.$values || [];
+              
+              // Lọc các đơn hàng của xe này và có status đã xác nhận/đang thuê
+              // Chỉ lấy các đơn hàng có status OrderDepositConfirmed (1), CheckedIn (2), hoặc Renting (3) để disable ngày
+              // Không disable các đơn Pending (0), Cancelled (7), Completed (9)
+              const activeOrders = orders.filter((order: any) => {
+                const orderCarId = order.carId ?? order.CarId ?? order.car?.id ?? order.Car?.Id;
+                const carIdNum = typeof orderCarId === 'number' ? orderCarId : Number(orderCarId);
+                const currentCarIdNum = typeof carWithLocation.id === 'number' ? carWithLocation.id : Number(carWithLocation.id);
+                
+                // Lấy status và convert sang number
+                const status = order.status ?? order.Status;
+                let statusNum = 0;
+                if (typeof status === 'number') {
+                  statusNum = status;
+                } else if (typeof status === 'string') {
+                  const statusLower = status.toLowerCase();
+                  if (statusLower === 'orderdepositconfirmed' || status === '1') statusNum = 1;
+                  else if (statusLower === 'checkedin' || status === '2') statusNum = 2;
+                  else if (statusLower === 'renting' || status === '3') statusNum = 3;
+                  else {
+                    const parsed = parseInt(status);
+                    if (!isNaN(parsed)) statusNum = parsed;
+                  }
+                }
+                
+                // Chỉ disable ngày nếu status là OrderDepositConfirmed (1), CheckedIn (2), hoặc Renting (3)
+                return carIdNum === currentCarIdNum && (statusNum === 1 || statusNum === 2 || statusNum === 3);
+              });
+
+              // Tạo Set các ngày đã được đặt (chỉ tính ngày, không tính giờ)
+              // Format từ API: "2025-11-25T16:30:00" hoặc "2025-11-26T22:00:00"
+              const datesSet = new Set<string>();
+              activeOrders.forEach((order: any) => {
+                const pickupTime = order.pickupTime ?? order.PickupTime;
+                const expectedReturnTime = order.expectedReturnTime ?? order.ExpectedReturnTime;
+                
+                if (pickupTime && expectedReturnTime) {
+                  try {
+                    // Parse từ format ISO: "2025-11-25T16:30:00" hoặc "2025-11-26T22:00:00"
+                    // dayjs có thể tự động parse format ISO này
+                    const pickupDate = dayjs(pickupTime);
+                    const returnDate = dayjs(expectedReturnTime);
+                    
+                    if (pickupDate.isValid() && returnDate.isValid()) {
+                      // Lấy tất cả các ngày trong khoảng thời gian thuê (chỉ tính ngày, không tính giờ)
+                      let currentDate = pickupDate.startOf('day');
+                      const endDate = returnDate.startOf('day');
+                      
+                      // Sử dụng isBefore hoặc isSame để so sánh
+                      while (currentDate.isBefore(endDate, 'day') || currentDate.isSame(endDate, 'day')) {
+                        const dateStr = currentDate.format('YYYY-MM-DD');
+                        datesSet.add(dateStr);
+                        currentDate = currentDate.add(1, 'day');
+                      }
+                    } else {
+                      console.warn('[Car Detail] Invalid date format:', {
+                        pickupTime,
+                        expectedReturnTime,
+                        pickupValid: pickupDate.isValid(),
+                        returnValid: returnDate.isValid()
+                      });
+                    }
+                  } catch (error) {
+                    console.error('[Car Detail] Error processing dates:', error, {
+                      pickupTime,
+                      expectedReturnTime
+                    });
+                  }
+                }
+              });
+              
+              console.log('[Car Detail] Booked dates for car:', Array.from(datesSet));
+              
+              setBookedDates(datesSet);
+            }
+          } catch (error) {
+            console.error('[Car Detail] Load booked dates error:', error);
+          }
+
           // Lọc các xe khác (không phải xe hiện tại) và lấy 3 xe đầu tiên
           const otherCarsList = activeCars
             .filter((c: Car) =>
@@ -873,7 +984,12 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     const checkUserOrders = async () => {
       setCheckingReviewEligibility(true);
       try {
-        const response = await rentalOrderApi.getByUserId(Number(user.id));
+        const userId = user?.id || user?.userId;
+        if (!userId || isNaN(Number(userId))) {
+          setCheckingReviewEligibility(false);
+          return;
+        }
+        const response = await rentalOrderApi.getByUserId(Number(userId));
         if (response.success && response.data) {
           const raw = response.data as any;
           const orders = Array.isArray(raw)
@@ -1820,9 +1936,9 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
                 {/* Status */}
                 <div className={`text-center p-3 rounded-lg mb-4 ${car.isActive && !car.isDeleted ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
-                  <span className="font-semibold">
+                  {/* <span className="font-semibold">
                     {car.isActive && !car.isDeleted ? ' Xe đang có sẵn' : 'Hết xe'}
-                  </span>
+                  </span> */}
                 </div>
 
                 {/* Thời gian thuê */}
@@ -1846,8 +1962,51 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                       }
                     }}
                     disabledDate={(current) => {
+                      if (!current) return false;
+                      
                       // Chặn các ngày trong quá khứ
-                      return current && current < dayjs().startOf('day');
+                      if (current < dayjs().startOf('day')) {
+                        return true;
+                      }
+                      
+                      // Disable các ngày đã được đặt (chỉ đơn OrderDepositConfirmed)
+                      const dateStr = current.format('YYYY-MM-DD');
+                      return bookedDates.has(dateStr);
+                    }}
+                    cellRender={(current, info) => {
+                      if (info.type !== 'date' || !current) {
+                        return info.originNode;
+                      }
+                      
+                      // Đảm bảo current là Dayjs
+                      const currentDate = dayjs.isDayjs(current) ? current : dayjs(current);
+                      if (!currentDate.isValid()) {
+                        return info.originNode;
+                      }
+                      
+                      const dateStr = currentDate.format('YYYY-MM-DD');
+                      const isBooked = bookedDates.has(dateStr);
+                      
+                      if (isBooked) {
+                        return (
+                          <div className="ant-picker-cell-inner-wrapper">
+                            <div
+                              className="ant-picker-cell-inner"
+                              style={{
+                                backgroundColor: '#fee2e2',
+                                border: '2px solid #ef4444',
+                                borderRadius: '4px',
+                                color: '#dc2626',
+                                fontWeight: 'bold',
+                              }}
+                            >
+                              {currentDate.date()}
+                            </div>
+                          </div>
+                        );
+                      }
+                      
+                      return info.originNode;
                     }}
                     disabledTime={(value, type) => {
                       const now = dayjs();

@@ -111,7 +111,11 @@ export default function CheckoutPage() {
         // Nếu getById fail, thử load từ getByUserId và tìm order
         console.warn("getById failed, trying to load from user orders:", orderResponse.error);
         try {
-          const userOrdersResponse = await rentalOrderApi.getByUserId(currentUser.id);
+          const userId = currentUser?.id || currentUser?.userId;
+          if (!userId || isNaN(Number(userId))) {
+            throw new Error("Invalid user ID");
+          }
+          const userOrdersResponse = await rentalOrderApi.getByUserId(Number(userId));
           if (userOrdersResponse.success && userOrdersResponse.data) {
             const orders = Array.isArray(userOrdersResponse.data)
               ? userOrdersResponse.data

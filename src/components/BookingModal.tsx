@@ -490,6 +490,7 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
   const [selectedLocationCoords, setSelectedLocationCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null);
   const [loadingCarLocation, setLoadingCarLocation] = useState(false);
+  const [bookedDates, setBookedDates] = useState<Set<string>>(new Set()); // Lưu các ngày đã được đặt (format: YYYY-MM-DD)
 
   // Debug: Track state changes
   useEffect(() => {
@@ -645,6 +646,98 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
             setLoadingCarLocation(false);
           }
         }
+
+        // Load các đơn hàng đã xác nhận và đang thuê cho xe này
+        try {
+          const ordersResponse = await rentalOrderApi.getAll();
+          if (ordersResponse.success && ordersResponse.data) {
+            const orders = Array.isArray(ordersResponse.data)
+              ? ordersResponse.data
+              : (ordersResponse.data as any)?.$values || [];
+            
+            console.log('[BookingModal] Total orders loaded:', orders.length);
+            console.log('[BookingModal] Current car.id:', car.id, 'type:', typeof car.id);
+            
+            // Lọc các đơn hàng của xe này và có status đã xác nhận/đang thuê
+            // Status: OrderDepositConfirmed (1), CheckedIn (2), Renting (3)
+            const activeOrders = orders.filter((order: any) => {
+              // Lấy carId từ nhiều nguồn có thể
+              const orderCarId = order.carId ?? order.CarId ?? order.car?.id ?? order.Car?.Id;
+              const carIdNum = typeof orderCarId === 'number' ? orderCarId : Number(orderCarId);
+              const currentCarIdNum = typeof car.id === 'number' ? car.id : Number(car.id);
+              
+              // Lấy status và convert sang number
+              const status = order.status ?? order.Status;
+              let statusNum = 0;
+              if (typeof status === 'number') {
+                statusNum = status;
+              } else if (typeof status === 'string') {
+                // Thử parse string status
+                const statusLower = status.toLowerCase();
+                if (statusLower === 'orderdepositconfirmed' || status === '1') statusNum = 1;
+                else if (statusLower === 'checkedin' || status === '2') statusNum = 2;
+                else if (statusLower === 'renting' || status === '3') statusNum = 3;
+                else {
+                  // Thử parse số từ string
+                  const parsed = parseInt(status);
+                  if (!isNaN(parsed)) statusNum = parsed;
+                }
+              }
+              
+              const isMatch = carIdNum === currentCarIdNum && (statusNum === 1 || statusNum === 2 || statusNum === 3);
+              
+              if (isMatch) {
+                console.log('[BookingModal] Found active order:', {
+                  orderId: order.id,
+                  carId: carIdNum,
+                  status: status,
+                  statusNum: statusNum,
+                  pickupTime: order.pickupTime,
+                  expectedReturnTime: order.expectedReturnTime
+                });
+              }
+              
+              return isMatch;
+            });
+
+            console.log('[BookingModal] Active orders for this car:', activeOrders.length);
+
+            // Tạo Set các ngày đã được đặt (chỉ tính ngày, không tính giờ)
+            // Format từ DB: 2025-11-26 22:00:00.0000000
+            // Sử dụng dayjs trực tiếp để parse và lấy YYYY-MM-DD
+            const datesSet = new Set<string>();
+            activeOrders.forEach((order: any) => {
+              const pickupTime = order.pickupTime ?? order.PickupTime;
+              const expectedReturnTime = order.expectedReturnTime ?? order.ExpectedReturnTime;
+              
+              if (pickupTime && expectedReturnTime) {
+                try {
+                  // Parse trực tiếp từ format: 2025-11-26 22:00:00.0000000
+                  const pickupDate = dayjs(pickupTime);
+                  const returnDate = dayjs(expectedReturnTime);
+                  
+                  if (pickupDate.isValid() && returnDate.isValid()) {
+                    // Lấy tất cả các ngày trong khoảng thời gian thuê (chỉ tính ngày, không tính giờ)
+                    let currentDate = pickupDate.startOf('day');
+                    const endDate = returnDate.startOf('day');
+                    
+                    while (currentDate.isSameOrBefore(endDate, 'day')) {
+                      const dateStr = currentDate.format('YYYY-MM-DD');
+                      datesSet.add(dateStr);
+                      currentDate = currentDate.add(1, 'day');
+                    }
+                  }
+                } catch (error) {
+                  console.error('[BookingModal] Error processing dates:', error);
+                }
+              }
+            });
+            
+            setBookedDates(datesSet);
+          }
+        } catch (error) {
+          console.error('[BookingModal] Load booked dates error:', error);
+        }
       } catch (error) {
         console.error("Load data error:", error);
         message.error("Có lỗi xảy ra khi tải dữ liệu. Vui lòng thử lại sau.");
@@ -665,7 +758,7 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
       const [pickupTime, expectedReturnTime] = values.dateRange;
       
       // Đảm bảo userId là number
-      const userId = Number(user.id || user.userId);
+      const userId = Number(user.id || (user as any).userId);
       if (!userId || isNaN(userId)) {
         message.error("Không tìm thấy ID người dùng. Vui lòng đăng nhập lại.");
         setLoading(false);
@@ -680,10 +773,22 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
         return;
       }
       
+      // Format thời gian theo local time (không convert sang UTC)
+      // Format: YYYY-MM-DDTHH:mm:ss (local time, không có Z)
+      const formatLocalTime = (date: Dayjs) => {
+        const year = date.year();
+        const month = String(date.month() + 1).padStart(2, '0');
+        const day = String(date.date()).padStart(2, '0');
+        const hours = String(date.hour()).padStart(2, '0');
+        const minutes = String(date.minute()).padStart(2, '0');
+        const seconds = String(date.second()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+      };
+      
       const orderData: CreateRentalOrderData = {
         phoneNumber: values.phoneNumber,
-        pickupTime: pickupTime.toISOString(),
-        expectedReturnTime: expectedReturnTime.toISOString(),
+        pickupTime: formatLocalTime(pickupTime),
+        expectedReturnTime: formatLocalTime(expectedReturnTime),
         withDriver: values.withDriver || false,
         userId: userId,
         carId: carIdNum,
@@ -694,7 +799,7 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
         ...orderData,
         userId: userId,
         carId: carIdNum,
-        user: { id: user.id, userId: user.userId, email: user.email }
+        user: { id: user.id, userId: (user as any).userId, email: user.email }
       });
 
       const response = await rentalOrderApi.create(orderData);
@@ -871,6 +976,11 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
                   placeholder={["Thời gian nhận xe", "Thời gian trả xe"]}
                   getPopupContainer={(trigger) => document.body}
                   popupStyle={{ zIndex: 10001 }}
+                  disabledDate={(current) => {
+                    if (!current) return false;
+                    const dateStr = current.format('YYYY-MM-DD');
+                    return bookedDates.has(dateStr);
+                  }}
                 />
               </Form.Item>
 

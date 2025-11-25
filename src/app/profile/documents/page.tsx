@@ -162,11 +162,12 @@ export default function DocumentsPage() {
   // Load orders and car info
   useEffect(() => {
     const loadOrders = async () => {
-      if (!user?.id) return;
+      const userId = user?.id || user?.userId;
+      if (!userId || typeof userId !== 'number' || isNaN(userId)) return;
       
       setLoadingOrders(true);
       try {
-        const ordersResponse = await rentalOrderApi.getByUserId(user.id);
+        const ordersResponse = await rentalOrderApi.getByUserId(userId);
         if (ordersResponse.success && ordersResponse.data) {
           const ordersData = Array.isArray(ordersResponse.data)
             ? ordersResponse.data
