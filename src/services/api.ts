@@ -1028,6 +1028,12 @@ export const driverLicenseApi = {
     });
   },
 
+  // Get driver license by ID
+  getById: (id: number) =>
+    apiCall<DriverLicenseData>(`/DriverLicense/GetById?id=${id}`, {
+      method: 'GET',
+    }),
+
   // Get current user's driver license
   getCurrent: () =>
     apiCall<DriverLicenseData>('/DriverLicense/GetById', {
@@ -1098,6 +1104,12 @@ export const citizenIdApi = {
       body: JSON.stringify(updateData),
     });
   },
+
+  // Get citizen ID by ID
+  getById: (id: number) =>
+    apiCall<CitizenIdData>(`/CitizenId/GetById?id=${id}`, {
+      method: 'GET',
+    }),
 
   // Get current user's citizen ID
   getCurrent: () =>

@@ -844,15 +844,7 @@ export default function ProfilePage() {
                                 <Input size="large" prefix={<MailOutlined />} disabled />
                               </Form.Item>
                             )}
-                            <Form.Item 
-                              label="Số điện thoại" 
-                              name="phone"
-                              rules={[
-                                { pattern: /^[0-9]{10,11}$/, message: "Số điện thoại phải có 10-11 chữ số!" }
-                              ]}
-                            >
-                              <Input size="large" prefix={<PhoneOutlined />} placeholder="Nhập số điện thoại" />
-                            </Form.Item>
+                         
                             <Space>
                               <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading} className="bg-blue-600">
                                 Lưu thay đổi
