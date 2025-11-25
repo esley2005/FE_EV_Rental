@@ -93,20 +93,24 @@ export default function ProfilePage() {
         if (userStr) {
           const userData = JSON.parse(userStr);
           setUser(userData);
+          // Lấy số điện thoại từ nhiều nguồn có thể
+          const phoneValue = (userData as any).PhoneNumber || (userData as any).phoneNumber || userData.phone || "";
           profileForm.setFieldsValue({
             fullName: userData.fullName,
             email: userData.email,
-            phone: (userData as any).PhoneNumber || userData.phone || "",
+            phone: phoneValue,
           });
         }
 
         const response = await authApi.getProfile();
         if (response.success && 'data' in response && response.data) {
           setUser(response.data);
+          // Lấy số điện thoại từ nhiều nguồn có thể
+          const phoneValue = (response.data as any).PhoneNumber || (response.data as any).phoneNumber || response.data.phone || "";
           profileForm.setFieldsValue({
             fullName: response.data.fullName,
             email: response.data.email,
-            phone: (response.data as any).PhoneNumber || response.data.phone || "",
+            phone: phoneValue,
           });
           localStorage.setItem("user", JSON.stringify(response.data));
 
@@ -228,9 +232,12 @@ export default function ProfilePage() {
         return;
       }
 
+      // Lấy số điện thoại từ user state (vì trường phone đã bị disabled)
+      const existingPhone = (user as any).PhoneNumber || (user as any).phoneNumber || user.phone || "";
+      
       const updateData: UpdateProfileData = {
         fullName: trimmedFullName,
-        phone: values.phone?.trim() || "",
+        phone: existingPhone,
         userId: user?.id, // Truyền userId từ user state
       };
 
@@ -245,10 +252,11 @@ export default function ProfilePage() {
           localStorage.setItem("user", JSON.stringify(updatedUser));
           
           // Cập nhật form values
+          const phoneValue = updateData.phone || (updatedUser as any).PhoneNumber || (updatedUser as any).phoneNumber || updatedUser.phone || "";
           profileForm.setFieldsValue({
             fullName: trimmedFullName,
             email: updatedUser.email || user?.email,
-            phone: updateData.phone || (updatedUser as any).PhoneNumber || updatedUser.phone || "",
+            phone: phoneValue,
           });
         }
 
@@ -814,13 +822,22 @@ export default function ProfilePage() {
                               <Descriptions.Item label="Họ và tên">{user.fullName}</Descriptions.Item>
                               <Descriptions.Item label="Email">{user.email}</Descriptions.Item>
                               <Descriptions.Item label="Số điện thoại">
-                                {(user as any).PhoneNumber || user.phone || "Chưa cập nhật"}
+                                {(user as any).PhoneNumber || (user as any).phoneNumber || user.phone || "Chưa cập nhật"}
                               </Descriptions.Item>
                             </Descriptions>
-<Button
+                            <Button
                               type="primary"
                               icon={<EditOutlined />}
-                              onClick={() => setEditing(true)}
+                              onClick={() => {
+                                // Đảm bảo form được set lại giá trị khi vào chế độ edit
+                                const phoneValue = (user as any).PhoneNumber || (user as any).phoneNumber || user.phone || "";
+                                profileForm.setFieldsValue({
+                                  fullName: user.fullName,
+                                  email: user.email,
+                                  phone: phoneValue,
+                                });
+                                setEditing(true);
+                              }}
                               className="mt-4 bg-blue-600 hover:bg-blue-700"
                             >
                               Chỉnh sửa thông tin
@@ -847,11 +864,13 @@ export default function ProfilePage() {
                             <Form.Item 
                               label="Số điện thoại" 
                               name="phone"
-                              rules={[
-                                { pattern: /^[0-9]{10,11}$/, message: "Số điện thoại phải có 10-11 chữ số!" }
-                              ]}
                             >
-                              <Input size="large" prefix={<PhoneOutlined />} placeholder="Nhập số điện thoại" />
+                              <Input 
+                                size="large" 
+                                prefix={<PhoneOutlined />} 
+                                placeholder="Nhập số điện thoại" 
+                                disabled
+                              />
                             </Form.Item>
                             <Space>
                               <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading} className="bg-blue-600">

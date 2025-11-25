@@ -667,16 +667,39 @@ export default function BookingPage() {
       // Lấy phoneNumber từ form (có thể là phoneNumber hoặc PhoneNumber)
       const phoneNumber = values.phoneNumber || values.PhoneNumber || (user as any)?.phoneNumber || (user as any)?.PhoneNumber || "";
       
+      // Đảm bảo userId là number
+      const userId = Number(user.id || user.userId);
+      if (!userId || isNaN(userId)) {
+        message.error("Không tìm thấy ID người dùng. Vui lòng đăng nhập lại.");
+        setLoading(false);
+        return;
+      }
+      
+      // Đảm bảo carId là number
+      const carIdNum = Number(car.id);
+      if (!carIdNum || isNaN(carIdNum)) {
+        message.error("Thông tin xe không hợp lệ.");
+        setLoading(false);
+        return;
+      }
+      
       const orderData: CreateRentalOrderData = {
         phoneNumber: phoneNumber,
         pickupTime: pickupTime.toISOString(),
         expectedReturnTime: expectedReturnTime.toISOString(),
         withDriver: withDriverValue,
-        userId: user.id,
-        carId: car.id,
+        userId: userId,
+        carId: carIdNum,
         rentalLocationId: values.rentalLocationId,
         orderDate: orderDateISO, // Thời gian khi ấn "Xác nhận"
       };
+      
+      console.log('[Booking] Creating order with data:', {
+        ...orderData,
+        userId: userId,
+        carId: carIdNum,
+        user: { id: user.id, userId: user.userId, email: user.email }
+      });
 
       const response = await rentalOrderApi.create(orderData);
 

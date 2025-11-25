@@ -696,9 +696,70 @@ export const authApi = {
 
   // Lấy thông tin user hiện tại
   // ✅ TẠM TẮT: Không gọi API, chỉ lấy từ localStorage
-  getProfile: () => {
-    // Tạm thời không gọi API, chỉ lấy từ localStorage
+  getProfile: async () => {
+    // Thử lấy từ localStorage trước
     const userStr = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
+    if (userStr) {
+      try {
+        const userData = JSON.parse(userStr);
+        // Nếu có phoneNumber/phone trong localStorage, trả về luôn
+        const hasPhone = userData.phoneNumber || userData.PhoneNumber || userData.phone;
+        if (hasPhone) {
+          return Promise.resolve({
+            success: true,
+            data: userData as User,
+          });
+        }
+      } catch (e) {
+        console.warn('[Auth API] Failed to parse user from localStorage:', e);
+      }
+    }
+    
+    // Nếu không có phoneNumber trong localStorage, thử gọi API để lấy profile mới nhất
+    // Thử nhiều endpoint để tương thích với backend
+    const candidates = [
+      '/User/GetById', // Cần userId từ localStorage
+      '/User/GetProfile',
+      '/user/profile',
+      '/auth/profile',
+    ];
+    
+    // Lấy userId từ localStorage nếu có
+    let userId: number | null = null;
+    if (userStr) {
+      try {
+        const userData = JSON.parse(userStr);
+        userId = userData.id || userData.userId;
+      } catch (e) {
+        // Ignore
+      }
+    }
+    
+    // Nếu có userId, thử gọi API với userId
+    if (userId) {
+      try {
+        const res = await apiCall<User>(`/User/GetById?id=${userId}`, { method: 'GET' });
+        if (res.success && res.data) {
+          // Normalize phoneNumber từ API response - lưu cả 3 format để tương thích
+          const phoneValue = res.data.phone || (res.data as any).phoneNumber || (res.data as any).PhoneNumber || "";
+          const normalizedUser = {
+            ...res.data,
+            phone: phoneValue,
+            phoneNumber: phoneValue,
+            PhoneNumber: phoneValue,
+          } as any;
+          // Cập nhật localStorage
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('user', JSON.stringify(normalizedUser));
+          }
+          return { success: true, data: normalizedUser };
+        }
+      } catch (error) {
+        // Continue to fallback
+      }
+    }
+    
+    // Fallback: trả về từ localStorage nếu có (dù không có phoneNumber)
     if (userStr) {
       try {
         const userData = JSON.parse(userStr);
@@ -707,19 +768,15 @@ export const authApi = {
           data: userData as User,
         });
       } catch (e) {
-        console.warn('[Auth API] Failed to parse user from localStorage:', e);
+        // Ignore
       }
     }
+    
     // Nếu không có trong localStorage, return error
     return Promise.resolve({
       success: false,
-      error: 'User not found in localStorage',
+      error: 'User not found',
     });
-    
-    // Code cũ - đã comment để tạm tắt API call
-    // return apiCall<User>('/user/profile', {
-    //   method: 'GET',
-    // });
   },
 
   // Lấy thông tin user theo ID
@@ -736,7 +793,14 @@ export const authApi = {
       try {
         const res = await apiCall<User>(ep, { method: 'GET' });
         if (res.success && res.data) {
-          return res;
+          // Normalize phoneNumber từ API response
+          const normalizedUser = {
+            ...res.data,
+            phone: res.data.phone || (res.data as any).phoneNumber || (res.data as any).PhoneNumber,
+            phoneNumber: (res.data as any).phoneNumber || (res.data as any).PhoneNumber || res.data.phone,
+            PhoneNumber: (res.data as any).PhoneNumber || (res.data as any).phoneNumber || res.data.phone,
+          };
+          return { success: true, data: normalizedUser };
         }
       } catch (error) {
         continue;
