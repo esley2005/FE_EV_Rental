@@ -1989,21 +1989,29 @@ export interface CreateFeedbackData {
   title: string;
   content: string;
   rating: number;
+  userId: number;
   rentalOrderId: number;
 }
 
 export const feedbackApi = {
   // Tạo feedback mới
   create: async (data: CreateFeedbackData) => {
+    console.log('[Feedback API] Creating feedback with data:', data);
+    const requestBody = {
+      title: data.title,
+      content: data.content,
+      rating: data.rating,
+      userId: data.userId,
+      rentalOrderId: data.rentalOrderId,
+    };
+    console.log('[Feedback API] Request body:', requestBody);
+    
     const response = await apiCall<FeedbackData>('/Feedback/Create', {
       method: 'POST',
-      body: JSON.stringify({
-        title: data.title,
-        content: data.content,
-        rating: data.rating,
-        rentalOrderId: data.rentalOrderId,
-      }),
+      body: JSON.stringify(requestBody),
     });
+    
+    console.log('[Feedback API] Response:', response);
     
     // Normalize response nếu cần
     if (response.success && response.data) {
@@ -2122,39 +2130,47 @@ export const feedbackApi = {
     }
   },
 
-  // Lấy feedback theo rentalOrderId (nếu backend có endpoint này)
+  // Lấy feedback theo rentalOrderId
+  // Vì backend có thể không có endpoint này, nên lấy tất cả và filter ở client
   getByRentalOrderId: async (rentalOrderId: number) => {
-    const response = await apiCall<any>(`/Feedback/GetByRentalOrderId?rentalOrderId=${rentalOrderId}`, {
-      method: 'GET',
-      skipAuth: true,
-    });
-    
-    // Normalize response format tương tự getAll
-    if (response.success && response.data) {
-      let feedbacks = response.data;
-      
-      if (feedbacks.$values && Array.isArray(feedbacks.$values)) {
-        feedbacks = feedbacks.$values;
-      } else if (Array.isArray(feedbacks)) {
-        // Giữ nguyên
-      } else if (feedbacks.data) {
-        if (feedbacks.data.$values && Array.isArray(feedbacks.data.$values)) {
-          feedbacks = feedbacks.data.$values;
-        } else if (Array.isArray(feedbacks.data)) {
-          feedbacks = feedbacks.data;
-        }
+    try {
+      // Lấy tất cả feedback
+      const allFeedbacksResponse = await feedbackApi.getAll();
+      if (!allFeedbacksResponse.success || !allFeedbacksResponse.data) {
+        return { success: true, data: [] };
       }
-      
+
+      const allFeedbacks = allFeedbacksResponse.data;
+      if (!Array.isArray(allFeedbacks) || allFeedbacks.length === 0) {
+        return { success: true, data: [] };
+      }
+
+      // Filter feedback có rentalOrderId trùng
+      const filteredFeedbacks = allFeedbacks.filter((fb: FeedbackData) => {
+        return fb.rentalOrderId === rentalOrderId;
+      });
+
       return {
-        ...response,
-        data: Array.isArray(feedbacks) ? feedbacks : []
+        success: true,
+        data: filteredFeedbacks
+      };
+    } catch (error) {
+      console.error('Error getting feedback by rentalOrderId:', error);
+      return {
+        success: false,
+        error: 'Không thể lấy đánh giá cho đơn hàng này',
+        data: []
       };
     }
+  },
+
+  // Xóa feedback
+  delete: async (id: number) => {
+    const response = await apiCall<{ message?: string }>(`/Feedback/Delete/${id}`, {
+      method: 'DELETE',
+    });
     
-    return {
-      ...response,
-      data: []
-    };
+    return response;
   },
 };
 

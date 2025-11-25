@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import { 
-  ShoppingOutlined,
   CalendarOutlined,
   CarOutlined,
   DollarOutlined,
@@ -23,6 +22,7 @@ import {
   IdcardOutlined,
   ReloadOutlined,
   DeleteOutlined,
+  StarOutlined,
 } from "@ant-design/icons";
 import { 
   Card, 
@@ -40,9 +40,14 @@ import {
   notification as antdNotification,
   Popconfirm,
   message,
-  Form
+  Form,
+  Rate,
+  Spin,
+  Avatar
 } from "antd";
-import { rentalOrderApi, carsApi, rentalLocationApi, authApi, driverLicenseApi, citizenIdApi, paymentApi } from "@/services/api";
+import { authUtils } from "@/utils/auth";
+import { rentalOrderApi, carsApi, rentalLocationApi, authApi, driverLicenseApi, citizenIdApi, paymentApi, feedbackApi } from "@/services/api";
+import type { FeedbackData, CreateFeedbackData } from "@/services/api";
 import type { RentalOrderData, RentalLocationData, User, DriverLicenseData, CitizenIdData } from "@/services/api";
 import type { Car } from "@/types/car";
 import dayjs from "dayjs";
@@ -74,6 +79,13 @@ export default function MyBookingsPage() {
   
   // GPLX status: null = chưa có, 0 = đã up (Pending), 1 = đã xác thực (Approved), 2 = bị từ chối (Rejected)
   const [licenseStatus, setLicenseStatus] = useState<number | null>(null);
+  
+  // Feedback state
+  const [feedback, setFeedback] = useState<FeedbackData | null>(null);
+  const [loadingFeedback, setLoadingFeedback] = useState(false);
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  const [deletingFeedback, setDeletingFeedback] = useState(false);
+  const [feedbackForm] = Form.useForm();
 
   useEffect(() => {
     loadUserAndBookings();
@@ -513,6 +525,10 @@ export default function MyBookingsPage() {
       const updatedBooking = bookings.find(b => b.id === selectedBooking.id);
       if (updatedBooking) {
         setSelectedBooking(updatedBooking);
+        // Reload feedback
+        if (updatedBooking.id) {
+          await loadFeedbackForBooking(updatedBooking.id);
+        }
       }
       setTimeout(() => {
         api.success({
@@ -817,6 +833,148 @@ export default function MyBookingsPage() {
   const showBookingDetail = (booking: BookingWithDetails) => {
     setSelectedBooking(booking);
     setDetailModalOpen(true);
+    // Load feedback for this booking (chỉ feedback của user hiện tại)
+    if (booking.id) {
+      loadFeedbackForBooking(booking.id);
+    }
+  };
+
+  // Load feedback for a specific booking (chỉ feedback của user hiện tại)
+  const loadFeedbackForBooking = async (rentalOrderId: number) => {
+    setLoadingFeedback(true);
+    try {
+      const response = await feedbackApi.getByRentalOrderId(rentalOrderId);
+      if (response.success && response.data) {
+        const feedbacksList = Array.isArray(response.data) ? response.data : [];
+        // Lấy feedback đầu tiên (mỗi đơn hàng chỉ có 1 feedback từ user hiện tại)
+        setFeedback(feedbacksList.length > 0 ? feedbacksList[0] : null);
+      } else {
+        setFeedback(null);
+      }
+    } catch (error) {
+      console.error('Error loading feedback:', error);
+      setFeedback(null);
+    } finally {
+      setLoadingFeedback(false);
+    }
+  };
+
+  // Get avatar initial
+  const getAvatarInitial = (name?: string): string => {
+    if (!name) return 'U';
+    const parts = name.trim().split(' ');
+    if (parts.length > 0) {
+      return parts[parts.length - 1].charAt(0).toUpperCase();
+    }
+    return name.charAt(0).toUpperCase();
+  };
+
+  // Kiểm tra có thể xóa feedback không
+  const canDeleteFeedback = (feedback: FeedbackData | null): boolean => {
+    if (!feedback || !feedback.id) return false;
+    if (!user) return false;
+    
+    // Admin và Staff có thể xóa bất kỳ feedback nào
+    if (authUtils.isAdmin() || authUtils.isStaff()) {
+      return true;
+    }
+    
+    // Customer chỉ có thể xóa feedback của chính mình
+    // Vì feedback này được load từ rentalOrderId của user hiện tại, nên có thể xóa
+    return true;
+  };
+
+  // Xóa feedback
+  const handleDeleteFeedback = async () => {
+    if (!feedback?.id) return;
+    
+    setDeletingFeedback(true);
+    try {
+      const response = await feedbackApi.delete(feedback.id);
+      
+      if (response.success) {
+        message.success('Đã xóa đánh giá thành công!');
+        setFeedback(null);
+        // Reload feedback
+        if (selectedBooking?.id) {
+          await loadFeedbackForBooking(selectedBooking.id);
+        }
+      } else {
+        message.error(response.error || 'Không thể xóa đánh giá. Vui lòng thử lại!');
+      }
+    } catch (error) {
+      console.error('Error deleting feedback:', error);
+      message.error('Có lỗi xảy ra khi xóa đánh giá. Vui lòng thử lại!');
+    } finally {
+      setDeletingFeedback(false);
+    }
+  };
+
+  // Submit feedback
+  const handleSubmitFeedback = async (values: { title: string; content: string; rating: number }) => {
+    console.log('[Feedback] handleSubmitFeedback called with values:', values);
+    console.log('[Feedback] Current user:', user);
+    
+    if (!selectedBooking?.id) {
+      console.error('[Feedback] No selectedBooking.id');
+      message.error('Không tìm thấy thông tin đơn hàng');
+      return;
+    }
+
+    // Lấy userId từ user object (có thể là id hoặc userId từ backend)
+    const userAny = user as any; // Backend có thể trả về id hoặc userId
+    const userId = userAny?.id || userAny?.userId;
+    if (!userId || (typeof userId !== 'number' && typeof userId !== 'string')) {
+      console.error('[Feedback] No valid userId. User object:', user);
+      message.error('Vui lòng đăng nhập để gửi đánh giá');
+      return;
+    }
+
+    // Đảm bảo userId là number
+    const userIdNumber = typeof userId === 'string' ? parseInt(userId) : userId;
+    if (isNaN(userIdNumber)) {
+      console.error('[Feedback] Invalid userId:', userId);
+      message.error('Thông tin người dùng không hợp lệ');
+      return;
+    }
+
+    console.log('[Feedback] Submitting feedback with:', {
+      title: values.title.trim(),
+      content: values.content.trim(),
+      rating: values.rating,
+      userId: userIdNumber,
+      rentalOrderId: selectedBooking.id,
+    });
+
+    setSubmittingFeedback(true);
+    try {
+      const feedbackData: CreateFeedbackData = {
+        title: values.title.trim(),
+        content: values.content.trim(),
+        rating: values.rating,
+        userId: userIdNumber,
+        rentalOrderId: selectedBooking.id,
+      };
+
+      console.log('[Feedback] Calling feedbackApi.create with:', feedbackData);
+      const response = await feedbackApi.create(feedbackData);
+      console.log('[Feedback] API response:', response);
+
+      if (response.success) {
+        message.success('Cảm ơn bạn đã đánh giá!');
+        feedbackForm.resetFields();
+        // Reload feedback (chỉ feedback của user)
+        await loadFeedbackForBooking(selectedBooking.id);
+      } else {
+        console.error('[Feedback] API error:', response.error);
+        message.error(response.error || 'Không thể gửi đánh giá. Vui lòng thử lại!');
+      }
+    } catch (error) {
+      console.error('[Feedback] Exception:', error);
+      message.error('Có lỗi xảy ra khi gửi đánh giá. Vui lòng thử lại!');
+    } finally {
+      setSubmittingFeedback(false);
+    }
   };
 
   const formatCurrency = (amount?: number) => {
@@ -827,6 +985,58 @@ export default function MyBookingsPage() {
   // Sử dụng utility function từ dateFormat.ts để đảm bảo timezone đúng
   const formatDate = (dateStr?: string) => formatDateTime(dateStr);
   const formatDateTimeFull = (dateStr?: string) => formatDateTime(dateStr, "DD/MM/YYYY HH:mm");
+  
+  // Format date for feedback (relative time)
+  const formatFeedbackDate = (dateString?: string) => {
+    if (!dateString) return "";
+    try {
+      const date = dayjs(dateString);
+      const now = dayjs();
+      const diffMinutes = now.diff(date, 'minute');
+      const diffHours = now.diff(date, 'hour');
+      const diffDays = now.diff(date, 'day');
+      const diffMonths = now.diff(date, 'month');
+      const diffYears = now.diff(date, 'year');
+
+      // Nếu quá 1 năm, hiển thị ngày/tháng/năm
+      if (diffYears > 0) {
+        return date.format("DD/MM/YYYY");
+      }
+
+      // Nếu quá 1 tháng, hiển thị ngày/tháng/năm
+      if (diffMonths > 0) {
+        return date.format("DD/MM/YYYY");
+      }
+
+      // Nếu quá 7 ngày, hiển thị ngày/tháng/năm
+      if (diffDays > 7) {
+        return date.format("DD/MM/YYYY");
+      }
+
+      // Nếu quá 1 ngày, hiển thị "X ngày trước"
+      if (diffDays > 0) {
+        return `${diffDays} ngày trước`;
+      }
+
+      // Nếu quá 1 giờ, hiển thị "X giờ Y phút trước" hoặc "X giờ trước"
+      if (diffHours > 0) {
+        const remainingMinutes = diffMinutes % 60;
+        if (remainingMinutes > 0) {
+          return `${diffHours} giờ ${remainingMinutes} phút trước`;
+        }
+        return `${diffHours} giờ trước`;
+      }
+
+      // Nếu dưới 1 giờ, hiển thị "X phút trước" hoặc "Vừa xong"
+      if (diffMinutes > 0) {
+        return `${diffMinutes} phút trước`;
+      }
+
+      return "Vừa xong";
+    } catch (e: unknown) {
+      return dateString;
+    }
+  };
 
   const calculateDays = (startDate?: string, endDate?: string) => {
     if (!startDate || !endDate) return 0;
@@ -1184,7 +1394,11 @@ export default function MyBookingsPage() {
           </div>
         }
         open={detailModalOpen}
-        onCancel={() => setDetailModalOpen(false)}
+        onCancel={() => {
+          setDetailModalOpen(false);
+          setFeedback(null);
+          feedbackForm.resetFields();
+        }}
         footer={[
           selectedBooking && canPayDeposit(selectedBooking) && (
             <Button
@@ -1480,6 +1694,176 @@ export default function MyBookingsPage() {
                 ]}
               />
             </Card>
+
+            {/* Feedback Section - Only show when order is completed */}
+            {normalizeStatus(selectedBooking.status) === 'completed' && (
+              <Card 
+                title={
+                  <div className="flex items-center gap-2">
+                    <StarOutlined className="text-yellow-500" />
+                    <span>Đánh giá</span>
+                  </div>
+                } 
+                size="small"
+              >
+                {loadingFeedback ? (
+                  <div className="flex justify-center py-4">
+                    <Spin />
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Feedback Card - Chỉ hiển thị feedback của user hiện tại */}
+                    {feedback ? (
+                      <div className="p-4 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition-shadow">
+                        <div className="flex items-start gap-3">
+                          <Avatar 
+                            size={40}
+                            style={{ backgroundColor: '#22c55e' }}
+                          >
+                            {getAvatarInitial(feedback.userFullName || user?.fullName)}
+                          </Avatar>
+                          <div className="flex-1">
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1">
+                                <div className="font-semibold text-gray-900 mb-1">
+                                  {feedback.userFullName || user?.fullName || 'Bạn'}
+                                </div>
+                                <Rate disabled value={feedback.rating} className="text-xs" style={{ fontSize: '14px' }} />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {feedback.createdAt && (
+                                  <span className="text-xs text-gray-500 whitespace-nowrap ml-2">
+                                    {formatFeedbackDate(feedback.createdAt)}
+                                  </span>
+                                )}
+                                {canDeleteFeedback(feedback) && (
+                                  <Popconfirm
+                                    title="Xóa đánh giá"
+                                    description="Bạn có chắc chắn muốn xóa đánh giá này không?"
+                                    onConfirm={handleDeleteFeedback}
+                                    okText="Xóa"
+                                    cancelText="Hủy"
+                                    okButtonProps={{ danger: true }}
+                                  >
+                                    <Button
+                                      type="text"
+                                      danger
+                                      size="small"
+                                      icon={<DeleteOutlined />}
+                                      loading={deletingFeedback}
+                                      className="text-red-500 hover:text-red-700"
+                                    />
+                                  </Popconfirm>
+                                )}
+                              </div>
+                            </div>
+                            {feedback.title && (
+                              <h4 className="font-semibold text-gray-900 mb-1 text-sm">
+                                {feedback.title}
+                              </h4>
+                            )}
+                            {feedback.content && (
+                              <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap mt-1">
+                                {feedback.content}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-4 text-gray-500">
+                        Chưa có đánh giá nào
+                      </div>
+                    )}
+
+                    {/* Feedback Form - Only show if user hasn't submitted feedback */}
+                    {!feedback && (
+                      <div className="space-y-4 mt-4 pt-4 border-t">
+                    <Alert
+                      message="Hãy chia sẻ trải nghiệm của bạn"
+                      description="Đánh giá của bạn sẽ giúp chúng tôi cải thiện dịch vụ tốt hơn."
+                      type="info"
+                      showIcon
+                      className="mb-4"
+                    />
+                    <Form
+                      form={feedbackForm}
+                      layout="vertical"
+                      onFinish={handleSubmitFeedback}
+                      onFinishFailed={(errorInfo: any) => {
+                        console.log('[Feedback] Form validation failed:', errorInfo);
+                        message.error('Vui lòng điền đầy đủ thông tin!');
+                      }}
+                    >
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Form.Item
+                          label={<span className="text-sm font-medium">Tiêu đề</span>}
+                          name="title"
+                          rules={[
+                            { required: true, message: "Vui lòng nhập tiêu đề!" },
+                            { max: 200, message: "Tiêu đề không được vượt quá 200 ký tự!" },
+                          ]}
+                        >
+                          <Input
+                            placeholder="Tiêu Đề Của Bài Đánh Giá"
+                            size="middle"
+                            maxLength={200}
+                          />
+                        </Form.Item>
+
+                        <Form.Item
+                          label={<span className="text-sm font-medium">Đánh giá sao</span>}
+                          name="rating"
+                          rules={[
+                            { required: true, message: "Vui lòng chọn số sao đánh giá!" },
+                          ]}
+                        >
+                          <Rate allowClear className="text-lg" />
+                        </Form.Item>
+                      </div>
+
+                      <Form.Item
+                        label={<span className="text-sm font-medium">Nội dung đánh giá</span>}
+                        name="content"
+                        rules={[
+                          { required: true, message: "Vui lòng nhập nội dung đánh giá!" },
+                          { min: 10, message: "Nội dung phải có ít nhất 10 ký tự!" },
+                          { max: 1000, message: "Nội dung không được vượt quá 1000 ký tự!" },
+                        ]}
+                      >
+                        <Input.TextArea
+                          placeholder="Chia sẻ trải nghiệm của bạn về xe và dịch vụ..."
+                          rows={4}
+                          maxLength={1000}
+                          showCount
+                        />
+                      </Form.Item>
+
+                      <Form.Item>
+                        <Button
+                          type="primary"
+                          htmlType="submit"
+                          loading={submittingFeedback}
+                          disabled={submittingFeedback}
+                          icon={<StarOutlined />}
+                          className="bg-blue-600 hover:bg-blue-700"
+                          size="large"
+                          onClick={() => {
+                            console.log('[Feedback] Button clicked');
+                            console.log('[Feedback] Form values:', feedbackForm.getFieldsValue());
+                            console.log('[Feedback] Form errors:', feedbackForm.getFieldsError());
+                          }}
+                        >
+                          {submittingFeedback ? 'Đang gửi...' : 'Gửi đánh giá'}
+                        </Button>
+                      </Form.Item>
+                    </Form>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Card>
+            )}
 
           </div>
         )}
