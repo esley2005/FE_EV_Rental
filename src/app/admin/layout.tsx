@@ -37,6 +37,7 @@ import RentalHistory from "@/components/admin/RentalHistory";
 import CarIssueReports from "@/components/admin/CarIssueReports";
 import RentalOrdersByLocation from "@/components/admin/RentalOrdersByLocation";
 import OrderDetailsWithPayments from "@/components/admin/OrderDetailsWithPayments";
+import CarUtilizationRate from "@/components/admin/CarUtilizationRate";
 
 
 const { Header, Sider, Content, Footer } = Layout;
@@ -169,7 +170,7 @@ export default function AdminLayout() {
           case "1":
             return <RevenueByLocation />;
           case "2":
-            return <AIAnalysis variant="car-usage" />;
+            return <CarUtilizationRate />;
           case "3":
             return <AIAnalysis />;
           default:
