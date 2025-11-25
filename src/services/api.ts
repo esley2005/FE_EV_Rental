@@ -1333,6 +1333,7 @@ export const rentalOrderApi = {
       method: 'GET',
     }),
 
+
   // Lấy đơn hàng kèm payments theo orderId
   getByOrderWithPayments: (orderId: number) =>
     apiCall<{
@@ -1740,6 +1741,190 @@ export const carReturnHistoryApi = {
         OrderId: data.orderId,
       }),
     });
+  },
+};
+
+// Feedback API
+export interface FeedbackData {
+  id?: number;
+  title: string;
+  content: string;
+  rating: number; // 1-5
+  createdAt?: string;
+  userFullName?: string;
+  rentalOrderId: number;
+}
+
+export interface CreateFeedbackData {
+  title: string;
+  content: string;
+  rating: number;
+  rentalOrderId: number;
+}
+
+export const feedbackApi = {
+  // Tạo feedback mới
+  create: async (data: CreateFeedbackData) => {
+    const response = await apiCall<FeedbackData>('/Feedback/Create', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: data.title,
+        content: data.content,
+        rating: data.rating,
+        rentalOrderId: data.rentalOrderId,
+      }),
+    });
+    
+    // Normalize response nếu cần
+    if (response.success && response.data) {
+      return {
+        ...response,
+        data: response.data
+      };
+    }
+    
+    return response;
+  },
+
+  // Lấy feedback theo ID
+  getById: async (id: number) => {
+    const response = await apiCall<FeedbackData>(`/Feedback/${id}`, {
+      method: 'GET',
+      skipAuth: true,
+    });
+    
+    return response;
+  },
+
+  // Lấy tất cả feedback
+  getAll: async () => {
+    const response = await apiCall<any>('/Feedback/GetAll', {
+      method: 'GET',
+      skipAuth: true, // Có thể public để mọi người xem feedback
+    });
+    
+    // Normalize response format: { isSuccess: true, data: { $values: [...] } }
+    if (response.success && response.data) {
+      let feedbacks = response.data;
+      
+      // Nếu có $values, extract ra
+      if (feedbacks.$values && Array.isArray(feedbacks.$values)) {
+        feedbacks = feedbacks.$values;
+      }
+      // Nếu là array trực tiếp
+      else if (Array.isArray(feedbacks)) {
+        // Giữ nguyên
+      }
+      // Nếu có data bên trong
+      else if (feedbacks.data) {
+        if (feedbacks.data.$values && Array.isArray(feedbacks.data.$values)) {
+          feedbacks = feedbacks.data.$values;
+        } else if (Array.isArray(feedbacks.data)) {
+          feedbacks = feedbacks.data;
+        }
+      }
+      
+      return {
+        ...response,
+        data: Array.isArray(feedbacks) ? feedbacks : []
+      };
+    }
+    
+    return {
+      ...response,
+      data: []
+    };
+  },
+
+  // Lấy feedback theo carId (thông qua rentalOrder)
+  getByCarId: async (carId: number) => {
+    try {
+      // Lấy tất cả feedback
+      const allFeedbacksResponse = await feedbackApi.getAll();
+      if (!allFeedbacksResponse.success || !allFeedbacksResponse.data) {
+        return { success: true, data: [] };
+      }
+
+      const allFeedbacks = allFeedbacksResponse.data;
+      if (!Array.isArray(allFeedbacks) || allFeedbacks.length === 0) {
+        return { success: true, data: [] };
+      }
+
+      // Lấy carId từ mỗi rentalOrder của feedback
+      const feedbacksWithCarId = await Promise.all(
+        allFeedbacks.map(async (fb: FeedbackData) => {
+          if (!fb.rentalOrderId) return null;
+          
+          try {
+            // Lấy rentalOrder theo ID để lấy carId
+            const orderResponse = await rentalOrderApi.getById(fb.rentalOrderId);
+            if (orderResponse.success && orderResponse.data) {
+              const order = orderResponse.data as any;
+              const orderCarId = order.carId || order.CarId;
+              return {
+                feedback: fb,
+                carId: orderCarId
+              };
+            }
+          } catch (error) {
+            console.error(`Error getting rentalOrder ${fb.rentalOrderId}:`, error);
+          }
+          return null;
+        })
+      );
+
+      // Filter feedback có carId trùng với carId của xe hiện tại
+      const filteredFeedbacks = feedbacksWithCarId
+        .filter((item: any) => item && item.carId === carId)
+        .map((item: any) => item.feedback);
+
+      return {
+        success: true,
+        data: filteredFeedbacks
+      };
+    } catch (error) {
+      console.error('Error getting feedback by carId:', error);
+      return {
+        success: false,
+        error: 'Không thể lấy đánh giá cho xe này',
+        data: []
+      };
+    }
+  },
+
+  // Lấy feedback theo rentalOrderId (nếu backend có endpoint này)
+  getByRentalOrderId: async (rentalOrderId: number) => {
+    const response = await apiCall<any>(`/Feedback/GetByRentalOrderId?rentalOrderId=${rentalOrderId}`, {
+      method: 'GET',
+      skipAuth: true,
+    });
+    
+    // Normalize response format tương tự getAll
+    if (response.success && response.data) {
+      let feedbacks = response.data;
+      
+      if (feedbacks.$values && Array.isArray(feedbacks.$values)) {
+        feedbacks = feedbacks.$values;
+      } else if (Array.isArray(feedbacks)) {
+        // Giữ nguyên
+      } else if (feedbacks.data) {
+        if (feedbacks.data.$values && Array.isArray(feedbacks.data.$values)) {
+          feedbacks = feedbacks.data.$values;
+        } else if (Array.isArray(feedbacks.data)) {
+          feedbacks = feedbacks.data;
+        }
+      }
+      
+      return {
+        ...response,
+        data: Array.isArray(feedbacks) ? feedbacks : []
+      };
+    }
+    
+    return {
+      ...response,
+      data: []
+    };
   },
 };
 
