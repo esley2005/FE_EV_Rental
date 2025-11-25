@@ -251,37 +251,164 @@ export default function CustomerList() {
           customerLicenses = [licenseByUserIdRes.data];
         }
       } catch (e) {
-        const ordersResponse = await rentalOrderApi.getByUserId(customer.id);
-        if (ordersResponse.success && ordersResponse.data) {
-          const orders = Array.isArray(ordersResponse.data)
-            ? ordersResponse.data
-            : (ordersResponse.data as any)?.$values || [];
-          
-          const orderIds = orders.map((order: RentalOrderData) => order.id);
-
-          const [licenseRes, citizenRes] = await Promise.all([
-            driverLicenseApi.getAll(),
-            citizenIdApi.getAll(),
-          ]);
-
-          if (licenseRes.success && licenseRes.data) {
-            const allLicenses = Array.isArray(licenseRes.data)
-              ? licenseRes.data
-              : (licenseRes.data as any)?.$values || [];
-            customerLicenses = allLicenses.filter((license: DriverLicenseData) =>
-              license.rentalOrderId && orderIds.includes(license.rentalOrderId)
-            );
-          }
-
-          if (citizenRes.success && citizenRes.data) {
-            const allCitizenIds = Array.isArray(citizenRes.data)
-              ? citizenRes.data
-              : (citizenRes.data as any)?.$values || [];
-            customerCitizenIds = allCitizenIds.filter((citizenId: CitizenIdData) =>
-              citizenId.rentalOrderId && orderIds.includes(citizenId.rentalOrderId)
-            );
+        // Fallback: tìm theo rentalOrderId
+      }
+      
+      // Thử lấy CitizenId theo userId trước (giống như GPLX)
+      try {
+        const citizenIdByUserIdRes = await citizenIdApi.getByUserId(customer.id);
+        if (citizenIdByUserIdRes.success && citizenIdByUserIdRes.data) {
+          // Xử lý response format: { isSuccess: true, data: { id, name, citizenIdNumber, ... } }
+          const data = citizenIdByUserIdRes.data;
+          if (data && ((data as any).id || (data as any).citizenIdNumber || (data as any).CitizenIdNumber)) {
+            const statusValue = (data as any).status || (data as any).Status;
+            const statusStr = statusValue !== undefined && statusValue !== null 
+              ? String(statusValue) 
+              : '0';
+            customerCitizenIds = [{
+              id: (data as any).id || (data as any).Id,
+              name: (data as any).name || (data as any).Name || customer.fullName || '',
+              citizenIdNumber: (data as any).citizenIdNumber || (data as any).CitizenIdNumber || '',
+              birthDate: (data as any).birthDate || (data as any).BirthDate || '',
+              imageUrl: (data as any).imageUrl || (data as any).ImageUrl || '',
+              imageUrl2: (data as any).imageUrl2 || (data as any).ImageUrl2 || '',
+              status: statusStr,
+              createdAt: (data as any).createdAt || (data as any).CreatedAt,
+              updatedAt: (data as any).updatedAt || (data as any).UpdatedAt,
+              rentalOrderId: (data as any).rentalOrderId || (data as any).RentalOrderId || undefined,
+            } as CitizenIdData];
           }
         }
+      } catch (e) {
+        // Nếu getByUserId không tồn tại hoặc fail, fallback về getAll()
+        console.log('getByUserId failed, trying getAll:', e);
+      }
+      
+      // Nếu chưa có CitizenId, lấy tất cả và filter theo userId hoặc rentalOrderId
+      if (customerCitizenIds.length === 0) {
+        try {
+          const [citizenRes, ordersResponse] = await Promise.all([
+            citizenIdApi.getAll(),
+            rentalOrderApi.getByUserId(customer.id).catch(() => ({ success: false, data: null })),
+          ]);
+
+          if (citizenRes.success && citizenRes.data) {
+            let allCitizenIds: any[] = [];
+            
+            // Xử lý nhiều format response: { isSuccess: true, data: { $values: [...] } }
+            let rawData = citizenRes.data;
+            
+            // Nếu có data.data (nested), extract ra
+            if ((rawData as any)?.data && typeof (rawData as any).data === 'object') {
+              rawData = (rawData as any).data;
+            }
+            
+            // Xử lý $values
+            if ((rawData as any)?.$values && Array.isArray((rawData as any).$values)) {
+              allCitizenIds = (rawData as any).$values;
+            } else if (Array.isArray(rawData)) {
+              allCitizenIds = rawData;
+            } else if (typeof rawData === 'object' && rawData !== null) {
+              // Nếu là single object, convert thành array
+              allCitizenIds = [rawData];
+            }
+            
+            // Normalize và filter theo userId
+            const normalizedCitizenIds = allCitizenIds.map((ci: any) => {
+              const statusValue = ci.status || ci.Status;
+              const statusStr = statusValue !== undefined && statusValue !== null 
+                ? String(statusValue) 
+                : '0';
+              return {
+                id: ci.id || ci.Id,
+                name: ci.name || ci.Name || '',
+                citizenIdNumber: ci.citizenIdNumber || ci.CitizenIdNumber || '',
+                birthDate: ci.birthDate || ci.BirthDate || '',
+                imageUrl: ci.imageUrl || ci.ImageUrl || '',
+                imageUrl2: ci.imageUrl2 || ci.ImageUrl2 || '',
+                status: statusStr,
+                createdAt: ci.createdAt || ci.CreatedAt,
+                updatedAt: ci.updatedAt || ci.UpdatedAt,
+                rentalOrderId: ci.rentalOrderId || ci.RentalOrderId || undefined,
+              } as CitizenIdData;
+            });
+            
+            // Filter theo userId trước (nếu có)
+            const customerId = customer.id || (customer as any).userId;
+            const byUserId = normalizedCitizenIds.filter((citizenId: any) => {
+              const citizenUserId = (citizenId as any).userId || (citizenId as any).UserId;
+              return citizenUserId === customerId || Number(citizenUserId) === Number(customerId);
+            });
+            
+            if (byUserId.length > 0) {
+              customerCitizenIds = byUserId;
+            } else if (ordersResponse.success && ordersResponse.data) {
+              // Nếu không có theo userId, filter theo rentalOrderId
+              const orders = Array.isArray(ordersResponse.data)
+                ? ordersResponse.data
+                : (ordersResponse.data as any)?.$values || [];
+              const orderIds = orders.map((order: RentalOrderData) => order.id);
+              
+              customerCitizenIds = normalizedCitizenIds.filter((citizenId: any) =>
+                (citizenId as any).rentalOrderId && orderIds.includes((citizenId as any).rentalOrderId)
+              );
+            }
+          }
+          
+          // Nếu vẫn chưa có license, thử tìm theo rentalOrderId
+          if (customerLicenses.length === 0 && ordersResponse.success && ordersResponse.data) {
+            const orders = Array.isArray(ordersResponse.data)
+              ? ordersResponse.data
+              : (ordersResponse.data as any)?.$values || [];
+            const orderIds = orders.map((order: RentalOrderData) => order.id);
+            
+            const licenseRes = await driverLicenseApi.getAll();
+            if (licenseRes.success && licenseRes.data) {
+              const allLicenses = Array.isArray(licenseRes.data)
+                ? licenseRes.data
+                : (licenseRes.data as any)?.$values || [];
+              customerLicenses = allLicenses.filter((license: DriverLicenseData) =>
+                license.rentalOrderId && orderIds.includes(license.rentalOrderId)
+              );
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to load citizen IDs from getAll:', e);
+        }
+      }
+
+      // Kiểm tra citizenIdNumber từ user profile nếu không có record trong DB
+      // Lấy từ customer object hoặc reload từ API
+      let citizenIdNumber = (customer as any).citizenIdNumber || (customer as any).CitizenIdNumber;
+      let birthDate = (customer as any).birthDate || (customer as any).BirthDate;
+      
+      // Nếu không có trong customer object, thử lấy từ API
+      if (!citizenIdNumber || !birthDate) {
+        try {
+          const userProfileRes = await authApi.getProfileById(customer.id);
+          if (userProfileRes.success && userProfileRes.data) {
+            citizenIdNumber = citizenIdNumber || (userProfileRes.data as any).citizenIdNumber || (userProfileRes.data as any).CitizenIdNumber;
+            birthDate = birthDate || (userProfileRes.data as any).birthDate || (userProfileRes.data as any).BirthDate;
+          }
+        } catch (e) {
+          console.warn('Failed to load user profile for citizenIdNumber/birthDate:', e);
+        }
+      }
+      
+      if (citizenIdNumber && customerCitizenIds.length === 0) {
+        // Tạo record ảo từ user profile để hiển thị
+        const virtualCitizenId: CitizenIdData = {
+          id: 0, // ID ảo, sẽ không có trong DB
+          name: customer.fullName || '',
+          citizenIdNumber: citizenIdNumber,
+          birthDate: birthDate || '',
+          imageUrl: '',
+          imageUrl2: '',
+          status: '0', // Mặc định là Pending (chờ xác thực)
+          rentalOrderId: undefined,
+          createdAt: customer.createdAt || new Date().toISOString(),
+        };
+        customerCitizenIds = [virtualCitizenId];
       }
 
       setDriverLicenses(customerLicenses);
@@ -405,6 +532,99 @@ export default function CustomerList() {
       }
     } catch (error) {
       console.error("Verify citizen ID error:", error);
+      api.error({
+        message: "Có lỗi xảy ra",
+        description: "Không thể cập nhật trạng thái CCCD. Vui lòng thử lại!",
+        placement: "topRight",
+        icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+      });
+    } finally {
+      setLoadingDocuments(false);
+    }
+  };
+
+  const handleVerifyVirtualCitizenId = async (citizenId: CitizenIdData, status: 0 | 1 | 2) => {
+    setLoadingDocuments(true);
+    try {
+      if (!selectedCustomer) {
+        api.error({
+          message: "Lỗi",
+          description: "Không tìm thấy thông tin khách hàng!",
+          placement: "topRight",
+          icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+        });
+        setLoadingDocuments(false);
+        return;
+      }
+
+      // Tạo record mới trong DB với status tương ứng
+      const createData: CitizenIdData = {
+        name: citizenId.name || selectedCustomer.fullName || '',
+        citizenIdNumber: citizenId.citizenIdNumber || '',
+        birthDate: citizenId.birthDate || null,
+        imageUrl: citizenId.imageUrl || '',
+        imageUrl2: citizenId.imageUrl2 || '',
+        rentalOrderId: 0, // Không có order
+        userId: selectedCustomer.id,
+      };
+
+      // Thử tạo record mới
+      const createResponse = await citizenIdApi.upload(createData);
+      
+      if (createResponse.success) {
+        // Sau khi tạo, reload documents để lấy ID mới
+        await loadCustomerDocuments(selectedCustomer);
+        
+        // Đợi một chút để DB cập nhật, sau đó cập nhật status
+        setTimeout(async () => {
+          await loadCustomerDocuments(selectedCustomer);
+          // Tìm record mới tạo và cập nhật status
+          const reloadedCitizenIds = [...citizenIds];
+          const newRecord = reloadedCitizenIds.find(ci => 
+            ci.citizenIdNumber === citizenId.citizenIdNumber && ci.id && ci.id > 0
+          );
+          if (newRecord) {
+            await handleVerifyCitizenId(newRecord.id, status);
+          } else {
+            // Nếu không tìm thấy, chỉ cập nhật local state
+            const updatedCitizenIds = citizenIds.map(ci => {
+              if (ci.citizenIdNumber === citizenId.citizenIdNumber && (ci.id === 0 || !ci.id)) {
+                return { ...ci, status: String(status) };
+              }
+              return ci;
+            });
+            setCitizenIds(updatedCitizenIds);
+            const statusText = status === 1 ? "xác thực" : status === 2 ? "từ chối" : "chờ xác thực";
+            api.success({
+              message: `Cập nhật trạng thái CCCD thành công`,
+              description: `CCCD đã được ${statusText}.`,
+              placement: "topRight",
+              icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
+            });
+          }
+        }, 1000);
+      } else {
+        // Nếu không tạo được, chỉ cập nhật local state
+        const statusText = status === 1 ? "xác thực" : status === 2 ? "từ chối" : "chờ xác thực";
+        api.warning({
+          message: `Cập nhật trạng thái CCCD`,
+          description: `CCCD đã được đánh dấu ${statusText} (chưa lưu vào DB).`,
+          placement: "topRight",
+          icon: <CheckCircleOutlined style={{ color: "#faad14" }} />,
+        });
+        
+        // Cập nhật local state
+        const updatedCitizenIds = citizenIds.map(ci => {
+          if (ci.citizenIdNumber === citizenId.citizenIdNumber && (ci.id === 0 || !ci.id)) {
+            return { ...ci, status: status };
+          }
+          return ci;
+        });
+        setCitizenIds(updatedCitizenIds);
+        await loadCustomers();
+      }
+    } catch (error) {
+      console.error("Verify virtual citizen ID error:", error);
       api.error({
         message: "Có lỗi xảy ra",
         description: "Không thể cập nhật trạng thái CCCD. Vui lòng thử lại!",
@@ -702,78 +922,110 @@ export default function CustomerList() {
                       <Empty description="Khách hàng chưa upload CCCD" />
                     ) : (
                       <div className="space-y-4">
-                        {citizenIds.map((citizenId, index) => (
+                        {citizenIds.map((citizenId, index) => {
+                          const isVirtual = citizenId.id === 0 || !citizenId.id;
+                          return (
                           <Card key={citizenId.id || index} size="small" className="mb-4">
                             <Descriptions column={2} bordered size="small" className="mb-4">
-                              <Descriptions.Item label="Họ tên">{citizenId.name}</Descriptions.Item>
+                              <Descriptions.Item label="Họ tên">{citizenId.name || selectedCustomer?.fullName || "-"}</Descriptions.Item>
                               <Descriptions.Item label="Số CCCD">
-                                {citizenId.citizenIdNumber}
+                                {citizenId.citizenIdNumber || (citizenId as any).CitizenIdNumber || "-"}
+                              </Descriptions.Item>
+                              <Descriptions.Item label="Số điện thoại">
+                                {selectedCustomer?.phone || (selectedCustomer as any)?.phoneNumber || (selectedCustomer as any)?.PhoneNumber || "-"}
                               </Descriptions.Item>
                               <Descriptions.Item label="Ngày sinh">
-                                {citizenId.birthDate
-                                  ? dayjs(citizenId.birthDate).format("DD/MM/YYYY")
+                                {citizenId.birthDate || (citizenId as any).BirthDate
+                                  ? dayjs(citizenId.birthDate || (citizenId as any).BirthDate).format("DD/MM/YYYY")
                                   : "-"}
                               </Descriptions.Item>
                               <Descriptions.Item label="Trạng thái">
-                                {getStatusTag(citizenId.status)}
+                                {getStatusTag(citizenId.status || (citizenId as any).Status)}
                               </Descriptions.Item>
                               <Descriptions.Item label="Ngày tạo">
-                                {citizenId.createdAt
-                                  ? dayjs(citizenId.createdAt).format("DD/MM/YYYY HH:mm")
+                                {citizenId.createdAt || (citizenId as any).CreatedAt
+                                  ? dayjs(citizenId.createdAt || (citizenId as any).CreatedAt).format("DD/MM/YYYY HH:mm")
                                   : "-"}
                               </Descriptions.Item>
                             </Descriptions>
-                            {citizenId.id && (
-                              <div className="mt-4 flex gap-2">
-                                <Button
-                                  type="primary"
-                                  icon={<CheckCircleOutlined />}
-                                  onClick={() => handleVerifyCitizenId(citizenId.id!, 1)}
-                                  disabled={String(citizenId.status) === '1' || String(citizenId.status).toLowerCase() === 'approved'}
-                                  className="bg-green-600 hover:bg-green-700"
-                                >
-                                  Xác thực
-                                </Button>
-                                <Button
-                                  danger
-                                  icon={<CloseCircleOutlined />}
-                                  onClick={() => handleVerifyCitizenId(citizenId.id!, 2)}
-                                  disabled={String(citizenId.status) === '2' || String(citizenId.status).toLowerCase() === 'rejected'}
-                                >
-                                  Từ chối
-                                </Button>
+                            <div className="mt-4 flex gap-2">
+                              <Button
+                                type="primary"
+                                icon={<CheckCircleOutlined />}
+                                onClick={() => {
+                                  if (isVirtual) {
+                                    handleVerifyVirtualCitizenId(citizenId, 1);
+                                  } else {
+                                    handleVerifyCitizenId(citizenId.id!, 1);
+                                  }
+                                }}
+                                disabled={String(citizenId.status) === '1' || String(citizenId.status).toLowerCase() === 'approved'}
+                                className="bg-green-600 hover:bg-green-700"
+                              >
+                                Xác thực
+                              </Button>
+                              <Button
+                                danger
+                                icon={<CloseCircleOutlined />}
+                                onClick={() => {
+                                  if (isVirtual) {
+                                    handleVerifyVirtualCitizenId(citizenId, 2);
+                                  } else {
+                                    handleVerifyCitizenId(citizenId.id!, 2);
+                                  }
+                                }}
+                                disabled={String(citizenId.status) === '2' || String(citizenId.status).toLowerCase() === 'rejected'}
+                              >
+                                Từ chối
+                              </Button>
+                            </div>
+                            {!isVirtual && (
+                              <div className="grid grid-cols-2 gap-4 mt-4">
+                                <div>
+                                  <Title level={5}>Mặt trước</Title>
+                                  {citizenId.imageUrl ? (
+                                    <Image
+                                      src={citizenId.imageUrl}
+                                      alt="Mặt trước CCCD"
+                                      width="100%"
+                                      style={{ maxHeight: 300, objectFit: "contain" }}
+                                      fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23ddd' width='400' height='300'/%3E%3Ctext fill='%23999' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Image%3C/text%3E%3C/svg%3E"
+                                    />
+                                  ) : (
+                                    <div className="flex items-center justify-center h-[300px] bg-gray-100 rounded">
+                                      <span className="text-gray-400">Chưa có ảnh</span>
+                                    </div>
+                                  )}
+                                </div>
+                                <div>
+                                  <Title level={5}>Mặt sau</Title>
+                                  {citizenId.imageUrl2 ? (
+                                    <Image
+                                      src={citizenId.imageUrl2}
+                                      alt="Mặt sau CCCD"
+                                      width="100%"
+                                      style={{ maxHeight: 300, objectFit: "contain" }}
+                                      fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23ddd' width='400' height='300'/%3E%3Ctext fill='%23999' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Image%3C/text%3E%3C/svg%3E"
+                                    />
+                                  ) : (
+                                    <div className="flex items-center justify-center h-[300px] bg-gray-100 rounded">
+                                      <span className="text-gray-400">Chưa có ảnh</span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             )}
-                            <div className="grid grid-cols-2 gap-4 mt-4">
-                              <div>
-                                <Title level={5}>Mặt trước</Title>
-                                <Image
-                                  src={citizenId.imageUrl}
-                                  alt="Mặt trước CCCD"
-                                  width="100%"
-                                  style={{ maxHeight: 300, objectFit: "contain" }}
-                                  fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23ddd' width='400' height='300'/%3E%3Ctext fill='%23999' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Image%3C/text%3E%3C/svg%3E"
-                                />
+                            {isVirtual && (
+                              <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                                <p className="text-sm text-yellow-800">
+                                  <strong>Lưu ý:</strong> Khách hàng chỉ nhập số CCCD, chưa upload ảnh. 
+                                  Bạn có thể xác thực hoặc từ chối dựa trên số CCCD này.
+                                </p>
                               </div>
-                              <div>
-                                <Title level={5}>Mặt sau</Title>
-                                {citizenId.imageUrl2 ? (
-                                  <Image
-                                    src={citizenId.imageUrl2}
-                                    alt="Mặt sau CCCD"
-                                    width="100%"
-                                    style={{ maxHeight: 300, objectFit: "contain" }}
-                                    fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23ddd' width='400' height='300'/%3E%3Ctext fill='%23999' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Image%3C/text%3E%3C/svg%3E"
-                                  />
-                                ) : (
-                                  <div className="flex items-center justify-center h-[300px] bg-gray-100 rounded">
-                                    <span className="text-gray-400">Chưa có ảnh</span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
+                            )}
                           </Card>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>

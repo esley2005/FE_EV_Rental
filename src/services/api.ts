@@ -150,6 +150,13 @@ export async function apiCall<T>(
 
     // Xử lý 404 Not Found
     if (response.status === 404) {
+      // Bỏ qua log warning cho endpoint GetByCarId vì nó có thể không tồn tại
+      if (endpoint.includes('GetByCarId')) {
+        return {
+          success: false,
+          error: `Endpoint not found: ${endpoint}`
+        };
+      }
       // Chỉ log warning thay vì error để tránh spam console khi thử nhiều endpoint
       logger.warn(`[API] ⚠️ 404 Not Found: ${endpoint} - endpoint may not exist`);
       return {
@@ -1228,16 +1235,98 @@ export const citizenIdApi = {
   },
 
   // Get citizen ID by ID
-  getById: (id: number) =>
-    apiCall<CitizenIdData>(`/CitizenId/GetById?id=${id}`, {
+  getById: async (id: number) => {
+    const response = await apiCall<any>(`/CitizenId/GetById?id=${id}`, {
       method: 'GET',
-    }),
+    });
+    
+    if (response.success && response.data) {
+      // Xử lý format: { isSuccess: true, data: { id, name, citizenIdNumber, ... } }
+      let citizenIdData: CitizenIdData | null = null;
+      
+      if (response.data) {
+        // Nếu data là object trực tiếp
+        if (typeof response.data === 'object' && !Array.isArray(response.data)) {
+          // Kiểm tra xem có phải là CitizenIdData không
+          if (response.data.citizenIdNumber || response.data.CitizenIdNumber || response.data.id) {
+            citizenIdData = {
+              id: response.data.id,
+              userId: response.data.userId || response.data.UserId,
+              name: response.data.name || response.data.Name || '',
+              citizenIdNumber: response.data.citizenIdNumber || response.data.CitizenIdNumber || '',
+              birthDate: response.data.birthDate || response.data.BirthDate || '',
+              imageUrl: response.data.imageUrl || response.data.ImageUrl || '',
+              imageUrl2: response.data.imageUrl2 || response.data.ImageUrl2 || '',
+              status: response.data.status || response.data.Status || '0',
+              createdAt: response.data.createdAt || response.data.CreatedAt,
+              updatedAt: response.data.updatedAt || response.data.UpdatedAt,
+            } as CitizenIdData;
+          }
+        }
+      }
+      
+      if (citizenIdData) {
+        return { success: true, data: citizenIdData };
+      }
+    }
+    
+    return response;
+  },
 
   // Get current user's citizen ID
   getCurrent: () =>
     apiCall<CitizenIdData>('/CitizenId/GetById', {
       method: 'GET',
     }),
+
+  // Get citizen ID by userId
+  getByUserId: async (userId: number) => {
+    // Thử nhiều endpoint có thể có
+    const candidates = [
+      `/CitizenId/GetByUserId?userId=${userId}`,
+      `/CitizenId/GetByUserId/${userId}`,
+      `/CitizenId/GetByUser/${userId}`,
+    ];
+    
+    for (const endpoint of candidates) {
+      try {
+        const res = await apiCall<any>(endpoint, { method: 'GET' });
+        if (res.success) {
+          // Xử lý cấu trúc response: { isSuccess: true, data: { $values: [] } }
+          let citizenIdData: CitizenIdData | null = null;
+          
+          if (res.data) {
+            // Nếu data có $values (mảng)
+            if ((res.data as any).$values && Array.isArray((res.data as any).$values)) {
+              const values = (res.data as any).$values;
+              if (values.length > 0) {
+                citizenIdData = values[0] as CitizenIdData;
+              }
+            } 
+            // Nếu data là object trực tiếp (không có $values)
+            else if (typeof res.data === 'object' && !Array.isArray(res.data)) {
+              // Kiểm tra xem có phải là CitizenIdData không
+              if ((res.data as any).citizenIdNumber || (res.data as any).CitizenIdNumber) {
+                citizenIdData = res.data as CitizenIdData;
+              }
+            }
+            // Nếu data là mảng
+            else if (Array.isArray(res.data) && res.data.length > 0) {
+              citizenIdData = res.data[0] as CitizenIdData;
+            }
+          }
+          
+          if (citizenIdData) {
+            return { success: true, data: citizenIdData };
+          }
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+    
+    return { success: false, error: 'Not found' };
+  },
 
   // Get all citizen IDs (Admin/Staff only)
   getAll: () =>
@@ -1359,10 +1448,24 @@ export const carRentalLocationApi = {
     }),
 
   // Lấy danh sách theo carId (nếu cần)
-  getByCarId: (carId: number) =>
-    apiCall<CarRentalLocationData[]>(`/CarRentalLocation/GetByCarId?carId=${carId}`, {
-      method: 'GET',
-    }),
+  // Endpoint này có thể không tồn tại, nên bỏ qua lỗi 404 và trả về empty array
+  getByCarId: async (carId: number) => {
+    try {
+      const response = await apiCall<CarRentalLocationData[]>(`/CarRentalLocation/GetByCarId?carId=${carId}`, {
+        method: 'GET',
+      });
+      
+      // Nếu response có lỗi 404, trả về empty array
+      if (!response.success && (response.error?.includes('404') || response.error?.includes('not found'))) {
+        return { success: true, data: [] };
+      }
+      
+      return response;
+    } catch (error: any) {
+      // Bỏ qua mọi lỗi và trả về empty array
+      return { success: true, data: [] };
+    }
+  },
 
   // Xóa quan hệ xe - địa điểm
   delete: (id: number) =>

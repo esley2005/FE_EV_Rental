@@ -212,6 +212,7 @@ async function enrichCarWithCoords(car: any) {
       try {
         const locationResponse = await carRentalLocationApi.getByCarId(Number(car.id));
         
+        // Bỏ qua nếu endpoint không tồn tại (404)
         if (locationResponse.success && locationResponse.data) {
           const locationsData = Array.isArray(locationResponse.data)
             ? locationResponse.data

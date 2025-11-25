@@ -30,9 +30,10 @@ import {
   Tag,
   Upload,
   message,
+  DatePicker,
 } from "antd";
-import { authApi, driverLicenseApi } from "@/services/api";
-import type { User, UpdateProfileData, ChangePasswordData, DriverLicenseData } from "@/services/api";
+import { authApi, driverLicenseApi, citizenIdApi } from "@/services/api";
+import type { User, UpdateProfileData, ChangePasswordData, DriverLicenseData, CitizenIdData } from "@/services/api";
 import dayjs from "dayjs";
 
 const { Content } = Layout;
@@ -51,6 +52,8 @@ export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null);
   const [profileForm] = Form.useForm();
   const [passwordForm] = Form.useForm();
+  const [citizenIdForm] = Form.useForm();
+  const [editingCitizenId, setEditingCitizenId] = useState(false);
   
   // State cho xác nhận qua email/OTP
   const [useEmailVerification, setUseEmailVerification] = useState(false);
@@ -89,30 +92,72 @@ export default function ProfilePage() {
           return;
         }
 
-        const userStr = localStorage.getItem("user");
-        if (userStr) {
-          const userData = JSON.parse(userStr);
-          setUser(userData);
-          // Lấy số điện thoại từ nhiều nguồn có thể
-          const phoneValue = (userData as any).PhoneNumber || (userData as any).phoneNumber || userData.phone || "";
-          profileForm.setFieldsValue({
-            fullName: userData.fullName,
-            email: userData.email,
-            phone: phoneValue,
-          });
+        // Kiểm tra xem có thông tin profile đã lưu từ lần đăng nhập trước không
+        let savedProfile = null;
+        try {
+          const savedProfileStr = localStorage.getItem('userProfile');
+          if (savedProfileStr) {
+            savedProfile = JSON.parse(savedProfileStr);
+          }
+        } catch (e) {
+          console.warn('Failed to load saved profile:', e);
         }
 
+        // Luôn gọi API để lấy dữ liệu mới nhất
         const response = await authApi.getProfile();
         if (response.success && 'data' in response && response.data) {
-          setUser(response.data);
-          // Lấy số điện thoại từ nhiều nguồn có thể
-          const phoneValue = (response.data as any).PhoneNumber || (response.data as any).phoneNumber || response.data.phone || "";
+          const userData = response.data;
+          
+          // Normalize phoneNumber và email từ API response, ưu tiên API, fallback về saved profile
+               const phoneValue = (userData as any).phoneNumber || (userData as any).PhoneNumber || (userData as any).phone || (savedProfile as any)?.phone || "";
+               const emailValue = userData.email || (userData as any).Email || (savedProfile as any)?.email || "";
+               const citizenIdValue = (userData as any).citizenIdNumber || (userData as any).CitizenIdNumber || (savedProfile as any)?.citizenIdNumber || "";
+               const birthDateValue = (userData as any).birthDate || (userData as any).BirthDate || (savedProfile as any)?.birthDate || "";
+               
+               // Normalize user data để đảm bảo có đầy đủ các field
+               const normalizedUser = {
+                 ...userData,
+                 email: emailValue,
+                 phone: phoneValue,
+                 phoneNumber: phoneValue,
+                 PhoneNumber: phoneValue,
+                 citizenIdNumber: citizenIdValue,
+                 CitizenIdNumber: citizenIdValue,
+                 birthDate: birthDateValue,
+                 BirthDate: birthDateValue,
+               };
+          
+          setUser(normalizedUser);
+          
           profileForm.setFieldsValue({
-            fullName: response.data.fullName,
-            email: response.data.email,
+            fullName: userData.fullName || normalizedUser.fullName,
+            email: emailValue,
             phone: phoneValue,
           });
-          localStorage.setItem("user", JSON.stringify(response.data));
+          citizenIdForm.setFieldsValue({
+            citizenIdNumber: citizenIdValue,
+            birthDate: birthDateValue ? dayjs(birthDateValue) : null,
+          });
+          
+          // Lưu vào cả user và userProfile
+          localStorage.setItem("user", JSON.stringify(normalizedUser));
+          
+          // Cũng lưu vào userProfile để giữ lại khi logout
+          const profileData = {
+            id: normalizedUser.id || (normalizedUser as any).userId,
+            email: emailValue,
+            fullName: normalizedUser.fullName,
+            phone: phoneValue,
+            phoneNumber: phoneValue,
+            PhoneNumber: phoneValue,
+            citizenIdNumber: citizenIdValue,
+            CitizenIdNumber: citizenIdValue,
+            birthDate: birthDateValue,
+            BirthDate: birthDateValue,
+            role: normalizedUser.role,
+            createdAt: normalizedUser.createdAt,
+          };
+          localStorage.setItem("userProfile", JSON.stringify(profileData));
 
           // tải xác thực căn cước công dân
           if (response.data.citizenIdStatus !== undefined) {
@@ -120,8 +165,8 @@ export default function ProfilePage() {
           }
 
           // Load GPLX từ DB theo userId
-          const userId = response.data.id;
-          if (userId) {
+          const userId = normalizedUser.id || (normalizedUser as any).userId;
+          if (userId && typeof userId === 'number' && !isNaN(userId)) {
             try {
               const licenseResponse = await driverLicenseApi.getByUserId(userId);
               if (licenseResponse.success && licenseResponse.data) {
@@ -173,7 +218,7 @@ export default function ProfilePage() {
     };
 
     loadUserProfile();
-  }, [router, api, profileForm]);
+  }, [router, api, profileForm, citizenIdForm, licenseForm]);
 
   // Helper function to reload license status từ DB
   const reloadLicenseStatus = async () => {
@@ -299,6 +344,161 @@ export default function ProfilePage() {
       api.error({
         message: "Có lỗi xảy ra",
         description: errorMessage,
+        placement: "topRight",
+        icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateCitizenId = async (values: { citizenIdNumber?: string; birthDate?: any }) => {
+    setLoading(true);
+    try {
+      if (!user) {
+        api.error({
+          message: "Lỗi",
+          description: "Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại!",
+          placement: "topRight",
+          icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+        });
+        setLoading(false);
+        return;
+      }
+
+      const citizenIdNumber = values.citizenIdNumber?.trim() || "";
+      if (!citizenIdNumber) {
+        api.error({
+          message: "Lỗi xác thực",
+          description: "Vui lòng nhập số căn cước công dân!",
+          placement: "topRight",
+          icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Format birthDate từ dayjs object sang YYYY-MM-DD
+      const birthDate = values.birthDate 
+        ? (dayjs.isDayjs(values.birthDate) ? values.birthDate.format("YYYY-MM-DD") : values.birthDate)
+        : "";
+
+      // 1. Tạo record CitizenId trong DB
+      const citizenIdData: CitizenIdData = {
+        name: user.fullName || "",
+        citizenIdNumber: citizenIdNumber,
+        birthDate: birthDate,
+        imageUrl: "", // Không có ảnh khi chỉ nhập số
+        imageUrl2: "", // Không có ảnh khi chỉ nhập số
+        rentalOrderId: null, // Không có order
+      };
+
+      const createResponse = await citizenIdApi.upload(citizenIdData);
+
+      // 2. Cập nhật citizenIdNumber vào user profile
+      const existingPhone = (user as any).PhoneNumber || (user as any).phoneNumber || user.phone || "";
+      const updateData: UpdateProfileData = {
+        fullName: user.fullName,
+        phone: existingPhone,
+        citizenIdNumber: citizenIdNumber,
+        userId: user.id,
+      };
+
+      const updateResponse = await authApi.updateProfile(updateData);
+
+      if (createResponse.success || updateResponse.success) {
+        // Reload profile từ API để lấy dữ liệu mới nhất
+        const profileResponse = await authApi.getProfile();
+        let updatedUser = user;
+        
+        if (profileResponse.success && 'data' in profileResponse && profileResponse.data) {
+          updatedUser = profileResponse.data;
+        } else if (updateResponse.data) {
+          updatedUser = updateResponse.data;
+        }
+        
+        if (updatedUser) {
+          // Đảm bảo citizenIdNumber được cập nhật vào user state
+          const citizenIdValue = citizenIdNumber || (updatedUser as any).citizenIdNumber || (updatedUser as any).CitizenIdNumber || "";
+          if (citizenIdValue) {
+            (updatedUser as any).citizenIdNumber = citizenIdValue;
+            (updatedUser as any).CitizenIdNumber = citizenIdValue;
+          }
+          
+          // Lấy birthDate từ form values (ưu tiên), sau đó từ response, cuối cùng từ user state
+          // Ưu tiên birthDate từ form values vì đây là giá trị user vừa nhập
+          const birthDateToSave = birthDate || (updatedUser as any).birthDate || (updatedUser as any).BirthDate || (user as any)?.birthDate || (user as any)?.BirthDate || "";
+          
+          // Normalize user data
+          const normalizedUser = {
+            ...updatedUser,
+            citizenIdNumber: citizenIdValue,
+            CitizenIdNumber: citizenIdValue,
+            birthDate: birthDateToSave,
+            BirthDate: birthDateToSave,
+          };
+          
+          // Cập nhật user state để tag tự động cập nhật
+          setUser(normalizedUser);
+          localStorage.setItem("user", JSON.stringify(normalizedUser));
+          
+          // Cũng cập nhật userProfile để giữ lại khi logout
+          // Lấy birthDate từ userProfile hiện tại nếu có, nếu không thì dùng giá trị mới
+          const currentProfileStr = localStorage.getItem("userProfile");
+          let currentProfile: any = null;
+          if (currentProfileStr) {
+            try {
+              currentProfile = JSON.parse(currentProfileStr);
+            } catch (e) {
+              // Ignore
+            }
+          }
+          
+          const profileData = {
+            id: normalizedUser.id || (normalizedUser as any).userId,
+            email: (normalizedUser as any).email || (normalizedUser as any).Email || (currentProfile as any)?.email,
+            fullName: normalizedUser.fullName,
+            phone: (normalizedUser as any).phone || (normalizedUser as any).phoneNumber || (normalizedUser as any).PhoneNumber || (currentProfile as any)?.phone,
+            phoneNumber: (normalizedUser as any).phoneNumber || (normalizedUser as any).PhoneNumber || (normalizedUser as any).phone || (currentProfile as any)?.phoneNumber,
+            PhoneNumber: (normalizedUser as any).PhoneNumber || (normalizedUser as any).phoneNumber || (normalizedUser as any).phone || (currentProfile as any)?.PhoneNumber,
+            citizenIdNumber: citizenIdValue,
+            CitizenIdNumber: citizenIdValue,
+            birthDate: birthDateToSave || (currentProfile as any)?.birthDate || "",
+            BirthDate: birthDateToSave || (currentProfile as any)?.BirthDate || "",
+            role: normalizedUser.role || (currentProfile as any)?.role,
+            createdAt: normalizedUser.createdAt || (currentProfile as any)?.createdAt,
+          };
+          localStorage.setItem("userProfile", JSON.stringify(profileData));
+          
+          // Cập nhật form values
+          citizenIdForm.setFieldsValue({
+            citizenIdNumber: citizenIdValue,
+            birthDate: birthDateToSave ? dayjs(birthDateToSave) : null,
+          });
+        }
+
+        api.success({
+          message: "Cập nhật thành công!",
+          description: createResponse.success 
+            ? "Số CCCD của bạn đã được tạo và cập nhật thành công."
+            : "Số CCCD của bạn đã được cập nhật.",
+          placement: "topRight",
+          icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
+        });
+        setEditingCitizenId(false);
+      } else {
+        api.error({
+          message: "Cập nhật thất bại",
+          description: createResponse.error || updateResponse.error || "Không thể cập nhật số CCCD.",
+          placement: "topRight",
+          icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+        });
+      }
+    } catch (error) {
+      console.error("Update citizen ID error:", error);
+      api.error({
+        message: "Có lỗi xảy ra",
+        description: "Không thể cập nhật số CCCD. Vui lòng thử lại!",
         placement: "topRight",
         icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
       });
@@ -796,10 +996,12 @@ export default function ProfilePage() {
                         {licenseStatus === 2 && <Tag color="error">GPLX: Bị từ chối</Tag>}
                         {licenseStatus === null && <Tag color="default">GPLX: Chưa gửi</Tag>}
                         
-                        {/* Citizen ID status */}
-                        {citizenIdVerified === true && <Tag color="success">CCCD: Đã xác thực</Tag>}
-                        {citizenIdVerified === false && <Tag color="error">CCCD: Chưa xác thực</Tag>}
-                        {citizenIdVerified === null && <Tag color="default">CCCD: Chưa gửi</Tag>}
+                        {/* Citizen ID status - dựa vào citizenIdNumber */}
+                        {(user as any).citizenIdNumber || (user as any).CitizenIdNumber ? (
+                          <Tag color="warning">CCCD: Đã gửi</Tag>
+                        ) : (
+                          <Tag color="default">CCCD: Chưa gửi</Tag>
+                        )}
                       </div>
                       
                       {/* <Button
@@ -1134,6 +1336,97 @@ export default function ProfilePage() {
                               </Form>
                             )}
                           </div>
+                        )}
+                      </div>
+                    ),
+                  },
+                  {
+                    key: "4",
+                    label: (
+                      <span>
+                        <IdcardOutlined /> Số căn cước công dân
+                      </span>
+                    ),
+                    children: (
+                      <div>
+                        {!editingCitizenId ? (
+                          <>
+                            <Descriptions column={1} bordered>
+                              <Descriptions.Item label="Số CCCD">
+                                {(user as any).citizenIdNumber || (user as any).CitizenIdNumber || "Chưa cập nhật"}
+                              </Descriptions.Item>
+                              <Descriptions.Item label="Ngày tháng năm sinh">
+                                {(() => {
+                                  const birthDateValue = (user as any).birthDate || (user as any).BirthDate;
+                                  if (birthDateValue) {
+                                    try {
+                                      return dayjs(birthDateValue).format("DD/MM/YYYY");
+                                    } catch (e) {
+                                      return birthDateValue;
+                                    }
+                                  }
+                                  return "Chưa cập nhật";
+                                })()}
+                              </Descriptions.Item>
+                            </Descriptions>
+                            <Button
+                              type="primary"
+                              icon={<EditOutlined />}
+                              onClick={() => {
+                                const citizenIdValue = (user as any).citizenIdNumber || (user as any).CitizenIdNumber || "";
+                                const birthDateValue = (user as any).birthDate || (user as any).BirthDate || "";
+                                citizenIdForm.setFieldsValue({
+                                  citizenIdNumber: citizenIdValue,
+                                  birthDate: birthDateValue ? dayjs(birthDateValue) : null,
+                                });
+                                setEditingCitizenId(true);
+                              }}
+                              className="mt-4 bg-blue-600 hover:bg-blue-700"
+                            >
+                              Cập nhật số CCCD
+                            </Button>
+                          </>
+                        ) : (
+                          <Form form={citizenIdForm} layout="vertical" onFinish={handleUpdateCitizenId}>
+                            <Form.Item 
+                              label="Số CCCD" 
+                              name="citizenIdNumber"
+                              rules={[{ required: true, message: "Vui lòng nhập số căn cước công dân!" }]}
+                            >
+                              <Input 
+                                size="large" 
+                                prefix={<IdcardOutlined />} 
+                                placeholder="Nhập số căn cước công dân" 
+                              />
+                            </Form.Item>
+                            <Form.Item 
+                              label="Ngày tháng năm sinh" 
+                              name="birthDate"
+                            >
+                              <DatePicker 
+                                size="large" 
+                                style={{ width: "100%" }}
+                                format="DD/MM/YYYY"
+                                placeholder="Chọn ngày tháng năm sinh"
+                              />
+                            </Form.Item>
+                            <Space>
+                              <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading} className="bg-blue-600">
+                                Lưu thay đổi
+                              </Button>
+                              <Button icon={<CloseOutlined />} onClick={() => { 
+                                const citizenIdValue = (user as any).citizenIdNumber || (user as any).CitizenIdNumber || "";
+                                const birthDateValue = (user as any).birthDate || (user as any).BirthDate || "";
+                                citizenIdForm.setFieldsValue({
+                                  citizenIdNumber: citizenIdValue,
+                                  birthDate: birthDateValue ? dayjs(birthDateValue) : null,
+                                });
+                                setEditingCitizenId(false);
+                              }}>
+                                Hủy
+                              </Button>
+                            </Space>
+                          </Form>
                         )}
                       </div>
                     ),
