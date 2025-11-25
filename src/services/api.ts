@@ -1316,6 +1316,13 @@ export const rentalOrderApi = {
     apiCall<RentalOrderData[]>('/RentalOrder/GetAll', {
       method: 'GET',
     }),
+  
+  // Lấy tất cả đơn hàng (Public - cho phép user gọi để xem booked dates)
+  getAllPublic: () =>
+    apiCall<RentalOrderData[]>('/RentalOrder/GetAll', {
+      method: 'GET',
+      skipAuth: true, // Cho phép user không đăng nhập cũng gọi được
+    }),
 
   // Tạo đơn hàng mới
   create: (orderData: CreateRentalOrderData) => {
