@@ -1648,6 +1648,9 @@ export const paymentApi = {
       `/Payment/CreateMomoPayment?rentalOrderId=${rentalOrderId}&userId=${userId}&amount=${amount}`,
       {
         method: "POST",
+        body: JSON.stringify({
+          ReturnUrl: "http://localhost:3000/checkout/payment-callback-momo",
+        }),
       }
     );
 
