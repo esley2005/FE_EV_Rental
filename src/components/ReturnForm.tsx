@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { Button, Card, Checkbox, Col, Form, Input, Row, Upload, InputNumber, message } from "antd";
+import { Button, Card, Checkbox, Col, Form, Input, Row, Upload, InputNumber, message, Space } from "antd";
 import type { UploadFile } from "antd/es/upload/interface";
 
 type ReturnFormValues = {
@@ -124,7 +124,18 @@ export default function ReturnForm({ carId, customerId, onSubmit, submitting }: 
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item label="% pin còn lại" name="batteryPercent" rules={[{ required: true, message: "% pin là bắt buộc" }]}> 
-              <InputNumber min={0} max={100} addonAfter="%" style={{ width: "100%" }} />
+              <Space.Compact style={{ width: "100%" }}>
+                <InputNumber min={0} max={100} style={{ width: "100%" }} />
+                <span style={{ 
+                  display: 'inline-flex', 
+                  alignItems: 'center', 
+                  padding: '0 11px', 
+                  background: '#fafafa', 
+                  border: '1px solid #d9d9d9',
+                  borderLeft: 'none',
+                  borderRadius: '0 6px 6px 0'
+                }}>%</span>
+              </Space.Compact>
             </Form.Item>
           </Col>
           <Col span={12}>
