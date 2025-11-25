@@ -173,7 +173,7 @@ export default function PaymentCallbackVnpayPage() {
                 key="bookings"
                 onClick={() => router.push("/my-bookings")}
               >
-                Xem đơn hàng của tôi
+                Xem Đơn thuê
               </Button>,
               <Button key="home" onClick={() => router.push("/")}>
                 Về trang chủ
@@ -193,7 +193,7 @@ export default function PaymentCallbackVnpayPage() {
                 key="bookings"
                 onClick={() => router.push("/my-bookings")}
               >
-                Xem đơn hàng của tôi
+                Xem Đơn thuê
               </Button>,
               <Button key="home" onClick={() => router.push("/")}>
                 Về trang chủ

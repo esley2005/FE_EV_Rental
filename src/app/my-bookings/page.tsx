@@ -70,6 +70,9 @@ export default function MyBookingsPage() {
   const [user, setUser] = useState<User | null>(null);
   const [currentTime, setCurrentTime] = useState(Date.now()); 
   const cancelledBookingIds = useRef<Set<number>>(new Set());
+  
+  // GPLX status: null = chưa có, 0 = đã up (Pending), 1 = đã xác thực (Approved), 2 = bị từ chối (Rejected)
+  const [licenseStatus, setLicenseStatus] = useState<number | null>(null);
 
   useEffect(() => {
     loadUserAndBookings();
@@ -123,9 +126,11 @@ export default function MyBookingsPage() {
 
 
       const userResponse = await authApi.getProfile();
-      if (userResponse.success && userResponse.data) {
+      if (userResponse.success && 'data' in userResponse && userResponse.data) {
         setUser(userResponse.data);
         await loadBookings(userResponse.data.id);
+        // Check GPLX status từ DB
+        await checkLicenseStatus(userResponse.data.id);
       } else {
 
         const userStr = localStorage.getItem('user');
@@ -133,6 +138,10 @@ export default function MyBookingsPage() {
           const userData = JSON.parse(userStr);
           setUser(userData);
           await loadBookings(userData.id);
+          // Check GPLX status từ DB
+          if (userData.id) {
+            await checkLicenseStatus(userData.id);
+          }
         }
       }
     } catch (error) {
@@ -145,6 +154,34 @@ export default function MyBookingsPage() {
         });
       }, 0);
       setLoading(false);
+    }
+  };
+
+  // Check GPLX status từ DB
+  const checkLicenseStatus = async (userId: number) => {
+    try {
+      const licenseResponse = await driverLicenseApi.getByUserId(userId);
+      if (licenseResponse.success && licenseResponse.data) {
+        const licenseData = licenseResponse.data as any;
+        let statusValue: number | null = null;
+        if (licenseData.status !== undefined) {
+          const status = licenseData.status;
+          if (typeof status === 'string') {
+            if (status === "Pending" || status === "0") statusValue = 0;
+            else if (status === "Approved" || status === "1") statusValue = 1;
+            else if (status === "Rejected" || status === "2") statusValue = 2;
+          } else if (typeof status === 'number') {
+            statusValue = status;
+          }
+        }
+        setLicenseStatus(statusValue);
+      } else {
+        // Không có GPLX trong DB
+        setLicenseStatus(null);
+      }
+    } catch (error) {
+      console.log("No GPLX found or error:", error);
+      setLicenseStatus(null);
     }
   };
 
@@ -739,10 +776,86 @@ export default function MyBookingsPage() {
         <div className="max-w-6xl mx-auto px-4 pt-24 pb-8">
           {/* Page Title */}
           <div className="mb-6">
-            <h1 className="text-2xl font-bold text-gray-800">Đơn hàng của tôi</h1>
+            <h1 className="text-2xl font-bold text-gray-800">Đơn thuê</h1>
             <p className="text-gray-600 mt-1">Quản lý tất cả đơn thuê xe của bạn</p>
           </div>
 
+          {/* Thông báo GPLX */}
+          {licenseStatus === null && (
+            <Alert
+              message="Chưa có Giấy phép lái xe"
+              description={
+                <div>
+                  <p className="mb-2">
+                    Bạn chưa upload Giấy phép lái xe. Vui lòng upload GPLX để có thể thuê xe.
+                  </p>
+                  <Button
+                    type="primary"
+                    icon={<IdcardOutlined />}
+                    onClick={() => router.push('/profile?tab=gplx')}
+                    className="mt-2"
+                  >
+                    Upload GPLX ngay
+                  </Button>
+                </div>
+              }
+              type="warning"
+              showIcon
+              icon={<WarningOutlined />}
+              className="mb-6"
+              closable
+            />
+          )}
+          {licenseStatus === 0 && (
+            <Alert
+              message="Giấy phép lái xe đang chờ xác thực"
+              description={
+                <div>
+                  <p className="mb-2">
+                    GPLX của bạn đã được upload và đang chờ admin xác thực. Vui lòng chờ trong giây lát.
+                  </p>
+                  <Button
+                    type="link"
+                    icon={<IdcardOutlined />}
+                    onClick={() => router.push('/profile?tab=gplx')}
+                    className="p-0"
+                  >
+                    Xem chi tiết GPLX →
+                  </Button>
+                </div>
+              }
+              type="info"
+              showIcon
+              icon={<InfoCircleOutlined />}
+              className="mb-6"
+              closable
+            />
+          )}
+          {licenseStatus === 2 && (
+            <Alert
+              message="Giấy phép lái xe bị từ chối"
+              description={
+                <div>
+                  <p className="mb-2">
+                    GPLX của bạn đã bị từ chối. Vui lòng upload lại GPLX mới để có thể thuê xe.
+                  </p>
+                  <Button
+                    type="primary"
+                    icon={<IdcardOutlined />}
+                    onClick={() => router.push('/profile?tab=gplx')}
+                    className="mt-2"
+                  >
+                    Upload lại GPLX
+                  </Button>
+                </div>
+              }
+              type="error"
+              showIcon
+              icon={<CloseCircleOutlined />}
+              className="mb-6"
+              closable
+            />
+          )}
 
           {/* Filters */}
           <Card className="mb-6 shadow-md">

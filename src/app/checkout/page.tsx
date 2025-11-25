@@ -409,7 +409,7 @@ export default function CheckoutPage() {
                 action={
                   <Space>
                     <Button onClick={() => router.push("/my-bookings")}>
-                      Xem đơn hàng của tôi
+                      Xem Đơn thuê
                     </Button>
                     <Button type="primary" onClick={() => router.push("/")}>
                       Về trang chủ

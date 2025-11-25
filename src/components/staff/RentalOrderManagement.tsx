@@ -31,7 +31,8 @@ import {
   PhoneOutlined,
   MailOutlined,
   DollarOutlined,
-  EditOutlined
+  EditOutlined,
+  EnvironmentOutlined
 } from "@ant-design/icons";
 import { rentalOrderApi, carsApi, authApi, driverLicenseApi, citizenIdApi, paymentApi, carDeliveryHistoryApi, carReturnHistoryApi, rentalLocationApi, carRentalLocationApi } from "@/services/api";
 import type { RentalOrderData, User, DriverLicenseData, CitizenIdData, RentalLocationData } from "@/services/api";
@@ -68,6 +69,7 @@ interface OrderWithDetails extends Omit<RentalOrderData, 'citizenId'> {
   driverLicense?: DriverLicenseData;
   citizenIdDoc?: CitizenIdData;
   deposit?: number;
+  location?: RentalLocationData;
 }
 
 // Status enum mapping
@@ -122,6 +124,8 @@ export default function RentalOrderManagement() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [form] = Form.useForm();
+  const [rentalLocations, setRentalLocations] = useState<RentalLocationData[]>([]);
+  const [deliveryImageFileList, setDeliveryImageFileList] = useState<UploadFile[]>([]);
 
   useEffect(() => {
     loadOrders();
@@ -206,6 +210,8 @@ export default function RentalOrderManagement() {
         // Tìm giấy tờ với logic rõ ràng hơn, xử lý cả null và undefined
         const license = licenses.find((l) => l.rentalOrderId != null && l.rentalOrderId === order.id);
         const citizenIdDoc = citizenIds.find((c) => c.rentalOrderId != null && c.rentalOrderId === order.id);
+        // Tìm địa điểm từ rentalLocationId
+        const location = locationsData.find((l) => l.id === order.rentalLocationId);
 
         // Debug: Log để kiểm tra user không tìm thấy
         if (!user && order.userId) {
@@ -239,6 +245,7 @@ export default function RentalOrderManagement() {
           user: user || undefined,
           driverLicense: license || undefined,
           citizenIdDoc: citizenIdDoc || undefined,
+          location: location || undefined,
         };
       });
 
@@ -300,8 +307,10 @@ export default function RentalOrderManagement() {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
-    // Nếu chọn "Bắt đầu thuê" (Renting), mở modal nhập thông tin giao xe
-    if (newStatus === RentalOrderStatus.Renting) {
+    // Nếu chọn "Bắt đầu thuê" (Confirmed = 3), mở modal nhập thông tin giao xe
+    // Chỉ mở modal nếu đang ở trạng thái Confirmed (3) và chọn "Bắt đầu thuê" (cũng là 3)
+    const currentStatusNum = getStatusNumber(order.status);
+    if (newStatus === RentalOrderStatus.Confirmed && currentStatusNum === RentalOrderStatus.Confirmed) {
       setSelectedOrderForAction(order);
       setDeliveryModalVisible(true);
       return;
@@ -355,22 +364,73 @@ export default function RentalOrderManagement() {
 
   // Xử lý giao xe (Bắt đầu thuê)
   const handleDelivery = async (values: any) => {
-    if (!selectedOrderForAction) return;
+    if (!selectedOrderForAction || !selectedOrderForAction.car || !selectedOrderForAction.user) {
+      message.error('Thiếu thông tin đơn hàng, xe hoặc người dùng');
+      return;
+    }
 
     try {
       setLoading(true);
+      
+      // Upload ảnh lên Cloudinary (tối đa 6 ảnh)
+      const imageUrls: string[] = [];
+      const maxImages = Math.min(deliveryImageFileList.length, 6);
+      
+      for (let i = 0; i < maxImages; i++) {
+        const file = deliveryImageFileList[i];
+        if (file.originFileObj) {
+          try {
+            const formData = new FormData();
+            formData.append('file', file.originFileObj);
+            formData.append('upload_preset', process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'ev_rental_cars');
+            const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'your-cloud-name';
+            const uploadResponse = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+              method: 'POST',
+              body: formData,
+            });
+            const uploadData = await uploadResponse.json();
+            if (uploadData.secure_url) {
+              imageUrls.push(uploadData.secure_url);
+            }
+          } catch (uploadError) {
+            console.error(`Error uploading image ${i + 1}:`, uploadError);
+            message.warning(`Không thể upload ảnh ${i + 1}`);
+          }
+        }
+      }
+
+      // Backend DTO chỉ yêu cầu: OdometerStart, BatteryLevelStart, VehicleConditionStart, ImageUrl (1-6), OrderId
+      // DeliveryDate, UpdateAt, CarId, UserId được backend tự động set từ OrderId
       const response = await carDeliveryHistoryApi.create({
-        deliveryDate: new Date().toISOString(),
-        odometerStart: values.odometerStart,
-        batteryLevelStart: values.batteryLevelStart,
+        odometerStart: Number(values.odometerStart),
+        batteryLevelStart: Number(values.batteryLevelStart),
         vehicleConditionStart: values.vehicleConditionStart || '',
+        imageUrl: imageUrls[0] || undefined,
+        imageUrl2: imageUrls[1] || undefined,
+        imageUrl3: imageUrls[2] || undefined,
+        imageUrl4: imageUrls[3] || undefined,
+        imageUrl5: imageUrls[4] || undefined,
+        imageUrl6: imageUrls[5] || undefined,
         orderId: selectedOrderForAction.id,
       });
 
       if (response.success) {
-        message.success('Giao xe thành công! Đơn hàng đã chuyển sang trạng thái đang thuê.');
+        // Cập nhật status đơn hàng sang "Đang thuê" (status = 3)
+        try {
+          const statusResponse = await rentalOrderApi.updateStatus(selectedOrderForAction.id, RentalOrderStatus.Confirmed);
+          if (statusResponse.success) {
+            message.success('Giao xe thành công! Đơn hàng đã chuyển sang trạng thái đang thuê.');
+          } else {
+            message.warning('Đã tạo lịch sử giao xe nhưng không thể cập nhật trạng thái đơn hàng.');
+          }
+        } catch (statusError) {
+          console.error('Error updating order status:', statusError);
+          message.warning('Đã tạo lịch sử giao xe nhưng có lỗi khi cập nhật trạng thái.');
+        }
+        
         setDeliveryModalVisible(false);
         deliveryForm.resetFields();
+        setDeliveryImageFileList([]);
         setSelectedOrderForAction(null);
         await loadOrders();
       } else {
@@ -791,7 +851,7 @@ export default function RentalOrderManagement() {
         break;
       case RentalOrderStatus.Confirmed:
         available.push(
-          { value: RentalOrderStatus.Renting, label: 'Bắt đầu thuê' },
+          { value: RentalOrderStatus.Confirmed, label: 'Bắt đầu thuê' },
           { value: RentalOrderStatus.Cancelled, label: 'Hủy đơn' }
         );
         break;
@@ -815,7 +875,7 @@ export default function RentalOrderManagement() {
   const filtered = useMemo(() => {
     return orders.filter((order) => {
       const matchText = search
-        ? `${order.id} ${order.car?.name || ''} ${order.car?.model || ''} ${order.user?.fullName || ''} ${order.user?.email || ''}`
+        ? `${order.id} ${order.car?.name || ''} ${order.car?.model || ''} ${order.user?.fullName || ''} ${order.user?.email || ''} ${order.location?.name || ''} ${order.location?.address || ''}`
             .toLowerCase()
             .includes(search.toLowerCase())
         : true;
@@ -828,6 +888,32 @@ export default function RentalOrderManagement() {
   }, [orders, search, filterStatus]);
 
   const columns = [
+    {
+      title: "Mã đơn",
+      key: "id",
+      width: 100,
+      fixed: 'left' as const,
+      render: (_: any, record: OrderWithDetails) => (
+        <span className="font-semibold text-blue-600">#{record.id}</span>
+      ),
+    },
+    {
+      title: "Trạng thái",
+      key: "status",
+      width: 150,
+      fixed: 'left' as const,
+      render: (_: any, record: OrderWithDetails) => getOrderStatusTag(record),
+    },
+    {
+      title: "Ngày đặt",
+      key: "orderDate",
+      width: 150,
+      render: (_: any, record: OrderWithDetails) => (
+        <span className="text-sm">
+          {formatVietnamTime(record.orderDate || record.createdAt)}
+        </span>
+      ),
+    },
     {
       title: "Xe",
       key: "car",
@@ -871,9 +957,25 @@ export default function RentalOrderManagement() {
       },
     },
     {
-      title: "Tiền Giữ Chỗ Order",
+      title: "Địa điểm nhận xe",
+      key: "location",
+      width: 200,
+      render: (_: any, record: OrderWithDetails) => {
+        if (!record.location) return '-';
+        return (
+          <div>
+            <div className="font-medium text-sm">{record.location.name || 'Không xác định'}</div>
+            {record.location.address && (
+              <div className="text-xs text-gray-500">{record.location.address}</div>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      title: "Tiền Giữ Chỗ",
       key: "bookingFee",
-      width: 150,
+      width: 130,
       render: (_: any, record: OrderWithDetails) => {
         // Tiền giữ chỗ có thể là deposit ban đầu hoặc booking fee
         const bookingFee = record.deposit || 0;
@@ -887,7 +989,7 @@ export default function RentalOrderManagement() {
     {
       title: "Tiền Cọc",
       key: "deposit",
-      width: 150,
+      width: 130,
       render: (_: any, record: OrderWithDetails) => {
         const deposit = record.deposit || 0;
         return (
@@ -900,7 +1002,7 @@ export default function RentalOrderManagement() {
     {
       title: "Tiền Thuê",
       key: "total",
-      width: 150,
+      width: 130,
       render: (_: any, record: OrderWithDetails) => {
         const total = record.total || record.subTotal || 0;
         return (
@@ -910,13 +1012,82 @@ export default function RentalOrderManagement() {
         );
       },
     },
+    {
+      title: "Hành động",
+      key: "actions",
+      width: 250,
+      fixed: 'right' as const,
+      render: (_: any, record: OrderWithDetails) => {
+        const statusNum = getStatusNumber(record.status);
+        const availableStatuses = getAvailableStatuses(statusNum);
+        
+        return (
+          <Space size="small">
+            <Button
+              type="link"
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={() => {
+                setSelectedOrder(record);
+                setDetailModalVisible(true);
+              }}
+            >
+              Chi tiết
+            </Button>
+            {(record.driverLicense || record.citizenIdDoc) && (
+              <Button
+                type="link"
+                size="small"
+                icon={<IdcardOutlined />}
+                onClick={() => showDocumentVerificationModal(record)}
+              >
+                Giấy tờ
+              </Button>
+            )}
+            {availableStatuses.length > 0 && (
+              <Select
+                size="small"
+                style={{ width: 140 }}
+                placeholder="Cập nhật"
+                onChange={(value) => handleStatusChange(record.id, value)}
+                options={availableStatuses.map(s => ({
+                  value: s.value,
+                  label: s.label,
+                }))}
+              />
+            )}
+            {statusNum === RentalOrderStatus.Returned && (
+              <Button
+                type="link"
+                size="small"
+                onClick={() => {
+                  setSelectedOrder(record);
+                  setUpdateTotalModalVisible(true);
+                }}
+              >
+                Cập nhật tổng
+              </Button>
+            )}
+            {statusNum === RentalOrderStatus.PaymentPending && (
+              <Button
+                type="link"
+                size="small"
+                onClick={() => handleConfirmPayment(record.id)}
+              >
+                Xác nhận TT
+              </Button>
+            )}
+          </Space>
+        );
+      },
+    },
   ];
 
   return (
     <div>
       <Space style={{ marginBottom: 12 }}>
         <Input
-          placeholder="Tìm theo mã đơn, tên xe, người dùng..."
+          placeholder="Tìm theo mã đơn, tên xe, người dùng, địa điểm..."
           allowClear
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -946,8 +1117,8 @@ export default function RentalOrderManagement() {
         dataSource={filtered}
         columns={columns}
         rowKey="id"
-        pagination={{ pageSize: 10 }}
-        scroll={{ x: 1400 }}
+        pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `Tổng ${total} đơn hàng` }}
+        scroll={{ x: 1800 }}
       />
 
       {/* Detail Modal */}
@@ -1069,6 +1240,12 @@ export default function RentalOrderManagement() {
                 {selectedOrder.actualReturnTime && (
                   <Descriptions.Item label="Ngày trả xe (thực tế)">{formatVietnamTime(selectedOrder.actualReturnTime)}</Descriptions.Item>
                 )}
+                <Descriptions.Item label={<><EnvironmentOutlined /> Địa điểm nhận xe</>} span={2}>
+                  {selectedOrder.location?.name || selectedOrder.location?.address || 'Không xác định'}
+                  {selectedOrder.location?.address && selectedOrder.location?.name && (
+                    <div className="text-sm text-gray-600 mt-1">{selectedOrder.location.address}</div>
+                  )}
+                </Descriptions.Item>
                 {selectedOrder.subTotal && (
                   <Descriptions.Item label="Tổng phụ">
                     <span className="font-semibold">
@@ -1569,10 +1746,11 @@ export default function RentalOrderManagement() {
         onCancel={() => {
           setDeliveryModalVisible(false);
           deliveryForm.resetFields();
+          setDeliveryImageFileList([]);
           setSelectedOrderForAction(null);
         }}
         footer={null}
-        width={600}
+        width={700}
       >
         <Form
           form={deliveryForm}
@@ -1584,6 +1762,9 @@ export default function RentalOrderManagement() {
           </Form.Item>
           <Form.Item label="Xe">
             <Input value={selectedOrderForAction?.car?.name || '-'} disabled />
+          </Form.Item>
+          <Form.Item label="Khách hàng">
+            <Input value={selectedOrderForAction?.user?.fullName || selectedOrderForAction?.user?.email || '-'} disabled />
           </Form.Item>
           <Form.Item
             label="Số km (Odometer)"
@@ -1619,6 +1800,32 @@ export default function RentalOrderManagement() {
               placeholder="Mô tả tình trạng xe: đèn, gương, lốp, nội thất..."
             />
           </Form.Item>
+          <Form.Item
+            label="Ảnh tình trạng xe (tối đa 6 ảnh)"
+            help="Chụp ảnh tình trạng xe khi giao: mặt ngoài, nội thất, vết xước, hư hỏng (nếu có)"
+          >
+            <Upload
+              beforeUpload={() => false}
+              maxCount={6}
+              multiple
+              listType="picture-card"
+              fileList={deliveryImageFileList}
+              onChange={({ fileList }) => setDeliveryImageFileList(fileList)}
+              onRemove={(file) => {
+                const newList = deliveryImageFileList.filter(item => item.uid !== file.uid);
+                setDeliveryImageFileList(newList);
+              }}
+            >
+              {deliveryImageFileList.length < 6 && (
+                <div>
+                  <div>+ Upload</div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {deliveryImageFileList.length}/6
+                  </div>
+                </div>
+              )}
+            </Upload>
+          </Form.Item>
           <Form.Item>
             <Space>
               <Button type="primary" htmlType="submit" loading={loading}>
@@ -1627,6 +1834,7 @@ export default function RentalOrderManagement() {
               <Button onClick={() => {
                 setDeliveryModalVisible(false);
                 deliveryForm.resetFields();
+                setDeliveryImageFileList([]);
                 setSelectedOrderForAction(null);
               }}>
                 Hủy

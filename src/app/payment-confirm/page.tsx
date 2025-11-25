@@ -139,7 +139,7 @@ export default function PaymentConfirmPage() {
                 Về trang chủ
               </Button>,
               <Button key="bookings" type="primary" onClick={() => router.push("/my-bookings")}>
-                Xem đơn hàng của tôi
+                Xem Đơn thuê
               </Button>,
             ]}
           />

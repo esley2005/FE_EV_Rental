@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   UserOutlined,
   MailOutlined,
@@ -39,7 +39,12 @@ const { Content } = Layout;
 
 export default function ProfilePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [api, contextHolder] = antdNotification.useNotification();
+  
+  // Get active tab from query param
+  const tabParam = searchParams?.get('tab');
+  const [activeTab, setActiveTab] = useState<string>(tabParam === 'gplx' ? '3' : '1');
 
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -55,6 +60,9 @@ export default function ProfilePage() {
   // Document verification status (for display only)
   const [licenseVerified, setLicenseVerified] = useState<boolean | null>(null);
   const [citizenIdVerified, setCitizenIdVerified] = useState<boolean | null>(null);
+  
+  // GPLX status từ DB: null = chưa có, 0 = đã up (Pending), 1 = đã xác thực (Approved), 2 = bị từ chối (Rejected)
+  const [licenseStatus, setLicenseStatus] = useState<number | null>(null);
 
   // GPLX upload states
   const [licenseImageFront, setLicenseImageFront] = useState<string | null>(null);
@@ -102,47 +110,57 @@ export default function ProfilePage() {
           });
           localStorage.setItem("user", JSON.stringify(response.data));
 
-          // tải xác thực giấy phép lái xe nha
-          if (response.data.driverLicenseStatus !== undefined) {
-            setLicenseVerified(response.data.driverLicenseStatus === 1);
-            setHasLicense(true);
-          }
-
           // tải xác thực căn cước công dân
           if (response.data.citizenIdStatus !== undefined) {
             setCitizenIdVerified(response.data.citizenIdStatus === 1);
           }
 
-          // Load existing GPLX if any
-          try {
-            const licenseResponse = await driverLicenseApi.getCurrent();
-            if (licenseResponse.success && licenseResponse.data) {
-              const licenseData = licenseResponse.data as any;
-              setHasLicense(true);
-              if (licenseData.id) setLicenseId(licenseData.id);
-              licenseForm.setFieldsValue({
-                licenseName: licenseData.name,
-                licenseNumber: licenseData.licenseNumber || "",
-              });
-              if (licenseData.imageUrl) setLicenseImageFront(licenseData.imageUrl);
-              if (licenseData.imageUrl2) setLicenseImageBack(licenseData.imageUrl2);
-              
-              // Check status from GPLX data
-              // Status có thể là: "Pending" (0), "Approved" (1), "Rejected" (2)
-              // hoặc số: 0, 1, 2
-              if (licenseData.status !== undefined) {
-                const status = licenseData.status;
-                if (status === 1 || status === "Approved" || status === "1") {
-                  setLicenseVerified(true);
-                } else if (status === 0 || status === "Pending" || status === "0") {
-                  setLicenseVerified(false);
-                } else {
-                  setLicenseVerified(false);
+          // Load GPLX từ DB theo userId
+          const userId = response.data.id;
+          if (userId) {
+            try {
+              const licenseResponse = await driverLicenseApi.getByUserId(userId);
+              if (licenseResponse.success && licenseResponse.data) {
+                const licenseData = licenseResponse.data as any;
+                setHasLicense(true);
+                if (licenseData.id) setLicenseId(licenseData.id);
+                licenseForm.setFieldsValue({
+                  licenseName: licenseData.name,
+                  licenseNumber: licenseData.licenseNumber || "",
+                });
+                if (licenseData.imageUrl) setLicenseImageFront(licenseData.imageUrl);
+                if (licenseData.imageUrl2) setLicenseImageBack(licenseData.imageUrl2);
+                
+                // Lấy status từ DB GPLX
+                // Status: 0 = Pending (đã up), 1 = Approved (đã xác thực), 2 = Rejected (bị từ chối)
+                let statusValue: number | null = null;
+                if (licenseData.status !== undefined) {
+                  const status = licenseData.status;
+                  // Convert string to number nếu cần
+                  if (typeof status === 'string') {
+                    if (status === "Pending" || status === "0") statusValue = 0;
+                    else if (status === "Approved" || status === "1") statusValue = 1;
+                    else if (status === "Rejected" || status === "2") statusValue = 2;
+                  } else if (typeof status === 'number') {
+                    statusValue = status;
+                  }
                 }
+                
+                setLicenseStatus(statusValue);
+                // Cập nhật licenseVerified cho backward compatibility
+                setLicenseVerified(statusValue === 1);
+              } else {
+                // Không có GPLX trong DB
+                setLicenseStatus(null);
+                setHasLicense(false);
+                setLicenseVerified(null);
               }
+            } catch (e) {
+              console.log("No existing GPLX found in DB:", e);
+              setLicenseStatus(null);
+              setHasLicense(false);
+              setLicenseVerified(null);
             }
-          } catch (e) {
-            console.log("No existing GPLX found");
           }
         }
       } catch (error) {
@@ -153,37 +171,44 @@ export default function ProfilePage() {
     loadUserProfile();
   }, [router, api, profileForm]);
 
-  // Helper function to reload license status
+  // Helper function to reload license status từ DB
   const reloadLicenseStatus = async () => {
     try {
-      // Reload profile để lấy driverLicenseStatus
-      const profileResponse = await authApi.getProfile();
-      if (profileResponse.success && 'data' in profileResponse && profileResponse.data) {
-        if (profileResponse.data.driverLicenseStatus !== undefined) {
-          setLicenseVerified(profileResponse.data.driverLicenseStatus === 1);
-        }
-      }
+      if (!user?.id) return;
       
-      // Reload GPLX data để lấy status chi tiết
-      const licenseResponse = await driverLicenseApi.getCurrent();
+      // Reload GPLX từ DB theo userId
+      const licenseResponse = await driverLicenseApi.getByUserId(user.id);
       if (licenseResponse.success && licenseResponse.data) {
         const licenseData = licenseResponse.data as any;
+        if (licenseData.id) setLicenseId(licenseData.id);
+        
+        // Lấy status từ DB GPLX
+        let statusValue: number | null = null;
         if (licenseData.status !== undefined) {
           const status = licenseData.status;
-          // Status có thể là: 0 (Pending), 1 (Approved), 2 (Rejected)
-          // hoặc string: "Pending", "Approved", "Rejected"
-          if (status === 1 || status === "Approved" || status === "1") {
-            setLicenseVerified(true);
-          } else if (status === 0 || status === "Pending" || status === "0") {
-            setLicenseVerified(false);
-          } else if (status === 2 || status === "Rejected" || status === "2") {
-            setLicenseVerified(false);
+          if (typeof status === 'string') {
+            if (status === "Pending" || status === "0") statusValue = 0;
+            else if (status === "Approved" || status === "1") statusValue = 1;
+            else if (status === "Rejected" || status === "2") statusValue = 2;
+          } else if (typeof status === 'number') {
+            statusValue = status;
           }
         }
-        if (licenseData.id) setLicenseId(licenseData.id);
+        
+        setLicenseStatus(statusValue);
+        setLicenseVerified(statusValue === 1);
+        setHasLicense(true);
+      } else {
+        // Không có GPLX trong DB
+        setLicenseStatus(null);
+        setHasLicense(false);
+        setLicenseVerified(null);
       }
     } catch (error) {
       console.error("Error reloading license status:", error);
+      setLicenseStatus(null);
+      setHasLicense(false);
+      setLicenseVerified(null);
     }
   };
 
@@ -740,10 +765,11 @@ export default function ProfilePage() {
 
 <div className="ml-auto flex flex-col items-end gap-2">
                       <div className="flex gap-2">
-                        {/* small status tag - license verification state */}
-                        {licenseVerified === true && <Tag color="success">GPLX: Đã xác thực</Tag>}
-                        {licenseVerified === false && <Tag color="error">GPLX: Chưa xác thực</Tag>}
-                        {licenseVerified === null && <Tag color="default">GPLX: Chưa gửi</Tag>}
+                        {/* small status tag - license verification state từ DB */}
+                        {licenseStatus === 1 && <Tag color="success">GPLX: Đã xác thực</Tag>}
+                        {licenseStatus === 0 && <Tag color="warning">GPLX: Đã up</Tag>}
+                        {licenseStatus === 2 && <Tag color="error">GPLX: Bị từ chối</Tag>}
+                        {licenseStatus === null && <Tag color="default">GPLX: Chưa gửi</Tag>}
                         
                         {/* Citizen ID status */}
                         {citizenIdVerified === true && <Tag color="success">CCCD: Đã xác thực</Tag>}
@@ -770,7 +796,8 @@ export default function ProfilePage() {
           <div style={{ width: "100%", marginBottom: 18 }}>
             <Card className="shadow-lg rounded-xl">
               <Tabs
-                defaultActiveKey="1"
+                activeKey={activeTab}
+                onChange={setActiveTab}
                 items={[
                   {
                     key: "1",

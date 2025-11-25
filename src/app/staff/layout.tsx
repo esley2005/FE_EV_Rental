@@ -11,6 +11,8 @@ import {
   PieChartOutlined,
   DesktopOutlined,
   UserOutlined,
+  IdcardOutlined,
+  EditOutlined,
 } from "@ant-design/icons";
 import { Hand } from "lucide-react";
 import {
@@ -28,6 +30,7 @@ import {
   Statistic,
   Input,
   Badge,
+  Tabs,
 } from "antd";
 import CarStatusList from "@/components/CarStatusList";
 import DeliveryForm from "@/components/DeliveryForm";
@@ -36,6 +39,7 @@ import CarManagement from "@/components/admin/CarManagement";
 import CarStatusManagement from "@/components/staff/CarStatusManagement";
 import RentalOrderManagement from "@/components/staff/RentalOrderManagement";
 import CustomerList from "@/components/staff/CustomerList";
+import DocumentManagement from "@/components/staff/DocumentManagement";
 import { authUtils } from "@/utils/auth";
 import { carsApi, bookingsApi as bookingsApiWrapped, rentalOrderApi, authApi, type ApiResponse } from "@/services/api";
 import { useRouter } from "next/navigation"; // ✅ Đúng cho App Router
@@ -46,6 +50,7 @@ const { Header, Sider, Content, Footer } = Layout;
  🧱 PHẦN 1: MENU CHÍNH (HEADER MENU)
  ========================================================= */
 const mainMenu = [
+  { key: "orders", label: "Quản lý đơn thuê xe", icon: <FileOutlined /> },
   { key: "tasks", label: "Giao / Nhận xe", icon: <Hand size={16} /> },
   { key: "customers", label: "Xác thực khách hàng", icon: <TeamOutlined /> },
   { key: "payments", label: "Thanh toán tại điểm", icon: <DollarOutlined /> },
@@ -56,6 +61,12 @@ const mainMenu = [
  📑 PHẦN 2: SUBMENU (SIDEBAR)
  ========================================================= */
 const subMenus: Record<string, { key: string; label: string; icon: React.ReactNode }[]> = {
+  orders: [
+    { key: "1", label: "Danh sách đơn hàng", icon: <FileOutlined /> },
+    { key: "2", label: "Xác thực giấy tờ", icon: <IdcardOutlined /> },
+    { key: "3", label: "Cập nhật trạng thái", icon: <EditOutlined /> },
+  ],
+
   tasks: [
     { key: "1", label: "Danh sách xe sẵn sàng", icon: <PieChartOutlined /> },
     { key: "2", label: "Xe đã đặt / đang thuê", icon: <DesktopOutlined /> },
@@ -84,7 +95,7 @@ const subMenus: Record<string, { key: string; label: string; icon: React.ReactNo
  ========================================================= */
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
-  const [selectedModule, setSelectedModule] = useState("tasks");
+  const [selectedModule, setSelectedModule] = useState("orders");
   const [selectedSubMenu, setSelectedSubMenu] = useState("1");
 
   const [showDelivery, setShowDelivery] = useState(false);
@@ -353,7 +364,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           </Dropdown>
         </Header>
 
-        {/* 📍 BREADCRUMB + CONTENT */}
+          {/* 📍 BREADCRUMB + CONTENT */}
         <Content style={{ margin: "16px" }}>
           <Breadcrumb
             style={{ marginBottom: 16 }}
@@ -364,6 +375,24 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               },
             ]}
           />
+
+          {/* Tabs cho submenu khi chọn "Quản lý đơn thuê xe" */}
+          {selectedModule === "orders" && (
+            <Tabs
+              activeKey={selectedSubMenu}
+              onChange={(key) => setSelectedSubMenu(key)}
+              items={subMenus.orders.map((item) => ({
+                key: item.key,
+                label: (
+                  <Space>
+                    {item.icon}
+                    {item.label}
+                  </Space>
+                ),
+              }))}
+              style={{ marginBottom: 16 }}
+            />
+          )}
 
           {/* ElaAdmin-like top summary cards */}
           <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
@@ -431,7 +460,13 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               minHeight: 400,
             }}
           >
-            {selectedModule === "tasks" ? (
+            {selectedModule === "orders" ? (
+              selectedSubMenu === "2" ? (
+                <DocumentManagement />
+              ) : (
+                <RentalOrderManagement />
+              )
+            ) : selectedModule === "tasks" ? (
               selectedSubMenu === "1" ? (
                 // Xem toàn bộ xe theo trạng thái
                 <CarStatusManagement />

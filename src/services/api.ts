@@ -1034,6 +1034,12 @@ export const driverLicenseApi = {
       method: 'GET',
     }),
 
+  // Get driver license by userId
+  getByUserId: (userId: number) =>
+    apiCall<DriverLicenseData>(`/DriverLicense/GetByUserId?userId=${userId}`, {
+      method: 'GET',
+    }),
+
   // Get all driver licenses (Admin/Staff only)
   getAll: () =>
     apiCall<DriverLicenseData[]>('/DriverLicense/GetAll', {
@@ -1505,22 +1511,39 @@ export const rentalOrderApi = {
 
 export const carDeliveryHistoryApi = {
   // Tạo lịch sử giao xe (Bắt đầu thuê)
+  // Backend DTO chỉ yêu cầu: OdometerStart, BatteryLevelStart, VehicleConditionStart, ImageUrl (1-6), OrderId
+  // DeliveryDate, UpdateAt, CarId, UserId được backend tự động set
   create: (data: {
-    deliveryDate: string;
     odometerStart: number;
     batteryLevelStart: number;
     vehicleConditionStart: string;
+    imageUrl?: string;
+    imageUrl2?: string;
+    imageUrl3?: string;
+    imageUrl4?: string;
+    imageUrl5?: string;
+    imageUrl6?: string;
     orderId: number;
   }) => {
+    // Tạo object request body theo đúng format backend DTO
+    const requestBody: any = {
+      OdometerStart: data.odometerStart,
+      BatteryLevelStart: data.batteryLevelStart,
+      VehicleConditionStart: data.vehicleConditionStart || '',
+      OrderId: data.orderId,
+    };
+
+    // Thêm các ImageUrl, chỉ gửi nếu có giá trị (nullable trong backend)
+    if (data.imageUrl) requestBody.ImageUrl = data.imageUrl;
+    if (data.imageUrl2) requestBody.ImageUrl2 = data.imageUrl2;
+    if (data.imageUrl3) requestBody.ImageUrl3 = data.imageUrl3;
+    if (data.imageUrl4) requestBody.ImageUrl4 = data.imageUrl4;
+    if (data.imageUrl5) requestBody.ImageUrl5 = data.imageUrl5;
+    if (data.imageUrl6) requestBody.ImageUrl6 = data.imageUrl6;
+
     return apiCall<{ message: string }>('/CarDeliveryHistory', {
       method: 'POST',
-      body: JSON.stringify({
-        DeliveryDate: data.deliveryDate,
-        OdometerStart: data.odometerStart,
-        BatteryLevelStart: data.batteryLevelStart,
-        VehicleConditionStart: data.vehicleConditionStart,
-        OrderId: data.orderId,
-      }),
+      body: JSON.stringify(requestBody),
     });
   },
 };

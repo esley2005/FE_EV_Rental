@@ -5,6 +5,11 @@ import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { Form, Input, DatePicker, Button, message, Checkbox, Radio, notification, Alert, Modal } from "antd";
 import { Calendar, MapPin, Phone, User as UserIcon, Search, Car as CarIcon, FileText, Download, Percent, Info, UserCheck } from "lucide-react";
 import dayjs, { Dayjs } from "dayjs";
+import isSameOrAfter from "dayjs/plugin/isSameOrAfter";
+import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
+
+dayjs.extend(isSameOrAfter);
+dayjs.extend(isSameOrBefore);
 import { carsApi, rentalOrderApi, rentalLocationApi, carRentalLocationApi, authApi, paymentApi } from "@/services/api";
 import type { Car } from "@/types/car";
 import type { User, CreateRentalOrderData, RentalLocationData } from "@/services/api";
@@ -33,6 +38,7 @@ export default function BookingPage() {
   const [availableLocations, setAvailableLocations] = useState<RentalLocationData[]>([]);
   const [withDriver, setWithDriver] = useState<boolean>(false);
   const [dateRangeValue, setDateRangeValue] = useState<[Dayjs, Dayjs] | null>(null);
+  const [bookedDates, setBookedDates] = useState<Array<{ start: Dayjs; end: Dayjs }>>([]);
 
   // Helper functions tương tự trang chi tiết xe
   const extractCarRentalLocationList = (source: any): any[] => {
@@ -371,6 +377,53 @@ export default function BookingPage() {
           }
         }
 
+        // Load booked dates cho xe này
+        try {
+          const ordersResponse = await rentalOrderApi.getAll();
+          if (ordersResponse.success && ordersResponse.data) {
+            const ordersData = Array.isArray(ordersResponse.data)
+              ? ordersResponse.data
+              : (ordersResponse.data as any)?.$values || [];
+            
+            const carIdNum = parseInt(carId);
+            const carOrders = ordersData.filter((order: any) => {
+              const orderCarId = order.carId || order.CarId;
+              return orderCarId === carIdNum;
+            });
+
+            // Lọc các đơn hàng có status không phải Cancelled hoặc Completed
+            const activeOrders = carOrders.filter((order: any) => {
+              const status = order.status || order.Status || '';
+              const statusStr = status.toString().toLowerCase();
+              // Chỉ lấy các đơn hàng đang active (không phải cancelled hoặc completed)
+              return !statusStr.includes('cancelled') && !statusStr.includes('completed') && statusStr !== '7' && statusStr !== '8';
+            });
+
+            // Parse các khoảng thời gian đã được thuê
+            const bookedRanges: Array<{ start: Dayjs; end: Dayjs }> = [];
+            activeOrders.forEach((order: any) => {
+              const pickupTime = order.pickupTime || order.PickupTime;
+              const expectedReturnTime = order.expectedReturnTime || order.ExpectedReturnTime;
+              const actualReturnTime = order.actualReturnTime || order.ActualReturnTime;
+              
+              if (pickupTime) {
+                const start = dayjs(pickupTime);
+                const end = dayjs(actualReturnTime || expectedReturnTime);
+                
+                if (start.isValid() && end.isValid()) {
+                  bookedRanges.push({ start, end });
+                }
+              }
+            });
+
+            setBookedDates(bookedRanges);
+            console.log(`[Booking] Loaded ${bookedRanges.length} booked date ranges for car ${carId}`);
+          }
+        } catch (error) {
+          console.error("Error loading booked dates:", error);
+          // Không hiển thị lỗi cho user vì đây không phải tính năng critical
+        }
+
         // Nếu có ngày giờ từ URL, tự động set vào form
         if (pickupTimeFromUrl && returnTimeFromUrl) {
           try {
@@ -541,6 +594,30 @@ export default function BookingPage() {
         placement: "topRight",
         duration: 4,
       });
+      return;
+    }
+
+    // Kiểm tra xem khoảng thời gian đã chọn có trùng với ngày đã được thuê không
+    const [pickupTime, expectedReturnTime] = dateRange;
+    const hasConflict = bookedDates.some((range) => {
+      const selectedStart = pickupTime.startOf('day');
+      const selectedEnd = expectedReturnTime.startOf('day');
+      const bookedStart = range.start.startOf('day');
+      const bookedEnd = range.end.startOf('day');
+      
+      // Kiểm tra xem có overlap không
+      // Overlap nếu: selectedStart <= bookedEnd && selectedEnd >= bookedStart
+      return (selectedStart.isSameOrBefore(bookedEnd) && selectedEnd.isSameOrAfter(bookedStart));
+    });
+
+    if (hasConflict) {
+      api.error({
+        message: "Không thể đặt xe",
+        description: "Khoảng thời gian bạn chọn đã được thuê. Vui lòng chọn khoảng thời gian khác.",
+        placement: "topRight",
+        duration: 5,
+      });
+      setSubmitting(false);
       return;
     }
 
@@ -912,8 +989,57 @@ export default function BookingPage() {
                           }
                         }}
                         disabledDate={(current) => {
+                          if (!current) return false;
+                          
                           // Chặn các ngày trong quá khứ
-                          return current && current < dayjs().startOf('day');
+                          if (current < dayjs().startOf('day')) {
+                            return true;
+                          }
+
+                          // Kiểm tra xem ngày có nằm trong khoảng thời gian đã được thuê không
+                          const isBooked = bookedDates.some((range) => {
+                            const date = current.startOf('day');
+                            const rangeStart = range.start.startOf('day');
+                            const rangeEnd = range.end.startOf('day');
+                            
+                            // Ngày nằm trong khoảng đã được thuê
+                            return (date.isSameOrAfter(rangeStart) && date.isSameOrBefore(rangeEnd));
+                          });
+
+                          return isBooked;
+                        }}
+                        cellRender={(current, info) => {
+                          if (info.type !== 'date') {
+                            return info.originNode;
+                          }
+
+                          if (!current || typeof current === 'string' || typeof current === 'number') {
+                            return info.originNode;
+                          }
+
+                          const currentDayjs = dayjs(current);
+
+                          // Kiểm tra xem ngày có bị thuê không
+                          const isBooked = bookedDates.some((range) => {
+                            const date = currentDayjs.startOf('day');
+                            const rangeStart = range.start.startOf('day');
+                            const rangeEnd = range.end.startOf('day');
+                            return (date.isSameOrAfter(rangeStart) && date.isSameOrBefore(rangeEnd));
+                          });
+
+                          if (isBooked) {
+                            return (
+                              <div className="ant-picker-cell-inner" style={{ 
+                                backgroundColor: '#ff4d4f', 
+                                color: '#fff',
+                                borderRadius: '2px'
+                              }}>
+                                {currentDayjs.date()}
+                              </div>
+                            );
+                          }
+
+                          return info.originNode;
                         }}
                         disabledTime={(value, type) => {
                           const now = dayjs();

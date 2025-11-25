@@ -292,7 +292,7 @@ export default function Header({ colorScheme = "blue" }: HeaderProps) {
                 </Link>
               )}
               <Link href="/profile" className="block px-3 py-2 rounded hover:bg-gray-100">Tài khoản của tôi</Link>
-              <Link href="/my-bookings" className="block px-3 py-2 rounded hover:bg-gray-100">Đơn hàng của tôi</Link>
+              <Link href="/my-bookings" className="block px-3 py-2 rounded hover:bg-gray-100">Đơn thuê</Link>
               <button
                 onClick={() => {
                   authUtils.logout();
