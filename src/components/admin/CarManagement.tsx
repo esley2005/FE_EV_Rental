@@ -682,11 +682,7 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
       key: 'name',
       sorter: (a: Car, b: Car) => a.name.localeCompare(b.name),
     },
-    {
-      title: 'Model',
-      dataIndex: 'model',
-      key: 'model',
-    },
+    
     {
       title: 'Loại xe',
       dataIndex: 'sizeType',
@@ -698,13 +694,7 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
       key: 'seats',
       width: 80,
     },
-    {
-      title: 'Giá/ngày',
-      dataIndex: 'rentPricePerDay',
-      key: 'rentPricePerDay',
-      render: (price: number) =>
-        new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price),
-    },
+    
     {
       title: 'Trạng thái',
       dataIndex: 'isActive',
@@ -1093,21 +1083,17 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
               <Select
                 placeholder="Chọn địa điểm cho thuê xe"
                 loading={loadingLocations}
-                optionFilterProp="label"
-                showSearch
                 allowClear
                 disabled={staffMode}
-                filterOption={(input: string, option: any) => {
-                  const label = option?.label?.toString() || '';
-                  return label.toLowerCase().includes(input.toLowerCase());
-                }}
+                style={{ width: '100%', minHeight: '50px', height: 'auto' }}
+                size="large"
+                className="select-large"
               >
                 {rentalLocations.map((location: RentalLocationData) => (
                   /* @ts-ignore - Select.Option from antd is valid JSX */
                   <Select.Option
                     key={location.id}
                     value={location.id}
-                    label={`${location.name} - ${location.address}`}
                   >
                     <div className="flex flex-col">
                       <span className="font-medium text-gray-900">{location.name}</span>
