@@ -664,17 +664,42 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
     try {
       const [pickupTime, expectedReturnTime] = values.dateRange;
       
+      // Đảm bảo userId là number
+      const userId = Number(user.id || user.userId);
+      if (!userId || isNaN(userId)) {
+        message.error("Không tìm thấy ID người dùng. Vui lòng đăng nhập lại.");
+        setLoading(false);
+        return;
+      }
+      
+      // Đảm bảo carId là number
+      const carIdNum = Number(car.id);
+      if (!carIdNum || isNaN(carIdNum)) {
+        message.error("Thông tin xe không hợp lệ.");
+        setLoading(false);
+        return;
+      }
+      
       const orderData: CreateRentalOrderData = {
         phoneNumber: values.phoneNumber,
         pickupTime: pickupTime.toISOString(),
         expectedReturnTime: expectedReturnTime.toISOString(),
         withDriver: values.withDriver || false,
-        userId: user.id,
-        carId: car.id,
+        userId: userId,
+        carId: carIdNum,
         rentalLocationId: values.rentalLocationId,
       };
 
+      console.log('[BookingModal] Creating order with data:', {
+        ...orderData,
+        userId: userId,
+        carId: carIdNum,
+        user: { id: user.id, userId: user.userId, email: user.email }
+      });
+
       const response = await rentalOrderApi.create(orderData);
+      
+      console.log('[BookingModal] API response:', response);
 
       if (response.success && response.data) {
         const orderId = (response.data as any).id || (response.data as any).Id;
