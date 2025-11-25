@@ -44,6 +44,7 @@ import {
   Sparkles,
   Calendar,
 } from "lucide-react";
+import { PlusOutlined } from '@ant-design/icons';
 
 //1
 // params.id chính là số ID của xe trong đường dẫn (VD: /cars/5 → id = "5")
@@ -966,6 +967,12 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
   // Điều hướng đến trang booking
   const handleBookingClick = () => {
+    // Kiểm tra nếu xe đã hết
+    if (car.status !== 1) {
+      message.warning('Vui lòng chọn xe khác hoặc chọn giờ thuê khác');
+      return;
+    }
+
     if (!dateRangeValue || !dateRangeValue[0] || !dateRangeValue[1]) {
       message.warning('Vui lòng chọn thời gian thuê xe');
       return;
@@ -1160,7 +1167,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
           {/* Phần thông tin xe chính - Chiếm 2/3 cột */}
           <div className="space-y-4 lg:col-span-8">
             {/* Vehicle Header */}
-            <div className="bg-white rounded-lg shadow-lg p-4">
+            <div className="mb-8">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
                   <h1 className="text-3xl font-bold text-gray-900 mb-3">
@@ -1272,7 +1279,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             </div>
 
 
-            <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="mb-8">
 
               {/* <h2 className="text-xl font-bold text-gray-900 mb-4">
                 <MapPin className="inline-block mr-2 text-blue-600" /> Vị trí xe
@@ -1418,7 +1425,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             </div>
 
             {/* Đặc điểm (Features) Section */}
-            <div className="bg-white rounded-lg shadow-lg p-4">
+            <div className="mb-8">
               <h2 className="text-xl font-bold text-blue-600 mb-2">Đặc điểm</h2>
               <div className="h-1.5 w-12 bg-blue-500 rounded-full mb-3"></div>
               <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-gray-200">
@@ -1480,7 +1487,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
 
             {/* Mô tả (Description) Section */}
-            <div className="bg-white rounded-lg shadow-lg p-4">
+            <div className="mb-8">
               <h2 className="text-xl font-bold text-blue-600 mb-2">Mô tả</h2>
               <div className="h-1.5 w-12 bg-blue-500 rounded-full mb-3"></div>
 
@@ -1528,7 +1535,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             </div>
 
             {/* Các tiện nghi khác (Other Amenities) Section */}
-            <div className="bg-white rounded-lg shadow-lg p-4">
+            <div className="mb-8">
               <h2 className="text-xl font-bold text-blue-600 mb-2">Các tiện nghi khác</h2>
               <div className="h-1.5 w-12 bg-blue-500 rounded-full mb-3"></div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
@@ -1558,7 +1565,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             </div>
 
             {/* Giấy tờ thuê xe (Rental Documents) Section */}
-            <div className="bg-white rounded-lg shadow-lg p-4">
+            <div className="mb-8">
               <div className="flex items-center gap-2 mb-2">
                 <h2 className="text-xl font-bold text-blue-600">Giấy tờ thuê xe</h2>
                 <HelpCircle className="text-gray-400 cursor-help" />
@@ -1595,7 +1602,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
 
             {/* Tài sản thế chấp (Collateral) Section */}
-            <div className="bg-white rounded-lg shadow-lg p-4">
+            <div className="mb-8">
               <div className="flex items-center gap-2 mb-4">
                 <h2 className="text-xl font-bold text-blue-600">Tài sản thế chấp</h2>
                 <HelpCircle className="text-gray-400 cursor-help" />
@@ -1610,7 +1617,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             </div>
 
             {/* Thông số kỹ thuật */}
-            <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="mb-8">
               <h2 className="text-2xl font-bold text-blue-600 mb-2">
                 Thông số kỹ thuật
               </h2>
@@ -1658,77 +1665,14 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
           {/* Phần booking panel - Chiếm 1/3 cột */}
           <div className="lg:col-span-4 space-y-6">
-            <div className="bg-white rounded-lg shadow-lg p-4">
-              {/* Giá thuê theo các gói */}
-              <div className="mb-4">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">Bảng giá thuê</h3>
+            <div className="bg-white rounded-xl shadow-lg border-2 border-[#4A90E2] overflow-hidden">
+              {/* TITLE */}
+              <div className="bg-[#2563EB] px-5 py-3">
+                <h2 className="text-white text-lg font-bold">Bảng giá thuê</h2>
+              </div>
 
-                {/* Chọn ngày giờ nhận và trả xe */}
-                <div className="mb-4">
-                  <RangePicker
-                    showTime={{ format: 'HH:mm' }}
-                    format="DD/MM/YYYY HH:mm"
-                    size="large"
-                    className="w-full"
-                    placeholder={["Thời gian nhận xe", "Thời gian trả xe"]}
-                    onChange={(dates) => {
-                      if (dates && dates[0] && dates[1]) {
-                        setDateRangeValue([dates[0], dates[1]]);
-                      } else {
-                        setDateRangeValue(null);
-                      }
-                    }}
-                    disabledDate={(current) => {
-                      // Chặn các ngày trong quá khứ
-                      return current && current < dayjs().startOf('day');
-                    }}
-                    disabledTime={(value, type) => {
-                      const now = dayjs();
-                      const isToday = value && value.isSame(now, 'day');
-
-                      // Chặn các giờ ngoài khoảng 6h-22h (chỉ cho phép 6h đến 22h)
-                      const disabledHours = () => {
-                        const hours = [];
-                        // Chặn 0h-5h
-                        for (let i = 0; i < 6; i++) {
-                          hours.push(i);
-                        }
-                        // Chặn 23h
-                        hours.push(23);
-
-                        // Nếu là ngày hôm nay và là thời gian nhận xe (start), chặn thêm các giờ trong quá khứ
-                        if (isToday && type === 'start') {
-                          for (let i = 0; i < now.hour(); i++) {
-                            if (!hours.includes(i)) {
-                              hours.push(i);
-                            }
-                          }
-                        }
-
-                        return hours;
-                      };
-
-                      const disabledMinutes = (selectedHour: number) => {
-                        const minutes = [];
-
-                        // Nếu là ngày hôm nay, là thời gian nhận xe (start), và chọn giờ hiện tại, chặn các phút trong quá khứ
-                        if (isToday && type === 'start' && selectedHour === now.hour()) {
-                          for (let i = 0; i <= now.minute(); i++) {
-                            minutes.push(i);
-                          }
-                        }
-
-                        return minutes;
-                      };
-
-                      return {
-                        disabledHours,
-                        disabledMinutes,
-                      };
-                    }}
-                  />
-                </div>
-
+              {/* CONTENT */}
+              <div className="p-5 space-y-5">
                 {/* Box chung hiển thị toàn bộ giá thuê */}
                 <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                   {/* Theo giờ - Tự lái */}
@@ -1770,15 +1714,8 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                     <div>
                       {/* <p className="text-xs text-gray-600">Theo giờ (Có tài xế)</p> */}
                       <div className="flex items-center gap-2">
-                        {/* <span className="text-sm text-gray-500 line-through">
-          {formatCurrency(Math.round(car.rentPricePerHourWithDriver * 1.1))}
-        </span> */}
-                        {/* <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span> */}
                       </div>
                     </div>
-                    {/* <p className="text-lg font-bold text-gray-900 text-right">
-      {formatCurrency(car.rentPricePerHourWithDriver)}/giờ
-    </p> */}
                   </div>
 
                   {/* Theo ngày - Có tài xế */}
@@ -1786,10 +1723,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                     <div>
                       <p className="text-xs text-gray-600">Thuê theo ngày (Có tài xế)</p>
                       <div className="flex items-center gap-2">
-                        {/* <span className="text-sm text-gray-500 line-through">
-          {formatCurrency(Math.round(car.rentPricePerDayWithDriver * 1.1))}
-        </span> */}
-                        {/* <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span> */}
+
                       </div>
                     </div>
                     <div className="text-right">
@@ -1804,12 +1738,11 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                     </div>
                   </div>
                 </div>
-              </div>
 
               {/* Status */}
               <div className={`text-center p-3 rounded-lg mb-4 ${car.status === 1 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
                 <span className="font-semibold">
-                  {car.status === 1 ? ' Xe đang có sẵn' : '✗ Hết xe'}
+                  {car.status === 1 ? ' Xe đang có sẵn' : 'Hết xe'}
                 </span>
               </div>
 
@@ -1893,17 +1826,20 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               {/* Booking Button */}
               <button
                 onClick={handleBookingClick}
-
-
                 disabled={car.isActive !== true}
                 className={`w-full py-4 px-6 rounded-lg font-bold text-lg transition-colors mb-5 flex items-center justify-center gap-2 ${car.isActive === true
-
-                  ? 'bg-blue-500 text-white hover:bg-blue-600'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    ? 'bg-blue-500 text-white hover:bg-blue-600'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   }`}
               >
-                <span></span>
-                {car.status === 1 ? 'CHỌN THUÊ' : 'Xe đã hết'}
+                {car.status === 1 ? (
+                  <>
+                    <PlusOutlined />
+                    CHỌN THUÊ
+                  </>
+                ) : (
+                  'Xe đã hết'
+                )}
               </button>
 
               {/* Quick Info */}
@@ -1928,78 +1864,114 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                   Gọi tư vấn
                 </a>
               </div>
+              </div>
             </div>
 
             {/* Phụ phí có thể phát sinh (Additional Fees) Section */}
-            <div className="bg-white rounded-lg shadow-lg p-4 border border-gray-100">
-              <h2 className="text-xl font-bold text-blue-600 mb-2">Phụ phí có thể phát sinh</h2>
-              <div className="h-1.5 w-12 bg-blue-500 rounded-full mb-3"></div>
-              <div className="space-y-4">
+            <div className="bg-white rounded-xl shadow-lg border overflow-hidden">
+              {/* TITLE */}
+              <div className="bg-[#D9EFFF] px-5 py-3">
+                <h2 className="text-[#4A90E2] text-lg font-bold">Phụ phí có thể phát sinh</h2>
+              </div>
+
+              {/* CONTENT */}
+              <div className="p-5 space-y-5">
+
                 {/* Phí vượt giới hạn */}
-                <div className="flex items-start gap-3 p-3 border-b border-gray-100 last:border-b-0">
-                  <Info className="text-blue-500 text-lg mt-1 flex-shrink-0" />
-                  <div className="flex-1">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <h3 className="font-bold text-gray-900 mb-1">Phí vượt giới hạn</h3>
-                        <p className="text-sm text-gray-600">
-                          Phụ phí phát sinh nếu lộ trình di chuyển vượt quá 350km khi thuê xe 1 ngày
-                        </p>
+                <div className="border-b border-blue-200 pb-4">
+                  <div className="flex items-start gap-3">
+                    <Info className="text-blue-600 text-lg mt-1 flex-shrink-0" />
+
+                    <div className="flex-1">
+                      <div className="flex items-start justify-between gap-4">
+                        <h3 className="font-semibold text-gray-900 text-base mb-1">
+                          Phí vượt giới hạn
+                        </h3>
+
+                        <span className="text-blue-700 font-semibold text-base whitespace-nowrap">
+                          3.000₫/km
+                        </span>
                       </div>
-                      <span className="text-blue-600 font-bold text-sm whitespace-nowrap">3.000₫/km</span>
+
+                      <p className="text-[12px] text-gray-500">
+                        Phụ phí phát sinh nếu lộ trình di chuyển vượt quá 350km khi thuê xe 1 ngày
+                      </p>
                     </div>
                   </div>
                 </div>
 
                 {/* Phí quá giờ */}
-                <div className="flex items-start gap-3 p-3 border-b border-gray-100 last:border-b-0">
-                  <Info className="text-blue-500 text-lg mt-1 flex-shrink-0" />
-                  <div className="flex-1">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <h3 className="font-bold text-gray-900 mb-1">Phí quá giờ</h3>
-                        <p className="text-sm text-gray-600">
-                          Phụ phí phát sinh nếu hoàn trả xe trễ giờ. Trường hợp trễ quá 5 giờ, phụ phí thêm 1 ngày thuê
-                        </p>
+                <div className="border-b border-blue-200 pb-4">
+                  <div className="flex items-start gap-3">
+                    <Info className="text-blue-600 text-lg mt-1 flex-shrink-0" />
+
+                    <div className="flex-1">
+                      <div className="flex items-start justify-between gap-4">
+                        <h3 className="font-semibold text-gray-900 text-base mb-1">
+                          Phí quá giờ
+                        </h3>
+
+                        <span className="text-blue-700 font-semibold text-base whitespace-nowrap">
+                          70.000₫/giờ
+                        </span>
                       </div>
-                      <span className="text-blue-600 font-bold text-sm whitespace-nowrap">70.000₫/giờ</span>
+
+                      <p className="text-[12px] text-gray-500">
+                        Phụ phí phát sinh nếu hoàn trả xe trễ giờ. Trường hợp trễ quá 5 giờ, phụ phí thêm 1 ngày thuê
+                      </p>
                     </div>
                   </div>
                 </div>
 
                 {/* Phí vệ sinh */}
-                <div className="flex items-start gap-3 p-3 border-b border-gray-100 last:border-b-0">
-                  <Info className="text-blue-500 text-lg mt-1 flex-shrink-0" />
-                  <div className="flex-1">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <h3 className="font-bold text-gray-900 mb-1">Phí vệ sinh</h3>
-                        <p className="text-sm text-gray-600">
-                          Phụ phí phát sinh khi xe hoàn trả không đảm bảo vệ sinh (nhiều vết bẩn, bùn cát, sình lầy...)
-                        </p>
+                <div className="border-b border-blue-200 pb-4">
+                  <div className="flex items-start gap-3">
+                    <Info className="text-blue-600 text-lg mt-1 flex-shrink-0" />
+
+                    <div className="flex-1">
+                      <div className="flex items-start justify-between gap-4">
+                        <h3 className="font-semibold text-gray-900 text-base mb-1">
+                          Phí vệ sinh
+                        </h3>
+
+                        <span className="text-blue-700 font-semibold text-base whitespace-nowrap">
+                          100.000₫ - 200.000₫
+                        </span>
                       </div>
-                      <span className="text-blue-600 font-bold text-sm whitespace-nowrap">100.000₫ - 200.000₫</span>
+
+                      <p className="text-[12px] text-gray-500">
+                        Phụ phí phát sinh khi xe hoàn trả không đảm bảo vệ sinh (nhiều vết bẩn, bùn cát, sình lầy...)
+                      </p>
                     </div>
                   </div>
                 </div>
 
                 {/* Phí khử mùi */}
-                <div className="flex items-start gap-3 p-3">
-                  <Info className="text-blue-500 text-lg mt-1 flex-shrink-0" />
-                  <div className="flex-1">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <h3 className="font-bold text-gray-900 mb-1">Phí khử mùi</h3>
-                        <p className="text-sm text-gray-600">
-                          Phụ phí phát sinh khi xe hoàn trả bị ám mùi khó chịu (mùi thuốc lá, thực phẩm nặng mùi...)
-                        </p>
+                <div>
+                  <div className="flex items-start gap-3">
+                    <Info className="text-blue-600 text-lg mt-1 flex-shrink-0" />
+
+                    <div className="flex-1">
+                      <div className="flex items-start justify-between gap-4">
+                        <h3 className="font-semibold text-gray-900 text-base mb-1">
+                          Phí khử mùi
+                        </h3>
+
+                        <span className="text-blue-700 font-semibold text-base whitespace-nowrap">
+                          300.000₫ - 500.000₫
+                        </span>
                       </div>
-                      <span className="text-blue-600 font-bold text-sm whitespace-nowrap">300.000₫ - 500.000₫</span>
+
+                      <p className="text-[12px] text-gray-500">
+                        Phụ phí phát sinh khi xe hoàn trả bị ám mùi khó chịu (mùi thuốc lá, thực phẩm nặng mùi...)
+                      </p>
                     </div>
                   </div>
                 </div>
+
               </div>
             </div>
+
           </div>
         </div>
 
@@ -2007,8 +1979,9 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
         {/* Xe khác */}
         {otherCars.length > 0 ? (
-          <div className="mt-12">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Xe điện khác</h2>
+          <div className="mb-8">
+            <h2 className="text-xl font-bold text-blue-600 mb-2">Xe điện khác</h2>
+            <div className="h-1.5 w-12 bg-blue-500 rounded-full mb-3"></div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {otherCars.map((otherCar) => (
                 <Link key={otherCar.id} href={`/cars/${otherCar.id}`}>
@@ -2043,8 +2016,9 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
             </div>
           </div>
         ) : (
-          <div className="mt-12">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Xe điện khác</h2>
+          <div className="mb-8">
+            <h2 className="text-xl font-bold text-blue-600 mb-2">Xe điện khác</h2>
+            <div className="h-1.5 w-12 bg-blue-500 rounded-full mb-3"></div>
             <p className="text-gray-500 text-center py-4">
               Hiện chưa có xe khác để hiển thị
             </p>
