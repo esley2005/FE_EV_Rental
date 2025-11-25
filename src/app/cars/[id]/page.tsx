@@ -50,7 +50,7 @@ import { SafetyOutlined, PlusOutlined } from '@ant-design/icons';
 //1
 // params.id chính là số ID của xe trong đường dẫn (VD: /cars/5 → id = "5")
 interface CarDetailPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 type CarLocationDisplay = {
@@ -200,7 +200,7 @@ const getQuantityFromRelation = (relation: any): number | null => {
 };
 
 export default function CarDetailPage({ params }: CarDetailPageProps) {
-  const { id: carIdParam } = params;
+  const { id: carIdParam } = React.use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
@@ -940,6 +940,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   };
 
   // Tính giá thuê dựa trên thời gian và loại (có tài xế hay không)
+  // Logic giống với backend: <= 0.4 ngày (4h) -> giá 4h, > 0.4 và <= 0.8 ngày (8h) -> giá 8h, > 0.8 ngày -> tính theo ngày
   const calculatePrice = (withDriver: boolean): number | null => {
     if (!dateRangeValue || !dateRangeValue[0] || !dateRangeValue[1] || !car) {
       return null;
@@ -952,24 +953,36 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     const totalHours = returnTime.diff(pickupTime, 'hour', true);
     if (totalHours <= 0) return null;
 
-    // Lấy giá theo loại (có tài xế hay không)
-    const pricePerDay = withDriver ? car.rentPricePerDayWithDriver : car.rentPricePerDay;
+    // Chuyển đổi sang số ngày (decimal)
+    const subtotalDays = totalHours / 24;
 
-    // Tính số ngày đầy đủ và số giờ còn lại
-    const fullDays = Math.floor(totalHours / 24);
-    const remainingHours = totalHours % 24;
+    let subTotal = 0;
 
-    // Tính tổng: (số ngày * giá/ngày) + (số giờ lẻ / 24 * giá/ngày)
-    const dayFee = fullDays * pricePerDay;
-    const partialDayFee = (remainingHours / 24) * pricePerDay;
+    // Logic tính giá theo backend
+    if (subtotalDays <= 0.4) {
+      // Dưới hoặc bằng 4 tiếng (0.4 ngày)
+      subTotal = withDriver 
+        ? (car.rentPricePer4HourWithDriver || 0)
+        : (car.rentPricePer4Hour || 0);
+    } else if (subtotalDays > 0.4 && subtotalDays <= 0.8) {
+      // Trên 4 tiếng và dưới hoặc bằng 8 tiếng (0.8 ngày)
+      subTotal = withDriver
+        ? (car.rentPricePer8HourWithDriver || 0)
+        : (car.rentPricePer8Hour || 0);
+    } else {
+      // Trên 8 tiếng - tính theo ngày
+      subTotal = subtotalDays * (withDriver 
+        ? (car.rentPricePerDayWithDriver || 0)
+        : (car.rentPricePerDay || 0));
+    }
 
-    return dayFee + partialDayFee;
+    return subTotal;
   };
 
   // Điều hướng đến trang booking
   const handleBookingClick = () => {
-    // Kiểm tra nếu xe đã hết
-    if (car.status !== 1) {
+    // Kiểm tra nếu xe đã hết hoặc không hoạt động
+    if (!car.isActive || car.isDeleted) {
       message.warning('Vui lòng chọn xe khác hoặc chọn giờ thuê khác');
       return;
     }
@@ -1711,76 +1724,103 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
               {/* CONTENT */}
               <div className="p-5 space-y-5">
-                {/* Box chung hiển thị toàn bộ giá thuê */}
-                <div className="bg-blue-50 rounded-lg p-4 border border-gray-200">
-                  {/* Theo giờ - Tự lái */}
-                  <div className="flex justify-between items-center mb-3">
-                    <div>
-                      {/* <p className="text-xs text-gray-600">Theo giờ (Tự lái)</p> */}
-
-                    </div>
-                    {/* <p className="text-lg font-bold text-gray-900 text-right">
-      {formatCurrency(car.rentPricePerHour)}/giờ
-    </p> */}
-                  </div>
-
-                  {/* Theo ngày - Tự lái */}
-                  <div className="flex justify-between items-center mb-3">
-                    <div>
-                      <p className="text-xs text-gray-600">Thuê theo ngày (Tự lái)</p>
-                      <div className="flex items-center gap-2">
-                        {/* <span className="text-sm text-gray-500 line-through">
-          {formatCurrency(Math.round(car.rentPricePerDay * 1.1))}
-        </span> */}
-                        {/* <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">-10%</span> */}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-gray-900">
-                        {formatCurrency(car.rentPricePerDay)}/ngày
-                      </p>
-                      {dateRangeValue && calculatePrice(false) && (
-                        <p className="text-sm text-blue-600 font-semibold mt-1">
-                          Tổng: {formatCurrency(Math.round(calculatePrice(false)!))}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Theo giờ - Có tài xế */}
-                  <div className="flex justify-between items-center mb-3">
-                    <div>
-                      {/* <p className="text-xs text-gray-600">Theo giờ (Có tài xế)</p> */}
-                      <div className="flex items-center gap-2">
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Theo ngày - Có tài xế */}
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="text-xs text-gray-600">Thuê theo ngày (Có tài xế)</p>
-                      <div className="flex items-center gap-2">
-
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-gray-900">
-                        {formatCurrency(car.rentPricePerDayWithDriver)}/ngày
-                      </p>
-                      {dateRangeValue && calculatePrice(true) && (
-                        <p className="text-sm text-blue-600 font-semibold mt-1">
-                          Tổng: {formatCurrency(Math.round(calculatePrice(true)!))}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                {/* Bảng giá thuê */}
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-blue-50">
+                        <th className="border border-gray-300 px-4 py-3 text-left text-sm font-semibold text-gray-700">
+                          Thời gian
+                        </th>
+                        <th className="border border-gray-300 px-4 py-3 text-center text-sm font-semibold text-gray-700">
+                          Tự lái
+                        </th>
+                        <th className="border border-gray-300 px-4 py-3 text-center text-sm font-semibold text-gray-700">
+                          Có tài xế
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {/* Giá 1 ngày */}
+                      <tr className="hover:bg-gray-50">
+                        <td className="border border-gray-300 px-4 py-3 text-sm font-medium text-gray-900">
+                          1 ngày
+                        </td>
+                        <td className="border border-gray-300 px-4 py-3 text-center">
+                          <p className="text-lg font-bold text-gray-900">
+                            {formatCurrency(car.rentPricePerDay || 0)}
+                          </p>
+                        </td>
+                        <td className="border border-gray-300 px-4 py-3 text-center">
+                          <p className="text-lg font-bold text-gray-900">
+                            {formatCurrency(car.rentPricePerDayWithDriver || 0)}
+                          </p>
+                        </td>
+                      </tr>
+                      {/* Giá dưới 8 tiếng */}
+                      <tr className="hover:bg-gray-50">
+                        <td className="border border-gray-300 px-4 py-3 text-sm font-medium text-gray-900">
+                          Dưới 8 tiếng
+                        </td>
+                        <td className="border border-gray-300 px-4 py-3 text-center">
+                          <p className="text-lg font-bold text-gray-900">
+                            {formatCurrency(car.rentPricePer8Hour || 0)}
+                          </p>
+                        </td>
+                        <td className="border border-gray-300 px-4 py-3 text-center">
+                          <p className="text-lg font-bold text-gray-900">
+                            {formatCurrency(car.rentPricePer8HourWithDriver || 0)}
+                          </p>
+                        </td>
+                      </tr>
+                      {/* Giá dưới 4 tiếng */}
+                      <tr className="hover:bg-gray-50">
+                        <td className="border border-gray-300 px-4 py-3 text-sm font-medium text-gray-900">
+                          Dưới 4 tiếng
+                        </td>
+                        <td className="border border-gray-300 px-4 py-3 text-center">
+                          <p className="text-lg font-bold text-gray-900">
+                            {formatCurrency(car.rentPricePer4Hour || 0)}
+                          </p>
+                        </td>
+                        <td className="border border-gray-300 px-4 py-3 text-center">
+                          <p className="text-lg font-bold text-gray-900">
+                            {formatCurrency(car.rentPricePer4HourWithDriver || 0)}
+                          </p>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
 
+                {/* Hiển thị tổng giá nếu đã chọn thời gian */}
+                {dateRangeValue && (
+                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                    <div className="space-y-2">
+                      {calculatePrice(false) && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600">Tổng (Tự lái):</span>
+                          <span className="text-lg font-bold text-blue-600">
+                            {formatCurrency(Math.round(calculatePrice(false)!))}
+                          </span>
+                        </div>
+                      )}
+                      {calculatePrice(true) && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600">Tổng (Có tài xế):</span>
+                          <span className="text-lg font-bold text-blue-600">
+                            {formatCurrency(Math.round(calculatePrice(true)!))}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Status */}
-                <div className={`text-center p-3 rounded-lg mb-4 ${car.status === 1 ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
+                <div className={`text-center p-3 rounded-lg mb-4 ${car.isActive && !car.isDeleted ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
                   <span className="font-semibold">
-                    {car.status === 1 ? ' Xe đang có sẵn' : 'Hết xe'}
+                    {car.isActive && !car.isDeleted ? ' Xe đang có sẵn' : 'Hết xe'}
                   </span>
                 </div>
 
@@ -1864,13 +1904,13 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                 {/* Booking Button */}
                 <button
                   onClick={handleBookingClick}
-                  disabled={car.isActive !== true}
-                  className={`w-full py-4 px-6 rounded-lg font-bold text-lg transition-colors mb-5 flex items-center justify-center gap-2 ${car.isActive === true
+                  disabled={car.isActive !== true || car.isDeleted === true}
+                  className={`w-full py-4 px-6 rounded-lg font-bold text-lg transition-colors mb-5 flex items-center justify-center gap-2 ${car.isActive === true && car.isDeleted !== true
                     ? 'bg-blue-500 text-white hover:bg-blue-600'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     }`}
                 >
-                  {car.status === 1 ? (
+                  {car.isActive === true && car.isDeleted !== true ? (
                     <>
                       <PlusOutlined />
                       CHỌN THUÊ

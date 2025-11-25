@@ -323,6 +323,11 @@ export default function DocumentsPage() {
       return;
     }
 
+    if (!user?.id) {
+      message.error("Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.");
+      return;
+    }
+
     setLicenseUploading(true);
     try {
       // Sử dụng selectedOrderId đã chọn
@@ -331,6 +336,7 @@ export default function DocumentsPage() {
         licenseNumber: values.licenseNumber || '',
         imageUrl: licenseImageFront, // Mặt trước
         imageUrl2: licenseImageBack, // Mặt sau
+        userId: user.id, // Required by backend
         rentalOrderId: selectedOrderId, // Sử dụng order đã chọn
       };
 

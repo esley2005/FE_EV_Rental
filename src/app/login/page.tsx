@@ -61,11 +61,13 @@ export default function LoginPage() {
         // Gọi API getProfile để lấy thông tin isActive mới nhất từ backend
         try {
           const profileResponse = await authApi.getProfile();
-          if (profileResponse.success && profileResponse.data) {
+          if (profileResponse.success && 'data' in profileResponse && profileResponse.data) {
             const profileData = profileResponse.data as any;
             const isActive = profileData.isActive ?? profileData.IsActive;
+            // Lấy PhoneNumber từ profile hoặc login response
+            const phoneNumber = profileData.phoneNumber || profileData.PhoneNumber || data.PhoneNumber || data.phoneNumber || "";
             
-            console.log('[Login] Profile data:', { isActive, profileData });
+            console.log('[Login] Profile data:', { isActive, profileData, phoneNumber });
             
             // Kiểm tra isActive: nếu false thì không cho đăng nhập
             if (isActive === false || isActive === "false" || isActive === 0) {
@@ -83,13 +85,15 @@ export default function LoginPage() {
               return;
             }
             
-            // Lưu user info với isActive từ profile
+            // Lưu user info với isActive và PhoneNumber từ profile
             localStorage.setItem('user', JSON.stringify({
               ...profileData,
-              id: profileData.id || userId,
+              id: profileData.id || profileData.userId || userId,
               role: profileData.role || role,
               fullName: profileData.fullName || fullName,
               email: profileData.email || formData.email,
+              phoneNumber: phoneNumber,
+              PhoneNumber: phoneNumber,
               isActive: isActive !== false
             }));
           } else {
@@ -111,12 +115,15 @@ export default function LoginPage() {
               return;
             }
             
-            // Lưu user info từ login response
+            // Lưu user info từ login response (bao gồm PhoneNumber)
+            const phoneNumber = data.PhoneNumber || data.phoneNumber || "";
             localStorage.setItem('user', JSON.stringify({
               id: userId,
               role: role,
               fullName: fullName,
               email: formData.email,
+              phoneNumber: phoneNumber,
+              PhoneNumber: phoneNumber,
               isActive: isActive !== false
             }));
           }
@@ -139,12 +146,15 @@ export default function LoginPage() {
             return;
           }
           
-          // Lưu user info từ login response
+          // Lưu user info từ login response (bao gồm PhoneNumber)
+          const phoneNumber = user?.PhoneNumber || user?.phoneNumber || data.PhoneNumber || data.phoneNumber || "";
           localStorage.setItem('user', JSON.stringify({
             id: userId,
             role: role,
             fullName: fullName,
             email: formData.email,
+            phoneNumber: phoneNumber,
+            PhoneNumber: phoneNumber,
             isActive: isActive !== false
           }));
         }

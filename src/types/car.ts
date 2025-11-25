@@ -8,14 +8,20 @@ export interface Car {
   batteryType: string;
   batteryDuration: number;
   rentPricePerDay: number;
-  rentPricePerHour: number;
+  rentPricePerHour?: number; 
   rentPricePerDayWithDriver: number;
-  rentPricePerHourWithDriver: number;
+  rentPricePerHourWithDriver?: number; 
+  rentPricePer4Hour: number;
+  rentPricePer8Hour: number;
+  rentPricePer4HourWithDriver: number;
+  rentPricePer8HourWithDriver: number;
+  depositOrderAmount: number;
+  depositCarAmount: number;
   imageUrl: string;
   imageUrl2?: string;
   imageUrl3?: string;
   status: number;
-  createdAt: string; // ISO date string (e.g., "2025-10-16T13:50:12.04")
+  createdAt: string; 
   updatedAt: string | null;
   isActive: boolean;
   isDeleted: boolean;

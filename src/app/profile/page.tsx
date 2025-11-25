@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   UserOutlined,
   MailOutlined,
+  PhoneOutlined,
   LockOutlined,
   EditOutlined,
   SaveOutlined,
@@ -12,6 +13,8 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   WarningOutlined,
+  UploadOutlined,
+  IdcardOutlined,
 } from "@ant-design/icons";
 import {
   Layout,
@@ -25,9 +28,11 @@ import {
   Form,
   Space,
   Tag,
+  Upload,
+  message,
 } from "antd";
-import { authApi } from "@/services/api";
-import type { User, UpdateProfileData, ChangePasswordData } from "@/services/api";
+import { authApi, driverLicenseApi } from "@/services/api";
+import type { User, UpdateProfileData, ChangePasswordData, DriverLicenseData } from "@/services/api";
 import dayjs from "dayjs";
 
 const { Content } = Layout;
@@ -50,6 +55,14 @@ export default function ProfilePage() {
   // Document verification status (for display only)
   const [licenseVerified, setLicenseVerified] = useState<boolean | null>(null);
   const [citizenIdVerified, setCitizenIdVerified] = useState<boolean | null>(null);
+
+  // GPLX upload states
+  const [licenseImageFront, setLicenseImageFront] = useState<string | null>(null);
+  const [licenseImageBack, setLicenseImageBack] = useState<string | null>(null);
+  const [licenseUploading, setLicenseUploading] = useState(false);
+  const [hasLicense, setHasLicense] = useState(false);
+  const [licenseId, setLicenseId] = useState<number | null>(null);
+  const [licenseForm] = Form.useForm();
 
   useEffect(() => {
     const loadUserProfile = async () => {
@@ -75,26 +88,61 @@ export default function ProfilePage() {
           profileForm.setFieldsValue({
             fullName: userData.fullName,
             email: userData.email,
+            phone: (userData as any).PhoneNumber || userData.phone || "",
           });
         }
 
         const response = await authApi.getProfile();
-        if (response.success && response.data) {
+        if (response.success && 'data' in response && response.data) {
           setUser(response.data);
           profileForm.setFieldsValue({
             fullName: response.data.fullName,
             email: response.data.email,
+            phone: (response.data as any).PhoneNumber || response.data.phone || "",
           });
           localStorage.setItem("user", JSON.stringify(response.data));
 
           // tải xác thực giấy phép lái xe nha
-if (response.data.driverLicenseStatus !== undefined) {
+          if (response.data.driverLicenseStatus !== undefined) {
             setLicenseVerified(response.data.driverLicenseStatus === 1);
+            setHasLicense(true);
           }
 
           // tải xác thực căn cước công dân
           if (response.data.citizenIdStatus !== undefined) {
             setCitizenIdVerified(response.data.citizenIdStatus === 1);
+          }
+
+          // Load existing GPLX if any
+          try {
+            const licenseResponse = await driverLicenseApi.getCurrent();
+            if (licenseResponse.success && licenseResponse.data) {
+              const licenseData = licenseResponse.data as any;
+              setHasLicense(true);
+              if (licenseData.id) setLicenseId(licenseData.id);
+              licenseForm.setFieldsValue({
+                licenseName: licenseData.name,
+                licenseNumber: licenseData.licenseNumber || "",
+              });
+              if (licenseData.imageUrl) setLicenseImageFront(licenseData.imageUrl);
+              if (licenseData.imageUrl2) setLicenseImageBack(licenseData.imageUrl2);
+              
+              // Check status from GPLX data
+              // Status có thể là: "Pending" (0), "Approved" (1), "Rejected" (2)
+              // hoặc số: 0, 1, 2
+              if (licenseData.status !== undefined) {
+                const status = licenseData.status;
+                if (status === 1 || status === "Approved" || status === "1") {
+                  setLicenseVerified(true);
+                } else if (status === 0 || status === "Pending" || status === "0") {
+                  setLicenseVerified(false);
+                } else {
+                  setLicenseVerified(false);
+                }
+              }
+            }
+          } catch (e) {
+            console.log("No existing GPLX found");
           }
         }
       } catch (error) {
@@ -105,7 +153,41 @@ if (response.data.driverLicenseStatus !== undefined) {
     loadUserProfile();
   }, [router, api, profileForm]);
 
-  const handleUpdateProfile = async (values: { fullName: string }) => {
+  // Helper function to reload license status
+  const reloadLicenseStatus = async () => {
+    try {
+      // Reload profile để lấy driverLicenseStatus
+      const profileResponse = await authApi.getProfile();
+      if (profileResponse.success && 'data' in profileResponse && profileResponse.data) {
+        if (profileResponse.data.driverLicenseStatus !== undefined) {
+          setLicenseVerified(profileResponse.data.driverLicenseStatus === 1);
+        }
+      }
+      
+      // Reload GPLX data để lấy status chi tiết
+      const licenseResponse = await driverLicenseApi.getCurrent();
+      if (licenseResponse.success && licenseResponse.data) {
+        const licenseData = licenseResponse.data as any;
+        if (licenseData.status !== undefined) {
+          const status = licenseData.status;
+          // Status có thể là: 0 (Pending), 1 (Approved), 2 (Rejected)
+          // hoặc string: "Pending", "Approved", "Rejected"
+          if (status === 1 || status === "Approved" || status === "1") {
+            setLicenseVerified(true);
+          } else if (status === 0 || status === "Pending" || status === "0") {
+            setLicenseVerified(false);
+          } else if (status === 2 || status === "Rejected" || status === "2") {
+            setLicenseVerified(false);
+          }
+        }
+        if (licenseData.id) setLicenseId(licenseData.id);
+      }
+    } catch (error) {
+      console.error("Error reloading license status:", error);
+    }
+  };
+
+  const handleUpdateProfile = async (values: { fullName: string; phone?: string }) => {
     setLoading(true);
     try {
       const trimmedFullName = values.fullName?.trim() || "";
@@ -123,6 +205,7 @@ if (response.data.driverLicenseStatus !== undefined) {
 
       const updateData: UpdateProfileData = {
         fullName: trimmedFullName,
+        phone: values.phone?.trim() || "",
         userId: user?.id, // Truyền userId từ user state
       };
 
@@ -140,6 +223,7 @@ if (response.data.driverLicenseStatus !== undefined) {
           profileForm.setFieldsValue({
             fullName: trimmedFullName,
             email: updatedUser.email || user?.email,
+            phone: updateData.phone || (updatedUser as any).PhoneNumber || updatedUser.phone || "",
           });
         }
 
@@ -283,7 +367,7 @@ if (response.data.driverLicenseStatus !== undefined) {
       if (!userId) {
         try {
           const profileResponse = await authApi.getProfile();
-          if (profileResponse.success && profileResponse.data) {
+          if (profileResponse.success && 'data' in profileResponse && profileResponse.data) {
             userId = profileResponse.data.id;
             // Cập nhật user state và localStorage
             setUser(profileResponse.data);
@@ -458,6 +542,159 @@ if (response.data.driverLicenseStatus !== undefined) {
     }
   };
 
+  // ================== Upload to Cloudinary ==================
+  const handleUploadToCloudinary = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'your-cloud-name';
+    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'ev_rental_cars';
+    
+    formData.append('upload_preset', uploadPreset);
+    
+    try {
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        {
+          method: 'POST',
+          body: formData,
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        const errorMsg = data.error?.message || `Upload failed with status: ${response.status}`;
+        throw new Error(errorMsg);
+      }
+      
+      if (data.secure_url) {
+        return data.secure_url;
+      }
+      throw new Error('No secure_url in response');
+    } catch (error) {
+      console.error('[Upload] Cloudinary upload failed:', error);
+      throw error;
+    }
+  };
+
+  // ================== GPLX upload logic ==================
+  const handleLicenseImageUpload = async (options: any, side: 'front' | 'back') => {
+    const { file, onSuccess, onError } = options;
+    
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      message.error('Chỉ chấp nhận file ảnh (JPG, PNG, GIF, WEBP)!');
+      onError(new Error('Invalid file type'));
+      return;
+    }
+    
+    // Validate file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      message.error('Kích thước file không được vượt quá 5MB!');
+      onError(new Error('File too large'));
+      return;
+    }
+    
+    setLicenseUploading(true);
+    
+    try {
+      const imageUrl = await handleUploadToCloudinary(file);
+      if (side === 'front') {
+        setLicenseImageFront(imageUrl);
+      } else {
+        setLicenseImageBack(imageUrl);
+      }
+      setTimeout(() => {
+        api.success({
+          message: 'Upload ảnh thành công!',
+          description: 'Ảnh đã được tải lên Cloudinary.',
+          placement: 'topRight',
+          icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+        });
+      }, 0);
+      onSuccess(imageUrl);
+    } catch (error) {
+      setTimeout(() => {
+        api.error({
+          message: 'Upload ảnh thất bại!',
+          description: error instanceof Error ? error.message : 'Vui lòng kiểm tra config Cloudinary và thử lại.',
+          placement: 'topRight',
+        });
+      }, 0);
+      onError(error);
+    } finally {
+      setLicenseUploading(false);
+    }
+  };
+
+  const handleSubmitLicense = async (values: any) => {
+    if (!licenseImageFront || !licenseImageBack) {
+      message.error("Vui lòng tải lên cả 2 mặt của giấy phép lái xe.");
+      return;
+    }
+
+    if (!user?.id) {
+      message.error("Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.");
+      return;
+    }
+
+    setLicenseUploading(true);
+    try {
+      const licenseData: DriverLicenseData = {
+        name: values.licenseName,
+        licenseNumber: values.licenseNumber || '',
+        imageUrl: licenseImageFront, // Mặt trước
+        imageUrl2: licenseImageBack, // Mặt sau
+        userId: user.id, // Required by backend
+        rentalOrderId: 0, // Upload chung, không cần đơn hàng cụ thể
+      };
+
+      const response = hasLicense && licenseId !== null
+        ? await driverLicenseApi.update({ ...licenseData, id: licenseId })
+        : await driverLicenseApi.upload(licenseData);
+
+      if (response.success) {
+        setLicenseVerified(false); // Will be verified by admin
+        setHasLicense(true);
+        
+        // Reload license status sau khi upload thành công
+        await reloadLicenseStatus();
+        
+        setTimeout(() => {
+          api.success({
+            message: "Gửi GPLX thành công",
+            description: "Yêu cầu xác thực GPLX đã được gửi, admin sẽ kiểm tra.",
+            placement: "topRight",
+            icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
+          });
+        }, 0);
+      } else {
+        setTimeout(() => {
+          api.error({
+            message: "Tải GPLX thất bại",
+            description: response.error || "Không thể tải lên giấy phép lái xe.",
+            placement: "topRight",
+            icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+          });
+        }, 0);
+      }
+    } catch (e) {
+      setTimeout(() => {
+        api.error({ 
+          message: "Tải GPLX thất bại",
+          description: "Có lỗi xảy ra khi tải lên giấy phép lái xe.",
+          placement: "topRight",
+          icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+        });
+      }, 0);
+    } finally {
+      setLicenseUploading(false);
+    }
+  };
+
   // ================== RENDER ==================
   if (!user) {
     return (
@@ -549,6 +786,9 @@ if (response.data.driverLicenseStatus !== undefined) {
                             <Descriptions column={1} bordered>
                               <Descriptions.Item label="Họ và tên">{user.fullName}</Descriptions.Item>
                               <Descriptions.Item label="Email">{user.email}</Descriptions.Item>
+                              <Descriptions.Item label="Số điện thoại">
+                                {(user as any).PhoneNumber || user.phone || "Chưa cập nhật"}
+                              </Descriptions.Item>
                             </Descriptions>
 <Button
                               type="primary"
@@ -577,6 +817,15 @@ if (response.data.driverLicenseStatus !== undefined) {
                                 <Input size="large" prefix={<MailOutlined />} disabled />
                               </Form.Item>
                             )}
+                            <Form.Item 
+                              label="Số điện thoại" 
+                              name="phone"
+                              rules={[
+                                { pattern: /^[0-9]{10,11}$/, message: "Số điện thoại phải có 10-11 chữ số!" }
+                              ]}
+                            >
+                              <Input size="large" prefix={<PhoneOutlined />} placeholder="Nhập số điện thoại" />
+                            </Form.Item>
                             <Space>
                               <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading} className="bg-blue-600">
                                 Lưu thay đổi
@@ -823,6 +1072,132 @@ if (response.data.driverLicenseStatus !== undefined) {
                             )}
                           </div>
                         )}
+                      </div>
+                    ),
+                  },
+                  {
+                    key: "3",
+                    label: (
+                      <span>
+                        <IdcardOutlined /> Giấy phép lái xe
+                      </span>
+                    ),
+                    children: (
+                      <div>
+                        <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                          <p className="text-sm text-gray-700 mb-2">
+                            <strong>Lưu ý:</strong> Vui lòng tải lên cả 2 mặt (mặt trước và mặt sau) của giấy phép lái xe.
+                          </p>
+                          <p className="text-xs text-gray-600">
+                            Ảnh phải rõ ràng, đầy đủ thông tin và không bị mờ.
+                          </p>
+                        </div>
+
+                        <Form form={licenseForm} layout="vertical" onFinish={handleSubmitLicense}>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            {/* Upload mặt trước */}
+                            <Form.Item label="Mặt trước GPLX" required>
+                              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                                {licenseImageFront ? (
+                                  <div className="relative">
+                                    <img 
+                                      src={licenseImageFront} 
+                                      alt="GPLX mặt trước" 
+                                      className="w-full h-48 object-contain rounded-lg mb-2" 
+                                    />
+                                    <Button
+                                      type="link"
+                                      danger
+                                      onClick={() => setLicenseImageFront(null)}
+                                      className="absolute top-0 right-0"
+                                    >
+                                      Xóa
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Upload
+                                    showUploadList={false}
+                                    customRequest={(options) => handleLicenseImageUpload(options, 'front')}
+                                    accept="image/*"
+                                  >
+                                    <Button icon={<UploadOutlined />} loading={licenseUploading}>
+                                      Tải lên mặt trước
+                                    </Button>
+                                  </Upload>
+                                )}
+                              </div>
+                            </Form.Item>
+
+                            {/* Upload mặt sau */}
+                            <Form.Item label="Mặt sau GPLX" required>
+                              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                                {licenseImageBack ? (
+                                  <div className="relative">
+                                    <img 
+                                      src={licenseImageBack} 
+                                      alt="GPLX mặt sau" 
+                                      className="w-full h-48 object-contain rounded-lg mb-2" 
+                                    />
+                                    <Button
+                                      type="link"
+                                      danger
+                                      onClick={() => setLicenseImageBack(null)}
+                                      className="absolute top-0 right-0"
+                                    >
+                                      Xóa
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Upload
+                                    showUploadList={false}
+                                    customRequest={(options) => handleLicenseImageUpload(options, 'back')}
+                                    accept="image/*"
+                                  >
+                                    <Button icon={<UploadOutlined />} loading={licenseUploading}>
+                                      Tải lên mặt sau
+                                    </Button>
+                                  </Upload>
+                                )}
+                              </div>
+                            </Form.Item>
+                          </div>
+
+                          <Form.Item 
+                            label="Họ và tên (trên GPLX)" 
+                            name="licenseName" 
+                            rules={[{ required: true, message: "Nhập họ tên trên GPLX" }]}
+                          >
+                            <Input size="large" placeholder="Nhập họ và tên như trên GPLX" />
+                          </Form.Item>
+
+                          <Form.Item 
+                            label="Số GPLX" 
+                            name="licenseNumber"
+                          >
+                            <Input size="large" placeholder="Nhập số giấy phép lái xe (nếu có)" />
+                          </Form.Item>
+
+                          <Space>
+                            <Button 
+                              type="primary" 
+                              htmlType="submit" 
+                              icon={<SaveOutlined />} 
+                              loading={licenseUploading}
+                              className="bg-blue-600"
+                            >
+                              {hasLicense ? "Cập nhật GPLX" : "Gửi GPLX"}
+                            </Button>
+                            <Button 
+                              onClick={() => {
+                                setLicenseImageFront(null);
+                                setLicenseImageBack(null);
+                                licenseForm.resetFields();
+                              }}
+                            >
+                              Hủy
+                            </Button>
+                          </Space>
+                        </Form>
                       </div>
                     ),
                   },

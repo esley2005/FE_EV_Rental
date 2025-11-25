@@ -639,6 +639,7 @@ export interface DriverLicenseData {
   imageUrl: string; // Mặt trước
   imageUrl2?: string; // Mặt sau
   rentalOrderId?: number | null;
+  userId?: number; // UserId để backend kiểm tra user tồn tại
   status?: string; // Pending, Approved, Rejected hoặc 0, 1, 2
   createdAt?: string;
   updatedAt?: string;
@@ -667,7 +668,7 @@ export const authApi = {
     }),
 
   // Đăng ký
-  register: (userData: Partial<User> & { password: string }) =>
+  register: (userData: { email: string; password: string; fullName: string; phoneNumber: string }) =>
     apiCall<AuthResponse>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(userData),
@@ -756,9 +757,15 @@ export const authApi = {
 
   // Lấy tất cả user (khách hàng) từ hệ thống auth
   getAllUsers: async () => {
+    // Ưu tiên endpoint đúng từ backend: /User/GetAll
     const candidates = [
-      '/User/GetAll', '/User', '/User/all', '/User/List',
-      '/user', '/users', '/user/all', '/auth/users'
+      '/User/GetAll', // Endpoint đúng từ backend
+      '/User', 
+      '/User/List',
+      '/user/GetAll',
+      '/user',
+      '/users',
+      '/auth/users'
     ];
     let lastError: any = null;
     
@@ -980,13 +987,21 @@ export const authApi = {
 export const driverLicenseApi = {
   // Upload/Create driver license
   upload: (data: DriverLicenseData) => {
-    // Backend requires RentalOrderId as int (not nullable)
+    // Backend requires UserId and RentalOrderId as int (not nullable)
     // Convert to PascalCase to match backend DTO
+    if (!data.userId) {
+      return Promise.resolve({
+        success: false,
+        error: 'UserId is required',
+      } as any);
+    }
+    
     const createData = {
       Name: data.name,
       LicenseNumber: data.licenseNumber || '',
       ImageUrl: data.imageUrl || '',
       ImageUrl2: data.imageUrl2 || '',
+      UserId: data.userId, // Required by backend
       RentalOrderId: data.rentalOrderId || 0, // Use 0 if no order yet
     };
     
@@ -1164,11 +1179,13 @@ export interface RevenueByLocationData {
 }
 
 export interface CreatePaymentDTO {
-  userId: number;
-  rentalOrderId: number;
+  userId?: number;
+  rentalOrderId?: number;
   amount: number;
-  status: string;
-  rentalLocationId?: number;
+  paymentDate?: string;
+  paymentType?: 'OrderDeposit' | 'Deposit' | 'OrderPayment' | 'RefundPayment';
+  paymentMethod?: string;
+  billingImageUrl?: string;
 }
 
 export interface UpdatePaymentStatusDTO {
@@ -1392,6 +1409,19 @@ export const rentalOrderApi = {
   confirmPayment: (orderId: number) => {
     return apiCall<{ success: boolean; message?: string }>(`/RentalOrder/ConfirmPayment?orderId=${orderId}`, {
       method: 'PUT',
+    });
+  },
+
+  // Xác nhận thanh toán OrderDeposit thủ công từ VNPay callback
+  confirmOrderDepositManual: (txnRef: string, responseCode: string) => {
+    // Backend route: [Route("api/[controller]")] + [HttpPost("api/payment/confirm-orderdeposit-manual")]
+    // Full path: /api/RentalOrder/api/payment/confirm-orderdeposit-manual
+    return apiCall<{ success: boolean; message?: string; orderId?: number }>('/RentalOrder/api/payment/confirm-orderdeposit-manual', {
+      method: 'POST',
+      body: JSON.stringify({
+        TxnRef: txnRef,
+        ResponseCode: responseCode,
+      }),
     });
   },
 
@@ -1635,6 +1665,33 @@ export const paymentApi = {
       }
     );
     return response;
+  },
+
+  // Tạo payment từ order (CreateFromOrder)
+  create: (data: CreatePaymentDTO) => {
+    // Convert PaymentType string to number (enum)
+    const paymentTypeMap: Record<string, number> = {
+      'OrderDeposit': 0,
+      'Deposit': 1,
+      'OrderPayment': 2,
+      'RefundPayment': 3,
+    };
+    const paymentType = typeof data.paymentType === 'string' 
+      ? paymentTypeMap[data.paymentType] ?? 0 
+      : (data.paymentType ?? 0);
+
+    return apiCall<PaymentData>('/Payment/CreateFromOrder', {
+      method: 'POST',
+      body: JSON.stringify({
+        PaymentDate: data.paymentDate ? new Date(data.paymentDate).toISOString() : new Date().toISOString(),
+        PaymentType: paymentType,
+        Amount: data.amount,
+        PaymentMethod: data.paymentMethod || null,
+        BillingImageUrl: data.billingImageUrl || null,
+        UserId: data.userId || null,
+        RentalOrderId: data.rentalOrderId || null,
+      }),
+    });
   },
 };
 

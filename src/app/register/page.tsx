@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Mail, Lock, CheckCircle, XCircle, AlertTriangle, User } from "lucide-react";
+import { Mail, Lock, CheckCircle, XCircle, AlertTriangle, User, Phone } from "lucide-react";
 import { Input, Button, Checkbox, Modal, notification as antdNotification } from "antd";
 import { authApi } from "@/services/api";
 
@@ -18,6 +18,7 @@ export default function RegisterPage() {
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
+    phoneNumber: "",
     password: "",
     confirmPassword: "",
     agreeToTerms: false,
@@ -64,12 +65,24 @@ export default function RegisterPage() {
       return;
     }
 
+    // Kiểm tra số điện thoại
+    if (!formData.phoneNumber || formData.phoneNumber.trim() === "") {
+      api.error({
+        message: "Số điện thoại không hợp lệ",
+        description: "Vui lòng nhập số điện thoại!",
+        placement: "topRight",
+        icon: <XCircle color="#ff4d4f" />,
+      });
+      return;
+    }
+
     setLoading(true);
     try {
       const response = await authApi.register({
         email: formData.email,
         password: formData.password,
         fullName: formData.fullName,
+        phoneNumber: formData.phoneNumber,
       });
 
       if (response.error) {
@@ -151,6 +164,18 @@ export default function RegisterPage() {
                 prefix={<Mail />}
                 placeholder="Email"
                 value={formData.email}
+                onChange={handleChange}
+                required
+                style={{ height: 40 }}
+              />
+
+              <Input
+                name="phoneNumber"
+                type="tel"
+                size="large"
+                prefix={<Phone />}
+                placeholder="Số điện thoại"
+                value={formData.phoneNumber}
                 onChange={handleChange}
                 required
                 style={{ height: 40 }}

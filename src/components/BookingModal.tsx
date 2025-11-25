@@ -135,6 +135,19 @@ function DocumentUploadModal({ visible, rentalOrderId, onComplete, onCancel }: D
       return;
     }
 
+    // Lấy userId từ localStorage
+    const userStr = localStorage.getItem("user");
+    if (!userStr) {
+      message.error("Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.");
+      return;
+    }
+    const userData = JSON.parse(userStr);
+    const userId = userData.id || userData.userId;
+    if (!userId) {
+      message.error("Không tìm thấy ID người dùng. Vui lòng đăng nhập lại.");
+      return;
+    }
+
     setLicenseUploading(true);
     try {
       const licenseData: DriverLicenseData = {
@@ -142,6 +155,7 @@ function DocumentUploadModal({ visible, rentalOrderId, onComplete, onCancel }: D
         licenseNumber: values.licenseNumber || '',
         imageUrl: licenseImageFront,
         imageUrl2: licenseImageBack,
+        userId: userId, // Required by backend
         rentalOrderId: rentalOrderId, // Sử dụng rentalOrderId từ đơn hàng
       };
 

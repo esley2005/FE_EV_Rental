@@ -685,12 +685,15 @@ export default function MyBookingsPage() {
       
       message.error(errorMessage);
       
-      api.error({
-        message: "Thanh toán thất bại",
-        description: errorMessage,
-        placement: "topRight",
-        duration: 5,
-      });
+      // Wrap trong setTimeout để tránh warning về React 18 concurrent mode
+      setTimeout(() => {
+        api.error({
+          message: "Thanh toán thất bại",
+          description: errorMessage,
+          placement: "topRight",
+          duration: 5,
+        });
+      }, 0);
     } finally {
       setLoading(false);
     }
@@ -740,29 +743,6 @@ export default function MyBookingsPage() {
             <p className="text-gray-600 mt-1">Quản lý tất cả đơn thuê xe của bạn</p>
           </div>
 
-          {/* ⚠️ Alert: Thông báo về thanh toán cọc ở đầu trang */}
-          {filteredBookings.some(booking => canPayDeposit(booking)) && (
-            <Alert
-              message={
-                <div className="py-1">
-                  <div className="font-bold text-lg text-red-600 mb-2 flex items-center gap-2">
-                    <WarningOutlined className="text-2xl" />
-                    THÔNG BÁO QUAN TRỌNG: BẠN CÓ ĐƠN HÀNG CẦN THANH TOÁN CỌC
-                  </div>
-                  <div className="text-base space-y-1">
-                    <p>• Bạn có <strong className="text-red-600">{filteredBookings.filter(booking => canPayDeposit(booking)).length} đơn hàng</strong> đang chờ thanh toán tiền đặt cọc</p>
-                    <p>• <strong className="text-red-600">ĐỂ ĐẢM BẢO ĐƠN HÀNG ĐƯỢC XÁC NHẬN, BẠN BẮT BUỘC PHẢI THANH TOÁN CỌC NGAY</strong></p>
-                    <p>• Vui lòng mở chi tiết đơn hàng và nhấn nút "Thanh toán cọc" để tiếp tục</p>
-                  </div>
-                </div>
-              }
-              type="error"
-              showIcon
-              icon={<WarningOutlined className="text-2xl" />}
-              className="mb-6 border-2 border-red-500 shadow-lg"
-              closable
-            />
-          )}
 
           {/* Filters */}
           <Card className="mb-6 shadow-md">
@@ -866,72 +846,6 @@ export default function MyBookingsPage() {
                           </div>
                         </div>
 
-                        {/* ⚠️ Alert: Thông báo về thanh toán cọc trên từng card với countdown */}
-                        {canPayDeposit(booking) && (() => {
-                          const countdown = getDepositCountdown(booking);
-                          const isUrgent = countdown.remaining < 2 * 60 * 1000; // < 2 phút
-                          const isExpired = countdown.expired;
-                          
-                          return (
-                            <Alert
-                              message={
-                                <div className="font-bold text-base text-red-600 flex items-center gap-2">
-                                  <WarningOutlined className="text-lg" />
-                                  CẦN THANH TOÁN CỌC NGAY
-                                  {!isExpired && (
-                                    <span className={`ml-2 font-mono text-lg ${isUrgent ? 'text-red-700 animate-pulse' : 'text-orange-600'}`}>
-                                      ⏱️ {countdown.formatted}
-                                    </span>
-                                  )}
-                                  {isExpired && (
-                                    <span className="ml-2 font-mono text-lg text-red-700">
-                                      ⏱️ HẾT THỜI GIAN
-                                    </span>
-                                  )}
-                                </div>
-                              }
-                              description={
-                                <div className="text-sm space-y-1 mt-2">
-                                  {isExpired ? (
-                                    <>
-                                      <p className="font-bold text-red-700">⚠️ THỜI GIAN ĐÃ HẾT!</p>
-                                      <p>• Đơn hàng của bạn có thể bị hủy nếu không thanh toán cọc ngay</p>
-                                    </>
-                                  ) : isUrgent ? (
-                                    <>
-                                      <p className="font-bold text-red-700">⚠️ CÒN {countdown.formatted} - CẦN THANH TOÁN NGAY!</p>
-                                      <p>• Đơn hàng của bạn <strong className="text-red-600">CHƯA ĐƯỢC XÁC NHẬN</strong></p>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <p>• Đơn hàng của bạn <strong className="text-red-600">CHƯA ĐƯỢC XÁC NHẬN</strong></p>
-                                      
-                                    </>
-                                  )}
-                                  <p>• <strong className="text-red-600">BẠN BẮT BUỘC PHẢI thanh toán tiền đặt cọc</strong> để giữ đơn hàng</p>
-                                  <p>• Số tiền cần thanh toán: <strong className="text-blue-600 text-base">{formatCurrency(getDepositAmount(booking))}</strong></p>
-                                  <p className="mt-2 font-semibold">👉 Mở chi tiết đơn hàng và nhấn "Thanh toán cọc" để tiếp tục</p>
-                                </div>
-                              }
-                              type={isExpired ? "error" : isUrgent ? "error" : "warning"}
-                              showIcon
-                              icon={<WarningOutlined className="text-xl" />}
-                              className={`mb-3 border-2 ${isExpired || isUrgent ? 'border-red-500' : 'border-orange-500'}`}
-                              action={
-                                <Button
-                                  type="primary"
-                                  danger
-                                  size="small"
-                                  icon={<DollarOutlined />}
-                                  onClick={() => showBookingDetail(booking)}
-                                  className="mt-2"
-                                >
-                                  Thanh toán ngay
-                                </Button>
-                              }
-                            />
-                          );
-                        })()}
 
                         {/* Thông báo khi đơn hàng đã xác nhận */}
                         {normalizeStatus(booking.status) === 'confirmed' && (
@@ -940,13 +854,17 @@ export default function MyBookingsPage() {
                             description={
                               <div>
                                 <p className="mb-2">
-                                  Đơn hàng đã được xác nhận, Bạn có thể nhận xe ngay bây giờ. 
+                                  Đơn hàng đã được xác nhận, Bạn có thể kiểm tra gmail để biết chi tiết về đơn hàng. 
                                 </p>
                                 <p className="mb-2">
                                   <strong>Địa điểm nhận xe:</strong> {locationName}
                                 </p>
+                            
                                 <p className="mb-2">
                                   <strong>Thời gian nhận xe:</strong> {formatDate(booking.pickupTime)}
+                                </p>
+                                <p className="mb-2">
+                                  <strong>Thời gian trả xe:</strong> {formatDate(booking.expectedReturnTime)}
                                 </p>
                                 <Link href="/guides/terms" className="text-blue-600 hover:text-blue-700 underline">
                                   Xem điều khoản cầm giấy tờ →
@@ -1101,46 +1019,6 @@ export default function MyBookingsPage() {
       >
         {selectedBooking && (
           <div className="space-y-4">
-            {/* ⚠️ Alert: Thông báo về thanh toán cọc */}
-            {canPayDeposit(selectedBooking) && (
-              <Alert
-                message={
-                  <div className="py-2">
-                    <div className="font-bold text-lg text-red-600 mb-2 flex items-center gap-2">
-                      <WarningOutlined className="text-2xl" />
-                      QUAN TRỌNG: BẠN PHẢI THANH TOÁN CỌC ĐỂ XÁC NHẬN ĐƠN HÀNG
-                    </div>
-                    <div className="text-base space-y-1">
-                      <p>• Đơn hàng của bạn đã được tạo nhưng <strong className="text-red-600">CHƯA ĐƯỢC XÁC NHẬN</strong></p>
-                      <p>• Để đảm bảo đơn hàng được giữ lại, bạn <strong className="text-red-600">BẮT BUỘC PHẢI thanh toán tiền đặt cọc</strong></p>
-                      <p>• Số tiền cọc cần thanh toán: <strong className="text-lg text-blue-600">{formatCurrency(getDepositAmount(selectedBooking))}</strong></p>
-                      <p className="mt-2 font-semibold">👉 Vui lòng nhấn nút "Thanh toán cọc" ở phía dưới để tiếp tục.</p>
-                    </div>
-                  </div>
-                }
-                type="error"
-                showIcon
-                icon={<WarningOutlined className="text-2xl" />}
-                className="mb-4 border-2 border-red-500"
-                action={
-                  <Button
-                    type="primary"
-                    danger
-                    size="large"
-                    icon={<DollarOutlined />}
-                    onClick={() => {
-                      if (selectedBooking) {
-                        handlePayDeposit(selectedBooking);
-                      }
-                    }}
-                    loading={loading}
-                    className="h-auto"
-                  >
-                    Thanh toán cọc ngay
-                  </Button>
-                }
-              />
-            )}
             
             {/* Order Status & Basic Info */}
             <Card size="small" className="bg-blue-50">
@@ -1253,8 +1131,8 @@ export default function MyBookingsPage() {
             <Card title="Thông tin thời gian và địa điểm" size="small">
               <Descriptions column={2} size="small" bordered>
                 <Descriptions.Item label="Mã đơn hàng">#{selectedBooking.id}</Descriptions.Item>
-                <Descriptions.Item label="Số điện thoại">{selectedBooking.phoneNumber || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Ngày đặt">{formatDate(selectedBooking.orderDate || selectedBooking.createdAt)}</Descriptions.Item>
+                {/* <Descriptions.Item label="Số điện thoại">{selectedBooking.phoneNumber || '-'}</Descriptions.Item> */}
+                {/* <Descriptions.Item label="Ngày đặt">{formatDate(selectedBooking.orderDate || selectedBooking.createdAt)}</Descriptions.Item> */}
                 <Descriptions.Item label="Có tài xế">
                   {selectedBooking.withDriver ? <Tag color="blue">Có</Tag> : <Tag color="default">Không</Tag>}
                 </Descriptions.Item>
@@ -1277,26 +1155,26 @@ export default function MyBookingsPage() {
 
             {/* Payment Details */}
             <Card 
-              title={<><DollarOutlined /> Chi tiết thanh toán</>} 
-              size="small"
-              extra={
-                canPayDeposit(selectedBooking) && (
-                  <Button
-                    type="primary"
-                    icon={<DollarOutlined />}
-                    onClick={() => {
-                      if (selectedBooking) {
-                        handlePayDeposit(selectedBooking);
-                      }
-                    }}
-                    loading={loading}
-                    className="bg-red-600 hover:bg-red-700 text-base font-bold h-auto py-2 px-6"
-                    size="large"
-                  >
-                    💳 Thanh toán cọc ngay
-                  </Button>
-                )
-              }
+              // title={<><DollarOutlined /> Chi tiết thanh toán</>} 
+              // size="small"
+              // extra={
+              //   canPayDeposit(selectedBooking) && (
+              //     <Button
+              //       type="primary"
+              //       icon={<DollarOutlined />}
+              //       onClick={() => {
+              //         if (selectedBooking) {
+              //           handlePayDeposit(selectedBooking);
+              //         }
+              //       }}
+              //       loading={loading}
+              //       className="bg-red-600 hover:bg-red-700 text-base font-bold h-auto py-2 px-6"
+              //       size="large"
+              //     >
+              //        Thanh toán cọc ngay
+              //     </Button>
+              //   )
+              // }
             >
               <Descriptions column={2} size="small" bordered>
                 {selectedBooking.subTotal && (
