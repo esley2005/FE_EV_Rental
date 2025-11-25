@@ -219,25 +219,11 @@ export default function MyBookingsPage() {
         ? ordersResponse.data
         : (ordersResponse.data as any)?.$values || [];
 
-      // Load all cars, licenses, and citizen IDs for mapping (location sẽ lấy từ car object)
-      const [carsResponse, licensesResponse, citizenIdsResponse] = await Promise.all([
-        carsApi.getAll(),
-        driverLicenseApi.getAll(),
-        citizenIdApi.getAll()
-      ]);
+      // Load all cars for mapping (location sẽ lấy từ car object)
+      const carsResponse = await carsApi.getAll();
 
       const cars: Car[] = carsResponse.success && carsResponse.data
         ? (Array.isArray(carsResponse.data) ? carsResponse.data : (carsResponse.data as any)?.$values || [])
-        : [];
-
-      // Xử lý licenses
-      const licenses: DriverLicenseData[] = licensesResponse.success && licensesResponse.data
-        ? (Array.isArray(licensesResponse.data) ? licensesResponse.data : (licensesResponse.data as any)?.$values || [])
-        : [];
-
-      // Xử lý citizen IDs
-      const citizenIds: CitizenIdData[] = citizenIdsResponse.success && citizenIdsResponse.data
-        ? (Array.isArray(citizenIdsResponse.data) ? citizenIdsResponse.data : (citizenIdsResponse.data as any)?.$values || [])
         : [];
 
       // ✅ Logic mới: Lấy tất cả locations và tìm location của mỗi car bằng Car/GetByLocationId
@@ -309,45 +295,73 @@ export default function MyBookingsPage() {
       }
 
       // Map orders with car, location, license, and citizen ID info
-      const bookingsWithDetails: BookingWithDetails[] = orders.map((order: RentalOrderData) => {
-        const car = cars.find((c) => c.id === order.carId);
-        const carId = car ? Number(car.id) : null;
-        const location = carId && !Number.isNaN(carId) ? carLocationMap.get(carId) : undefined;
-        const license = licenses.find((l) => l.rentalOrderId === order.id);
-        const citizenIdDoc = citizenIds.find((c) => c.rentalOrderId === order.id);
-        
-        // Tự động cập nhật orderDate = createdAt nếu orderDate là giá trị mặc định
-        const orderId = order.id;
-        const orderDate = order.orderDate || (order as any).OrderDate;
-        const createdAt = order.createdAt || (order as any).CreatedAt;
-        
-        // Kiểm tra nếu orderDate là giá trị mặc định (0001-01-01 hoặc 1901-01-01)
-        const isDefaultDate = !orderDate || 
-                             orderDate === '0001-01-01T00:00:00' || 
-                             orderDate === '1901-01-01T00:00:00' ||
-                             orderDate.includes('0001-01-01') ||
-                             orderDate.includes('1901-01-01');
-        
-        // Tự động cập nhật OrderDate = createdAt trong background (không block UI)
-        if (orderId && isDefaultDate && createdAt) {
-          console.log(`[MyBookings] Auto-updating OrderDate for order ${orderId} to createdAt:`, createdAt);
-          rentalOrderApi.updateOrderDate(orderId, createdAt).catch((error: unknown) => {
-            // Không hiển thị lỗi cho user, chỉ log
-            console.log(`[MyBookings] Failed to auto-update OrderDate for order ${orderId}:`, error);
-          });
-        }
-        
-        return {
-          ...order,
-          // Nếu orderDate là default, dùng createdAt để hiển thị (tạm thời cho đến khi update thành công)
-          orderDate: isDefaultDate ? createdAt : orderDate,
-          car,
-          location,
-          user,
-          driverLicense: license,
-          citizenIdDoc,
-        };
-      });
+      const bookingsWithDetails: BookingWithDetails[] = await Promise.all(
+        orders.map(async (order: RentalOrderData) => {
+          const car = cars.find((c) => c.id === order.carId);
+          const carId = car ? Number(car.id) : null;
+          const location = carId && !Number.isNaN(carId) ? carLocationMap.get(carId) : undefined;
+          
+          // Lấy driverLicenseId từ order nếu có, sau đó gọi getById
+          let license: DriverLicenseData | undefined = undefined;
+          const orderDriverLicenseId = (order as any).driverLicenseId || order.driverLicenseId;
+          if (orderDriverLicenseId && !Number.isNaN(Number(orderDriverLicenseId))) {
+            try {
+              const licenseResponse = await driverLicenseApi.getById(Number(orderDriverLicenseId));
+              if (licenseResponse.success && licenseResponse.data) {
+                license = licenseResponse.data;
+              }
+            } catch (error) {
+              console.error(`Error loading driverLicense ${orderDriverLicenseId} for order ${order.id}:`, error);
+            }
+          }
+          
+          // Lấy citizenId từ order nếu có, sau đó gọi getById
+          let citizenIdDoc: CitizenIdData | undefined = undefined;
+          const orderCitizenId = (order as any).citizenId || order.citizenId;
+          if (orderCitizenId && !Number.isNaN(Number(orderCitizenId))) {
+            try {
+              const citizenIdResponse = await citizenIdApi.getById(Number(orderCitizenId));
+              if (citizenIdResponse.success && citizenIdResponse.data) {
+                citizenIdDoc = citizenIdResponse.data;
+              }
+            } catch (error) {
+              console.error(`Error loading citizenId ${orderCitizenId} for order ${order.id}:`, error);
+            }
+          }
+          
+          // Tự động cập nhật orderDate = createdAt nếu orderDate là giá trị mặc định
+          const orderId = order.id;
+          const orderDate = order.orderDate || (order as any).OrderDate;
+          const createdAt = order.createdAt || (order as any).CreatedAt;
+          
+          // Kiểm tra nếu orderDate là giá trị mặc định (0001-01-01 hoặc 1901-01-01)
+          const isDefaultDate = !orderDate || 
+                               orderDate === '0001-01-01T00:00:00' || 
+                               orderDate === '1901-01-01T00:00:00' ||
+                               orderDate.includes('0001-01-01') ||
+                               orderDate.includes('1901-01-01');
+          
+          // Tự động cập nhật OrderDate = createdAt trong background (không block UI)
+          if (orderId && isDefaultDate && createdAt) {
+            console.log(`[MyBookings] Auto-updating OrderDate for order ${orderId} to createdAt:`, createdAt);
+            rentalOrderApi.updateOrderDate(orderId, createdAt).catch((error: unknown) => {
+              // Không hiển thị lỗi cho user, chỉ log
+              console.log(`[MyBookings] Failed to auto-update OrderDate for order ${orderId}:`, error);
+            });
+          }
+          
+          return {
+            ...order,
+            // Nếu orderDate là default, dùng createdAt để hiển thị (tạm thời cho đến khi update thành công)
+            orderDate: isDefaultDate ? createdAt : orderDate,
+            car,
+            location,
+            user,
+            driverLicense: license,
+            citizenIdDoc,
+          };
+        })
+      );
 
       // Sort by orderDate descending (newest first)
       bookingsWithDetails.sort((a, b) => {

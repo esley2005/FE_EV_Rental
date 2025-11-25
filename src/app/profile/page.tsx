@@ -233,7 +233,7 @@ export default function ProfilePage() {
       }
 
       // Lấy số điện thoại từ user state (vì trường phone đã bị disabled)
-      const existingPhone = (user as any).PhoneNumber || (user as any).phoneNumber || user.phone || "";
+      const existingPhone = user ? ((user as any).PhoneNumber || (user as any).phoneNumber || user.phone || "") : "";
       
       const updateData: UpdateProfileData = {
         fullName: trimmedFullName,

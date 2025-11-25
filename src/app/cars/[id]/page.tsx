@@ -12,6 +12,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import BookingModal from "@/components/BookingModal";
 import CarMap from "@/components/CarMap";
+import FeedbackSection from "@/components/FeedbackSection";
 import { carsApi, authApi, rentalLocationApi, carRentalLocationApi, rentalOrderApi } from "@/services/api";
 import type { Car } from "@/types/car";
 import type { User } from "@/services/api";
@@ -2053,7 +2054,10 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
           </div>
         </div>
 
-
+        {/* Feedback Section */}
+        <div className="mb-8">
+          <FeedbackSection carId={car?.id} />
+        </div>
 
         {/* Xe khác */}
         {
