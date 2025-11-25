@@ -5,6 +5,9 @@ import { notFound, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Spin, message, notification, Modal, Button, DatePicker } from "antd";
 import dayjs, { Dayjs } from "dayjs";
+import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
+
+dayjs.extend(isSameOrBefore);
 
 const { RangePicker } = DatePicker;
 // Removed @ant-design/icons to standardize on lucide-react icons
@@ -829,7 +832,8 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                 : (ordersResponse.data as any)?.$values || [];
               
               // Lọc các đơn hàng của xe này và có status đã xác nhận/đang thuê
-              // Status: OrderDepositConfirmed (1), CheckedIn (2), Renting (3)
+              // Chỉ lấy các đơn hàng có status OrderDepositConfirmed (1), CheckedIn (2), hoặc Renting (3) để disable ngày
+              // Không disable các đơn Pending (0), Cancelled (7), Completed (9)
               const activeOrders = orders.filter((order: any) => {
                 const orderCarId = order.carId ?? order.CarId ?? order.car?.id ?? order.Car?.Id;
                 const carIdNum = typeof orderCarId === 'number' ? orderCarId : Number(orderCarId);
@@ -851,6 +855,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                   }
                 }
                 
+                // Chỉ disable ngày nếu status là OrderDepositConfirmed (1), CheckedIn (2), hoặc Renting (3)
                 return carIdNum === currentCarIdNum && (statusNum === 1 || statusNum === 2 || statusNum === 3);
               });
 
@@ -873,7 +878,8 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                       let currentDate = pickupDate.startOf('day');
                       const endDate = returnDate.startOf('day');
                       
-                      while (currentDate.isSameOrBefore(endDate, 'day')) {
+                      // Sử dụng isBefore hoặc isSame để so sánh
+                      while (currentDate.isBefore(endDate, 'day') || currentDate.isSame(endDate, 'day')) {
                         const dateStr = currentDate.format('YYYY-MM-DD');
                         datesSet.add(dateStr);
                         currentDate = currentDate.add(1, 'day');
@@ -1924,9 +1930,9 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
                 {/* Status */}
                 <div className={`text-center p-3 rounded-lg mb-4 ${car.isActive && !car.isDeleted ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
-                  <span className="font-semibold">
+                  {/* <span className="font-semibold">
                     {car.isActive && !car.isDeleted ? ' Xe đang có sẵn' : 'Hết xe'}
-                  </span>
+                  </span> */}
                 </div>
 
                 {/* Thời gian thuê */}
@@ -1957,9 +1963,44 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                         return true;
                       }
                       
-                      // Disable các ngày đã được đặt
+                      // Disable các ngày đã được đặt (chỉ đơn OrderDepositConfirmed)
                       const dateStr = current.format('YYYY-MM-DD');
                       return bookedDates.has(dateStr);
+                    }}
+                    cellRender={(current, info) => {
+                      if (info.type !== 'date' || !current) {
+                        return info.originNode;
+                      }
+                      
+                      // Đảm bảo current là Dayjs
+                      const currentDate = dayjs.isDayjs(current) ? current : dayjs(current);
+                      if (!currentDate.isValid()) {
+                        return info.originNode;
+                      }
+                      
+                      const dateStr = currentDate.format('YYYY-MM-DD');
+                      const isBooked = bookedDates.has(dateStr);
+                      
+                      if (isBooked) {
+                        return (
+                          <div className="ant-picker-cell-inner-wrapper">
+                            <div
+                              className="ant-picker-cell-inner"
+                              style={{
+                                backgroundColor: '#fee2e2',
+                                border: '2px solid #ef4444',
+                                borderRadius: '4px',
+                                color: '#dc2626',
+                                fontWeight: 'bold',
+                              }}
+                            >
+                              {currentDate.date()}
+                            </div>
+                          </div>
+                        );
+                      }
+                      
+                      return info.originNode;
                     }}
                     disabledTime={(value, type) => {
                       const now = dayjs();

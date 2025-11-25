@@ -721,6 +721,18 @@ export const authApi = {
       body: JSON.stringify(data),
     }),
 
+  // Cập nhật thông tin ngân hàng để hoàn tiền
+  updateBankingInfo: (data: {
+    userId: number;
+    bankAccountName: string;
+    bankNumber: string;
+    bankName: string;
+  }) =>
+    apiCall<{ message: string }>('/User/UpdateBankingInfo', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
   // Lấy thông tin user hiện tại
   // ✅ TẠM TẮT: Không gọi API, chỉ lấy từ localStorage
   getProfile: () => {
