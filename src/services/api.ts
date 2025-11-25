@@ -298,6 +298,33 @@ export async function apiCall<T>(
   logger.log(`[API] Response text (first 500 chars):`, text.substring(0, 500));
   logger.log(`[API] Response full text length:`, text.length);
 
+    // Xử lý 400 Bad Request - thường là do dữ liệu không hợp lệ
+    if (response.status === 400) {
+      logger.error(`[API] ⚠️ 400 Bad Request: ${endpoint}`);
+      logger.error(`[API] Error body:`, text);
+      
+      let errorMessage = 'Dữ liệu không hợp lệ';
+      try {
+        const errorData = JSON.parse(text);
+        errorMessage = errorData.message || errorData.Message || errorData.error || errorData.Error || errorMessage;
+        // Nếu có validation errors
+        if (errorData.errors) {
+          const validationErrors = Object.values(errorData.errors).flat().join(', ');
+          errorMessage = validationErrors || errorMessage;
+        }
+      } catch (e) {
+        // Nếu không parse được JSON, dùng text
+        if (text && text.trim() && !text.includes('<!DOCTYPE')) {
+          errorMessage = text.substring(0, 200);
+        }
+      }
+      
+      return {
+        success: false,
+        error: errorMessage
+      };
+    }
+
     // Kiểm tra nếu response rỗng
     if (!text || text.trim() === '') {
       if (response.ok) {
@@ -1418,6 +1445,17 @@ export const rentalOrderApi = {
     });
   },
 
+  // Xác nhận thanh toán đơn hàng (Admin/Staff only)
+  confirmOrderPayment: (rentalOrderId: number, billingImageUrl: string) => {
+    return apiCall<{ success: boolean; message?: string }>(`/RentalOrder/confirmOrderPayment`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        rentalOrderId,
+        billingImageUrl,
+      }),
+    });
+  },
+
   // Xác nhận thanh toán OrderDeposit thủ công từ VNPay callback
   confirmOrderDepositManual: (txnRef: string, responseCode: string) => {
     // Backend route: [Route("api/[controller]")] + [HttpPost("api/payment/confirm-orderdeposit-manual")]
@@ -1510,6 +1548,12 @@ export const rentalOrderApi = {
 };
 
 export const carDeliveryHistoryApi = {
+  // Lấy lịch sử giao xe theo orderId
+  getByOrderId: (orderId: number) => {
+    return apiCall<any>(`/CarDeliveryHistory/GetByOrderId?orderId=${orderId}`, {
+      method: 'GET',
+    });
+  },
   // Tạo lịch sử giao xe (Bắt đầu thuê)
   // Backend DTO chỉ yêu cầu: OdometerStart, BatteryLevelStart, VehicleConditionStart, ImageUrl (1-6), OrderId
   // DeliveryDate, UpdateAt, CarId, UserId được backend tự động set
@@ -1525,21 +1569,45 @@ export const carDeliveryHistoryApi = {
     imageUrl6?: string;
     orderId: number;
   }) => {
-    // Tạo object request body theo đúng format backend DTO
+    // Validate dữ liệu đầu vào
+    if (!data.orderId || data.orderId <= 0) {
+      return Promise.resolve({
+        success: false,
+        error: 'OrderId không hợp lệ'
+      });
+    }
+    
+    if (data.odometerStart === undefined || data.odometerStart < 0) {
+      return Promise.resolve({
+        success: false,
+        error: 'OdometerStart không hợp lệ'
+      });
+    }
+    
+    if (data.batteryLevelStart === undefined || data.batteryLevelStart < 0 || data.batteryLevelStart > 100) {
+      return Promise.resolve({
+        success: false,
+        error: 'BatteryLevelStart không hợp lệ (phải từ 0-100)'
+      });
+    }
+
+    // Tạo object request body theo đúng format backend DTO (camelCase)
     const requestBody: any = {
-      OdometerStart: data.odometerStart,
-      BatteryLevelStart: data.batteryLevelStart,
-      VehicleConditionStart: data.vehicleConditionStart || '',
-      OrderId: data.orderId,
+      odometerStart: Number(data.odometerStart),
+      batteryLevelStart: Number(data.batteryLevelStart),
+      vehicleConditionStart: data.vehicleConditionStart || '',
+      orderId: Number(data.orderId),
     };
 
     // Thêm các ImageUrl, chỉ gửi nếu có giá trị (nullable trong backend)
-    if (data.imageUrl) requestBody.ImageUrl = data.imageUrl;
-    if (data.imageUrl2) requestBody.ImageUrl2 = data.imageUrl2;
-    if (data.imageUrl3) requestBody.ImageUrl3 = data.imageUrl3;
-    if (data.imageUrl4) requestBody.ImageUrl4 = data.imageUrl4;
-    if (data.imageUrl5) requestBody.ImageUrl5 = data.imageUrl5;
-    if (data.imageUrl6) requestBody.ImageUrl6 = data.imageUrl6;
+    if (data.imageUrl) requestBody.imageUrl = data.imageUrl;
+    if (data.imageUrl2) requestBody.imageUrl2 = data.imageUrl2;
+    if (data.imageUrl3) requestBody.imageUrl3 = data.imageUrl3;
+    if (data.imageUrl4) requestBody.imageUrl4 = data.imageUrl4;
+    if (data.imageUrl5) requestBody.imageUrl5 = data.imageUrl5;
+    if (data.imageUrl6) requestBody.imageUrl6 = data.imageUrl6;
+
+    console.log('[DEBUG] CarDeliveryHistory API request body:', requestBody);
 
     return apiCall<{ message: string }>('/CarDeliveryHistory', {
       method: 'POST',
@@ -1644,9 +1712,26 @@ export const paymentApi = {
   },
 
   // Xác nhận thanh toán đặt cọc (Admin/Staff only)
-  confirmDepositPayment: (orderId: number) => {
-    return apiCall<{ success: boolean; message?: string }>(`/Payment/ConfirmDepositPayment?orderId=${orderId}`, {
+  confirmDepositPayment: (rentalOrderId: number, billingImageUrl: string) => {
+    // PUT method để cập nhật Payment DB và status ở RentalOrder
+    return apiCall<{ success: boolean; message?: string }>(`/Payment/ConfirmDepositPayment`, {
       method: 'PUT',
+      body: JSON.stringify({
+        rentalOrderId,
+        billingImageUrl,
+      }),
+    });
+  },
+
+  // Xác nhận hoàn tiền thế chấp xe (Admin/Staff only)
+  confirmRefundDepositCarPayment: (rentalOrderId: number, billingImageUrl: string, note: string) => {
+    return apiCall<{ success: boolean; message?: string }>(`/Payment/ConfirmRefundDepositCarPayment`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        rentalOrderId,
+        billingImageUrl,
+        note,
+      }),
     });
   },
 
@@ -1722,21 +1807,37 @@ export const paymentApi = {
 
 // Car Return History API
 export const carReturnHistoryApi = {
+  // Lấy lịch sử trả xe theo orderId
+  getByOrderId: (orderId: number) => {
+    return apiCall<any>(`/CarReturnHistory/GetByOrderId?orderId=${orderId}`, {
+      method: 'GET',
+    });
+  },
   // Tạo lịch sử trả xe
   create: (data: {
-    returnDate: string;
     odometerEnd: number;
     batteryLevelEnd: number;
     vehicleConditionEnd: string;
+    imageUrl?: string;
+    imageUrl2?: string;
+    imageUrl3?: string;
+    imageUrl4?: string;
+    imageUrl5?: string;
+    imageUrl6?: string;
     orderId: number;
   }) => {
     return apiCall<{ message: string }>('/CarReturnHistory', {
       method: 'POST',
       body: JSON.stringify({
-        ReturnDate: data.returnDate,
         OdometerEnd: data.odometerEnd,
         BatteryLevelEnd: data.batteryLevelEnd,
         VehicleConditionEnd: data.vehicleConditionEnd,
+        ImageUrl: data.imageUrl || undefined,
+        ImageUrl2: data.imageUrl2 || undefined,
+        ImageUrl3: data.imageUrl3 || undefined,
+        ImageUrl4: data.imageUrl4 || undefined,
+        ImageUrl5: data.imageUrl5 || undefined,
+        ImageUrl6: data.imageUrl6 || undefined,
         OrderId: data.orderId,
       }),
     });

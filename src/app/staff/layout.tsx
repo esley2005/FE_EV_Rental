@@ -64,7 +64,7 @@ const subMenus: Record<string, { key: string; label: string; icon: React.ReactNo
   orders: [
     { key: "1", label: "Danh sách đơn hàng", icon: <FileOutlined /> },
     { key: "2", label: "Xác thực giấy tờ", icon: <IdcardOutlined /> },
-    { key: "3", label: "Cập nhật trạng thái", icon: <EditOutlined /> },
+   
   ],
 
   tasks: [
@@ -498,7 +498,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               open={showDelivery}
               onCancel={() => setShowDelivery(false)}
               footer={null}
-              destroyOnClose
+              destroyOnHidden
             >
               {selectedCar && (
                 <DeliveryForm
@@ -514,7 +514,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               open={showReturn}
               onCancel={() => setShowReturn(false)}
               footer={null}
-              destroyOnClose
+              destroyOnHidden
             >
               {selectedCar && (
                 <ReturnForm
