@@ -41,7 +41,7 @@ import {
   Popconfirm,
   message
 } from "antd";
-import { rentalOrderApi, carsApi, rentalLocationApi, authApi, driverLicenseApi, citizenIdApi, paymentApi } from "@/services/api";
+import { rentalOrderApi, carsApi, rentalLocationApi, authApi, paymentApi } from "@/services/api";
 import type { RentalOrderData, RentalLocationData, User, DriverLicenseData, CitizenIdData } from "@/services/api";
 import type { Car } from "@/types/car";
 import dayjs from "dayjs";
@@ -124,8 +124,13 @@ export default function MyBookingsPage() {
       // Load user profile
       const userResponse = await authApi.getProfile();
       if (userResponse.success && userResponse.data) {
-        setUser(userResponse.data);
-        await loadBookings(userResponse.data.id);
+        const userData = userResponse.data as User & { phoneNumber?: string };
+        // Map phoneNumber từ backend sang phone
+        if (!userData.phone && userData.phoneNumber) {
+          userData.phone = userData.phoneNumber;
+        }
+        setUser(userData);
+        await loadBookings(userData.id);
       } else {
         // Fallback: lấy từ localStorage
         const userStr = localStorage.getItem('user');
@@ -185,12 +190,11 @@ export default function MyBookingsPage() {
         ? ordersResponse.data
         : (ordersResponse.data as any)?.$values || [];
 
-      // Load all cars, locations, licenses, and citizen IDs for mapping
-      const [carsResponse, locationsResponse, licensesResponse, citizenIdsResponse] = await Promise.all([
+      // Load all cars and locations for mapping
+      // Note: Không gọi getAll() cho driverLicense và citizenId vì Customer role không có quyền (403 Forbidden)
+      const [carsResponse, locationsResponse] = await Promise.all([
         carsApi.getAll(),
-        rentalLocationApi.getAll(),
-        driverLicenseApi.getAll(),
-        citizenIdApi.getAll()
+        rentalLocationApi.getAll()
       ]);
 
       const cars: Car[] = carsResponse.success && carsResponse.data
@@ -212,15 +216,10 @@ export default function MyBookingsPage() {
         }
       }
 
-      // Xử lý licenses
-      const licenses: DriverLicenseData[] = licensesResponse.success && licensesResponse.data
-        ? (Array.isArray(licensesResponse.data) ? licensesResponse.data : (licensesResponse.data as any)?.$values || [])
-        : [];
-
-      // Xử lý citizen IDs
-      const citizenIds: CitizenIdData[] = citizenIdsResponse.success && citizenIdsResponse.data
-        ? (Array.isArray(citizenIdsResponse.data) ? citizenIdsResponse.data : (citizenIdsResponse.data as any)?.$values || [])
-        : [];
+      // Không load licenses và citizenIds vì Customer role không có quyền gọi GetAll
+      // Documents sẽ được hiển thị từ order data nếu có
+      const licenses: DriverLicenseData[] = [];
+      const citizenIds: CitizenIdData[] = [];
 
       // Map orders with car, location, license, and citizen ID info
       const bookingsWithDetails: BookingWithDetails[] = orders.map((order: RentalOrderData) => {
@@ -1162,7 +1161,9 @@ export default function MyBookingsPage() {
                 <Descriptions column={2} size="small">
                   <Descriptions.Item label="Họ tên">{selectedBooking.user.fullName || '-'}</Descriptions.Item>
                   <Descriptions.Item label={<><MailOutlined /> Email</>}>{selectedBooking.user.email || '-'}</Descriptions.Item>
-                  <Descriptions.Item label={<><PhoneOutlined /> Số điện thoại</>}>{selectedBooking.user.phone || selectedBooking.phoneNumber || '-'}</Descriptions.Item>
+                  <Descriptions.Item label={<><PhoneOutlined /> Số điện thoại</>}>
+                    {selectedBooking.user.phone || (selectedBooking.user as User & { phoneNumber?: string })?.phoneNumber || '-'}
+                  </Descriptions.Item>
                 </Descriptions>
               ) : (
                 <div className="text-gray-500">Không có thông tin người dùng</div>

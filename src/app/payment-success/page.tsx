@@ -79,6 +79,28 @@ export default function PaymentSuccessPage() {
                       searchParams.get("partner_code");
   const extraData = searchParams.get("extraData") || 
                     searchParams.get("extra_data");
+  
+  // ✅ MoMo Payment Notification - Tất cả các tham số theo tài liệu
+  const storeId = searchParams.get("storeId") || 
+                   searchParams.get("store_id");
+  const orderInfo = searchParams.get("orderInfo") || 
+                    searchParams.get("order_info");
+  const partnerUserId = searchParams.get("partnerUserId") || 
+                        searchParams.get("partner_user_id");
+  const orderType = searchParams.get("orderType") || 
+                    searchParams.get("order_type");
+  const payType = searchParams.get("payType") || 
+                  searchParams.get("pay_type");
+  const responseTime = searchParams.get("responseTime") || 
+                       searchParams.get("response_time");
+  const signature = searchParams.get("signature");
+  const paymentOption = searchParams.get("paymentOption") || 
+                        searchParams.get("payment_option");
+  const userFee = searchParams.get("userFee") || 
+                  searchParams.get("user_fee");
+  const promotionInfo = searchParams.get("promotionInfo") || 
+                        searchParams.get("promotion_info");
+  
   // ✅ PayOS specific params
   const payOSOrderCode = searchParams.get("orderCode") || 
                          searchParams.get("order_code");
@@ -94,6 +116,7 @@ export default function PaymentSuccessPage() {
     console.log('[Payment Success] Protocol:', typeof window !== 'undefined' ? window.location.protocol : 'N/A');
     console.log('[Payment Success] All query params:', allParams);
     console.log('[Payment Success] Extracted values:', {
+      // Basic params
       orderId,
       amount,
       transactionId,
@@ -103,6 +126,18 @@ export default function PaymentSuccessPage() {
       resultMessage,
       partnerCode,
       extraData,
+      // MoMo Payment Notification params (theo tài liệu)
+      storeId,
+      orderInfo,
+      partnerUserId,
+      orderType,
+      payType,
+      responseTime,
+      signature: signature ? `${signature.substring(0, 20)}...` : null, // Chỉ log một phần để bảo mật
+      paymentOption,
+      userFee,
+      promotionInfo,
+      // PayOS specific params
       payOSOrderCode,
       payOSStatus,
       cancelParam
@@ -115,7 +150,7 @@ export default function PaymentSuccessPage() {
       error
     });
     console.log('[Payment Success] ========== DEBUG END ==========');
-  }, [allParams, orderId, amount, transactionId, paymentId, momoOrderId, resultCode, resultMessage, partnerCode, extraData, payOSOrderCode, payOSStatus, cancelParam, loading, paymentStatus, order, payment, error]);
+  }, [allParams, orderId, amount, transactionId, paymentId, momoOrderId, resultCode, resultMessage, partnerCode, extraData, storeId, orderInfo, partnerUserId, orderType, payType, responseTime, signature, paymentOption, userFee, promotionInfo, payOSOrderCode, payOSStatus, cancelParam, loading, paymentStatus, order, payment, error]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -124,6 +159,13 @@ export default function PaymentSuccessPage() {
         setError(null);
         
         console.log('[Payment Success] Starting loadData...');
+        
+        // ✅ NOTE: Signature verification nên được thực hiện ở backend
+        // Frontend chỉ log một phần signature để debug (không log đầy đủ vì lý do bảo mật)
+        if (signature) {
+          console.log('[Payment Success] Signature received (partial):', signature.substring(0, 20) + '...');
+          console.log('[Payment Success] Signature should be verified by backend IPN handler');
+        }
 
         // ✅ FIX: Parse extraData TRƯỚC để có thể dùng trong logic sau
         let rentalOrderIdFromExtraData: number | null = null;
@@ -329,8 +371,12 @@ export default function PaymentSuccessPage() {
         // ✅ FIX: Load payment info với better error handling
         // loadedPayment đã được khai báo ở trên, không cần khai báo lại
 
-        // Try to load payment by MoMo Order ID
-        if (momoOrderId) {
+        // ✅ CHỈ GỌI API GetByMomoOrderId KHI THỰC SỰ CẦN THIẾT
+        // Tránh gọi API khi:
+        // 1. Đã có resultCode từ query params (ưu tiên dùng resultCode)
+        // 2. Payment đã được load từ nguồn khác
+        // 3. Đã xác định được payment status từ query params
+        if (momoOrderId && !loadedPayment && (resultCode === null || resultCode === undefined)) {
           try {
             console.log('[Payment Success] Loading payment by momoOrderId:', momoOrderId);
             const paymentResponse = await paymentApi.getByMomoOrderId(momoOrderId);
@@ -342,24 +388,63 @@ export default function PaymentSuccessPage() {
               setPayment(loadedPayment);
               console.log('[Payment Success] Payment loaded:', loadedPayment);
               
-              // ✅ Update status based on payment - NHƯNG chỉ khi chưa có resultCode
-              // Nếu đã có resultCode từ query params, ưu tiên dùng resultCode (đã set ở trên)
-              if (resultCode === null) {
-                // Chỉ update nếu không có resultCode từ query params
-                if (loadedPayment.status === 'Completed' || loadedPayment.status === 1 || loadedPayment.status === '1') {
-                  setPaymentStatus('success');
-                } else if (loadedPayment.status === 'Cancelled' || loadedPayment.status === 2 || loadedPayment.status === '2' || loadedPayment.status === 'Failed') {
-                  setPaymentStatus('failed');
-                }
-              } else {
-                // Nếu đã có resultCode, chỉ log để debug, không override
-                console.log('[Payment Success] Payment status from DB:', loadedPayment.status, 'but using resultCode:', resultCode);
+              // ✅ Update status based on payment - chỉ khi chưa có resultCode
+              if (loadedPayment.status === 'Completed' || loadedPayment.status === 1 || loadedPayment.status === '1') {
+                setPaymentStatus('success');
+              } else if (loadedPayment.status === 'Cancelled' || loadedPayment.status === 2 || loadedPayment.status === '2' || loadedPayment.status === 'Failed') {
+                setPaymentStatus('failed');
+              }
+            } else {
+              // Payment not found - có thể do backend chưa lưu payment record hoặc đang xử lý IPN
+              // Không log warning ở đây vì đây là trường hợp bình thường
+              // Chỉ log trong development mode
+              if (process.env.NODE_ENV === 'development') {
+                console.log('[Payment Success] Payment not found by momoOrderId (this is normal if payment is still processing via IPN):', momoOrderId);
               }
             }
           } catch (error: unknown) {
-            const errorMsg = error instanceof Error ? error.message : String(error);
-            console.error('[Payment Success] Error loading payment by momoOrderId:', errorMsg);
-            // Don't fail completely, continue
+            // ✅ Xử lý 404 silently - đây là trường hợp bình thường khi payment chưa được lưu
+            // Không log error vì đây là expected behavior khi backend IPN callback chưa chạy
+            // Chỉ log trong development mode để debug
+            if (process.env.NODE_ENV === 'development') {
+              const errorMsg = error instanceof Error ? error.message : String(error);
+              if (errorMsg.includes('404') || errorMsg.includes('Not Found')) {
+                console.log('[Payment Success] Payment not found by momoOrderId (404) - Payment may still be processing via IPN callback:', momoOrderId);
+              }
+            }
+            // Don't fail completely, continue với resultCode từ query params
+          }
+        } else if (momoOrderId && resultCode !== null && resultCode !== undefined) {
+          // Đã có resultCode, không cần gọi API GetByMomoOrderId
+          console.log('[Payment Success] Skipping GetByMomoOrderId API call - already have resultCode:', resultCode);
+        }
+        
+        // ✅ Nếu không tìm thấy payment bằng momoOrderId nhưng có orderId và user, thử tìm từ user's payments
+        if (!loadedPayment && finalOrderId && user && momoOrderId) {
+          try {
+            console.log('[Payment Success] Payment not found by momoOrderId, trying to find payment by orderId:', finalOrderId);
+            const userPaymentsResponse = await paymentApi.getAllByUserId(user.id);
+            if (userPaymentsResponse.success && userPaymentsResponse.data) {
+              const payments = Array.isArray(userPaymentsResponse.data)
+                ? userPaymentsResponse.data
+                : (userPaymentsResponse.data as { $values?: PaymentData[] })?.$values || [];
+              
+              // Tìm payment có rentalOrderId khớp và momoOrderId khớp
+              const foundPayment = payments.find((p: PaymentData) => {
+                return p.rentalOrderId === finalOrderId && 
+                       (p.momoOrderId === momoOrderId || 
+                        (p as PaymentData & { requestId?: string })?.requestId === momoOrderId);
+              });
+              
+              if (foundPayment) {
+                loadedPayment = foundPayment;
+                setPayment(foundPayment);
+                console.log('[Payment Success] Found payment by orderId and momoOrderId:', foundPayment);
+              }
+            }
+          } catch (error: unknown) {
+            // Silently fail - đây là fallback method
+            console.warn('[Payment Success] Could not find payment by orderId:', error);
           }
         }
 
@@ -456,6 +541,21 @@ export default function PaymentSuccessPage() {
         // Chỉ dispatch khi THỰC SỰ thành công (resultCode = '0' hoặc '00')
         const isPaymentSuccess = (resultCode === '0' || resultCode === '00') || 
                                 (resultCode === null && (loadedPayment?.status === 'Completed' || loadedPayment?.status === 1));
+        
+        // ✅ QUAN TRỌNG: Sau khi payment completed, backend sẽ tự động cập nhật order status qua IPN callback
+        // Backend sẽ tự động cập nhật order status từ Pending (0) thành DocumentsSubmitted (1) khi payment completed
+        // Hiển thị trang payment-success, user có thể click button để chuyển sang documents page
+        if (isPaymentSuccess && finalOrderId && !isNaN(finalOrderId) && finalOrderId > 0) {
+          // Reload order để hiển thị thông tin mới nhất trên payment-success page
+          setTimeout(async () => {
+            try {
+              console.log('[Payment Success] Reloading order to get updated status after payment completion...');
+              await loadOrderDetailsById(finalOrderId);
+            } catch (reloadError) {
+              console.error('[Payment Success] Error reloading order:', reloadError);
+            }
+          }, 2000); // Đợi 2 giây để backend xử lý IPN
+        }
         
         if (isPaymentSuccess && typeof window !== 'undefined') {
           console.log('[Payment Success] Dispatching paymentSuccess event to refresh cars list...');
@@ -805,8 +905,11 @@ export default function PaymentSuccessPage() {
                       <h3 className="text-lg font-semibold text-green-800 mb-2">
                         Giao dịch đã được xử lý thành công
                       </h3>
-                      <p className="text-green-700">
+                      <p className="text-green-700 mb-3">
                         Chúng tôi đã nhận được thanh toán của bạn. Đơn hàng đang được xử lý và bạn sẽ nhận được email xác nhận trong vài phút.
+                      </p>
+                      <p className="text-green-800 font-semibold">
+                        Vui lòng nộp giấy tờ để hoàn tất đặt xe của bạn.
                       </p>
                     </div>
                   </div>
@@ -844,9 +947,82 @@ export default function PaymentSuccessPage() {
                       {/* Transaction ID */}
                       {(payment?.momoTransactionId || payment?.id || transactionId) && (
                         <div>
-                          <span className="text-gray-600 block mb-1">Mã giao dịch:</span>
+                          <span className="text-gray-600 block mb-1">Mã giao dịch (transId):</span>
                           <span className="font-semibold text-gray-800">
                             {payment?.momoTransactionId || payment?.id?.toString() || transactionId}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* MoMo Request ID */}
+                      {momoOrderId && (
+                        <div>
+                          <span className="text-gray-600 block mb-1">Request ID (MoMo):</span>
+                          <span className="font-semibold text-gray-800">{momoOrderId}</span>
+                        </div>
+                      )}
+                      
+                      {/* Order Info */}
+                      {orderInfo && (
+                        <div>
+                          <span className="text-gray-600 block mb-1">Thông tin đơn hàng:</span>
+                          <span className="font-semibold text-gray-800">{orderInfo}</span>
+                        </div>
+                      )}
+                      
+                      {/* Pay Type */}
+                      {payType && (
+                        <div>
+                          <span className="text-gray-600 block mb-1">Hình thức thanh toán:</span>
+                          <span className="font-semibold text-gray-800">
+                            {payType === 'webApp' ? 'Web App' : 
+                             payType === 'app' ? 'MoMo App' : 
+                             payType === 'qr' ? 'QR Code' : 
+                             payType === 'miniapp' ? 'Mini App' :
+                             payType === 'aio_qr' ? 'AIO QR' :
+                             payType === 'banktransfer_qr' ? 'Bank Transfer QR' :
+                             payType}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* Payment Option */}
+                      {paymentOption && (
+                        <div>
+                          <span className="text-gray-600 block mb-1">Tài khoản/Thẻ:</span>
+                          <span className="font-semibold text-gray-800">
+                            {paymentOption === 'momo' ? 'Ví MoMo' : 
+                             paymentOption === 'pay_later' ? 'Thanh toán sau' :
+                             paymentOption}
+                          </span>
+                        </div>
+                      )}
+                      {
+                        resultCode && (
+                          <div>
+                            <span className="text-gray-600 block mb-1">Mã kết quả:</span>
+                            <span className="font-semibold text-gray-800">
+                              {resultCode}
+                            </span>
+                          </div>
+                        )
+                      }
+                      {/* Response Time */}
+                      {responseTime && (
+                        <div>
+                          <span className="text-gray-600 block mb-1">Thời gian phản hồi:</span>
+                          <span className="font-semibold text-gray-800">
+                            {new Date(Number(responseTime)).toLocaleString('vi-VN')}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* User Fee */}
+                      {userFee && (
+                        <div>
+                          <span className="text-gray-600 block mb-1">Phí người dùng:</span>
+                          <span className="font-semibold text-gray-800">
+                            {Number(userFee).toLocaleString('vi-VN')} đ
                           </span>
                         </div>
                       )}
@@ -1178,6 +1354,34 @@ export default function PaymentSuccessPage() {
 
                 {/* Standard Action Buttons */}
                 <div className="flex flex-col sm:flex-row gap-4">
+                  {/* Button Nộp giấy tờ - chỉ hiển thị khi payment thành công */}
+                  {paymentStatus === 'success' && (orderId || order?.id) && (
+                    <Button
+                      type="primary"
+                      size="large"
+                      icon={<FileTextOutlined />}
+                      onClick={() => {
+                        const orderIdToUse = order?.id || orderId;
+                        if (orderIdToUse) {
+                          router.push(`/profile/documents?orderId=${orderIdToUse}`);
+                        }
+                      }}
+                      className="flex-1 h-12 bg-green-600 hover:bg-green-700"
+                    >
+                      Nộp giấy tờ
+                    </Button>
+                  )}
+                  {(orderId || order?.id) && (
+                    <Button
+                      type={paymentStatus === 'success' ? 'default' : 'primary'}
+                      size="large"
+                      icon={<FileTextOutlined />}
+                      onClick={() => router.push(`/my-bookings?orderId=${orderId || order?.id}`)}
+                      className={`flex-1 h-12 ${paymentStatus === 'success' ? '' : 'bg-blue-600 hover:bg-blue-700'}`}
+                    >
+                      Xem đơn hàng
+                    </Button>
+                  )}
                   <Button
                     type="default"
                     size="large"
@@ -1187,17 +1391,6 @@ export default function PaymentSuccessPage() {
                   >
                     Về trang chủ
                   </Button>
-                  {(orderId || order?.id) && (
-                    <Button
-                      type="primary"
-                      size="large"
-                      icon={<FileTextOutlined />}
-                      onClick={() => router.push(`/my-bookings?orderId=${orderId || order?.id}`)}
-                      className="flex-1 h-12 bg-blue-600 hover:bg-blue-700"
-                    >
-                      Xem đơn hàng
-                    </Button>
-                  )}
                   <Button
                     type="default"
                     size="large"

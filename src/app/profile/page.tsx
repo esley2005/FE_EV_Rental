@@ -12,6 +12,12 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   WarningOutlined,
+  HomeOutlined,
+  IdcardOutlined,
+  MessageOutlined,
+  ShoppingOutlined,
+  DollarOutlined,
+  PhoneOutlined,
 } from "@ant-design/icons";
 import {
   Layout,
@@ -25,10 +31,16 @@ import {
   Form,
   Space,
   Tag,
+  DatePicker,
 } from "antd";
 import { authApi } from "@/services/api";
 import type { User, UpdateProfileData, ChangePasswordData } from "@/services/api";
-import dayjs from "dayjs";
+import dayjs, { Dayjs } from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 const { Content } = Layout;
 
@@ -79,16 +91,28 @@ export default function ProfilePage() {
         }
 
         const response = await authApi.getProfile();
-        if (response.success && response.data) {
-          setUser(response.data);
+        if (response.success && 'data' in response && response.data) {
+          const userData = response.data;
+          // Backend có thể trả về phoneNumber thay vì phone - map lại
+          const userWithPhone = userData as User & { phoneNumber?: string | null };
+          // ✅ Xử lý phoneNumber: null, undefined, hoặc empty string
+          if (!userWithPhone.phone && userWithPhone.phoneNumber && userWithPhone.phoneNumber !== null) {
+            userWithPhone.phone = userWithPhone.phoneNumber;
+          }
+          setUser(userWithPhone);
           profileForm.setFieldsValue({
-            fullName: response.data.fullName,
-            email: response.data.email,
+            fullName: userData.fullName,
+            email: userData.email,
+            // ✅ Xử lý phoneNumber: null - chỉ set nếu có giá trị hợp lệ
+            phone: userData.phone || (userData as User & { phoneNumber?: string | null }).phoneNumber || "",
+            dateOfBirth: userData.dateOfBirth ? dayjs(userData.dateOfBirth.split('T')[0]) : null,
+            address: userData.address || "",
+            occupation: userData.occupation || "",
           });
           localStorage.setItem("user", JSON.stringify(response.data));
 
           // tải xác thực giấy phép lái xe nha
-if (response.data.driverLicenseStatus !== undefined) {
+          if (response.data.driverLicenseStatus !== undefined) {
             setLicenseVerified(response.data.driverLicenseStatus === 1);
           }
 
@@ -105,7 +129,13 @@ if (response.data.driverLicenseStatus !== undefined) {
     loadUserProfile();
   }, [router, api, profileForm]);
 
-  const handleUpdateProfile = async (values: { fullName: string }) => {
+  const handleUpdateProfile = async (values: { 
+    fullName: string;
+    phone?: string;
+    dateOfBirth?: Dayjs | null;
+    address?: string;
+    occupation?: string;
+  }) => {
     setLoading(true);
     try {
       const trimmedFullName = values.fullName?.trim() || "";
@@ -124,37 +154,82 @@ if (response.data.driverLicenseStatus !== undefined) {
       const updateData: UpdateProfileData = {
         fullName: trimmedFullName,
         userId: user?.id, // Truyền userId từ user state
+        phone: values.phone?.trim() || undefined,
+        dateOfBirth: values.dateOfBirth ? values.dateOfBirth.format('YYYY-MM-DD') + 'T00:00:00' : undefined,
+        address: values.address?.trim() || undefined,
+        occupation: values.occupation?.trim() || undefined,
       };
 
+      console.log('[Profile Page] Update data being sent:', updateData);
       const response = await authApi.updateProfile(updateData);
+      console.log('[Profile Page] Update response:', response);
 
-      if (response.success) {
-        // Cập nhật user state và localStorage
-        const updatedUser = response.data || user;
-        if (updatedUser) {
-          updatedUser.fullName = trimmedFullName;
-          setUser({ ...updatedUser });
-          localStorage.setItem("user", JSON.stringify(updatedUser));
-          
-          // Cập nhật form values
-          profileForm.setFieldsValue({
-            fullName: trimmedFullName,
-            email: updatedUser.email || user?.email,
-          });
-        }
-
+      if (response.success && 'data' in response && response.data) {
         api.success({
           message: "Cập nhật thành công!",
-          description: "Tên của bạn đã được cập nhật.",
+          description: "Thông tin cá nhân của bạn đã được cập nhật.",
           placement: "topRight",
           icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
         });
 
         setEditing(false);
+        
+        // Reload lại profile để lấy dữ liệu mới nhất từ backend
+        try {
+          // Sử dụng data từ response ngay (đã được update) và map lại
+          const updatedUserData = response.data;
+          // ✅ Map phoneNumber từ backend sang phone - xử lý null
+          if (!updatedUserData.phone && 'phoneNumber' in updatedUserData) {
+            const phoneNumber = (updatedUserData as User & { phoneNumber?: string | null }).phoneNumber;
+            if (phoneNumber && phoneNumber !== null && typeof phoneNumber === 'string') {
+              (updatedUserData as User & { phoneNumber?: string | null }).phone = phoneNumber;
+            }
+          }
+          
+          setUser(updatedUserData);
+          localStorage.setItem("user", JSON.stringify(updatedUserData));
+          
+          // Cập nhật form values với dữ liệu mới từ response
+          profileForm.setFieldsValue({
+            fullName: updatedUserData.fullName,
+            email: updatedUserData.email,
+            // ✅ Xử lý phoneNumber: null - chỉ set nếu có giá trị hợp lệ
+            phone: updatedUserData.phone || ((updatedUserData as User & { phoneNumber?: string | null }).phoneNumber && (updatedUserData as User & { phoneNumber?: string | null }).phoneNumber !== null ? (updatedUserData as User & { phoneNumber?: string | null }).phoneNumber : "") || "",
+            dateOfBirth: updatedUserData.dateOfBirth ? dayjs(updatedUserData.dateOfBirth) : null,
+            address: updatedUserData.address || "",
+            occupation: updatedUserData.occupation || "",
+          });
+          
+          // Gọi lại API getProfile để đảm bảo có dữ liệu mới nhất
+          const reloadResponse = await authApi.getProfile();
+          if (reloadResponse.success && 'data' in reloadResponse && reloadResponse.data) {
+            const userData = reloadResponse.data as User & { phoneNumber?: string | null };
+            // ✅ Map phoneNumber từ backend sang phone - xử lý null
+            if (!userData.phone && userData.phoneNumber && userData.phoneNumber !== null) {
+              userData.phone = userData.phoneNumber;
+            }
+            setUser(userData);
+            localStorage.setItem("user", JSON.stringify(userData));
+            
+            // Cập nhật form values với dữ liệu mới nhất từ reload
+            profileForm.setFieldsValue({
+              fullName: userData.fullName,
+              email: userData.email,
+              // ✅ Xử lý phoneNumber: null - chỉ set nếu có giá trị hợp lệ
+              phone: userData.phone || (userData.phoneNumber && userData.phoneNumber !== null ? userData.phoneNumber : "") || "",
+              dateOfBirth: userData.dateOfBirth ? dayjs(userData.dateOfBirth.split('T')[0]) : null,
+              address: userData.address || "",
+              occupation: userData.occupation || "",
+            });
+          }
+        } catch (error) {
+          console.error("Error reloading profile after update:", error);
+        }
       } else {
+        const errorMsg = ('error' in response ? response.error : 'Không thể cập nhật thông tin!');
         api.error({
           message: "Cập nhật thất bại",
-          description: response.error || "Không thể cập nhật thông tin!",
+          description: errorMsg,
           placement: "topRight",
           icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
         });
@@ -283,7 +358,7 @@ if (response.data.driverLicenseStatus !== undefined) {
       if (!userId) {
         try {
           const profileResponse = await authApi.getProfile();
-          if (profileResponse.success && profileResponse.data) {
+          if (profileResponse.success && 'data' in profileResponse && profileResponse.data) {
             userId = profileResponse.data.id;
             // Cập nhật user state và localStorage
             setUser(profileResponse.data);
@@ -544,22 +619,8 @@ if (response.data.driverLicenseStatus !== undefined) {
                     ),
                     children: (
                       <div>
-                        {!editing ? (
-                          <>
-                            <Descriptions column={1} bordered>
-                              <Descriptions.Item label="Họ và tên">{user.fullName}</Descriptions.Item>
-                              <Descriptions.Item label="Email">{user.email}</Descriptions.Item>
-                            </Descriptions>
-<Button
-                              type="primary"
-                              icon={<EditOutlined />}
-                              onClick={() => setEditing(true)}
-                              className="mt-4 bg-blue-600 hover:bg-blue-700"
-                            >
-                              Chỉnh sửa thông tin
-                            </Button>
-                          </>
-                        ) : (
+                        {/* Form luôn được render để tránh warning, chỉ hiển thị khi editing */}
+                        <div style={{ display: editing ? 'block' : 'none' }}>
                           <Form form={profileForm} layout="vertical" onFinish={handleUpdateProfile}>
                             <Form.Item 
                               label="Họ và tên" 
@@ -572,11 +633,60 @@ if (response.data.driverLicenseStatus !== undefined) {
                             >
                               <Input size="large" prefix={<UserOutlined />} placeholder="Nhập họ và tên" />
                             </Form.Item>
-                            {user.id !== 3 && (
+                            {user && user.id !== 3 && (
                               <Form.Item label="Email" name="email">
                                 <Input size="large" prefix={<MailOutlined />} disabled />
                               </Form.Item>
                             )}
+                            <Form.Item 
+                              label="Số điện thoại" 
+                              name="phone"
+                              rules={[
+                                { 
+                                  pattern: /^[0-9]{10,11}$/, 
+                                  message: "Số điện thoại phải có 10-11 chữ số!" 
+                                }
+                              ]}
+                            >
+                              <Input 
+                                size="large" 
+                                prefix={<PhoneOutlined />} 
+                                placeholder="Nhập số điện thoại"
+                                maxLength={11}
+                              />
+                            </Form.Item>
+                            <Form.Item 
+                              label="Ngày sinh" 
+                              name="dateOfBirth"
+                            >
+                              <DatePicker
+                                size="large"
+                                placeholder="Chọn ngày sinh"
+                                format="DD/MM/YYYY"
+                                style={{ width: "100%" }}
+                                disabledDate={(current) => {
+                                  return current && current > dayjs().endOf('day');
+                                }}
+                              />
+                            </Form.Item>
+                            <Form.Item 
+                              label="Địa chỉ" 
+                              name="address"
+                              rules={[
+                                { max: 200, message: "Địa chỉ không được vượt quá 200 ký tự!" }
+                              ]}
+                            >
+                              <Input size="large" prefix={<HomeOutlined />} placeholder="Nhập địa chỉ" />
+                            </Form.Item>
+                            <Form.Item 
+                              label="Nghề nghiệp" 
+                              name="occupation"
+                              rules={[
+                                { max: 100, message: "Nghề nghiệp không được vượt quá 100 ký tự!" }
+                              ]}
+                            >
+                              <Input size="large" prefix={<IdcardOutlined />} placeholder="Nhập nghề nghiệp" />
+                            </Form.Item>
                             <Space>
                               <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading} className="bg-blue-600">
                                 Lưu thay đổi
@@ -586,7 +696,90 @@ if (response.data.driverLicenseStatus !== undefined) {
                               </Button>
                             </Space>
                           </Form>
-                        )}
+                        </div>
+                        {/* Phần hiển thị thông tin - ẩn khi đang editing */}
+                        <div style={{ display: !editing ? 'block' : 'none' }}>
+                          <Descriptions column={1} bordered>
+                            <Descriptions.Item label="Họ và tên">{user?.fullName || ''}</Descriptions.Item>
+                            <Descriptions.Item label="Email">
+                              <span className="flex items-center gap-2">
+                                {user?.email}
+                                {user?.isEmailConfirmed && (
+                                  <Tag color="success" icon={<CheckCircleOutlined />} className="m-0">
+                                    Đã xác nhận
+                                  </Tag>
+                                )}
+                                {user?.isEmailConfirmed === false && (
+                                  <Tag color="warning" icon={<WarningOutlined />} className="m-0">
+                                    Chưa xác nhận
+                                  </Tag>
+                                )}
+                              </span>
+                            </Descriptions.Item>
+                            <Descriptions.Item label="Số điện thoại">
+                              {(() => {
+                                // ✅ Xử lý phoneNumber: null - kiểm tra rõ ràng
+                                const phone = user?.phone;
+                                const phoneNumber = (user as User & { phoneNumber?: string | null })?.phoneNumber;
+                                // Chỉ hiển thị nếu có giá trị hợp lệ (không phải null, undefined, hoặc empty string)
+                                const displayPhone = phone || (phoneNumber && phoneNumber !== null ? phoneNumber : null);
+                                return displayPhone || "Chưa cập nhật";
+                              })()}
+                            </Descriptions.Item>
+                            <Descriptions.Item label="Ngày sinh">
+                              {user?.dateOfBirth ? dayjs(user.dateOfBirth.split('T')[0]).format("DD/MM/YYYY") : "Chưa cập nhật"}
+                            </Descriptions.Item>
+                            <Descriptions.Item label="Địa chỉ">
+                              {user?.address || "Chưa cập nhật"}
+                            </Descriptions.Item>
+                            <Descriptions.Item label="Nghề nghiệp">
+                              {user?.occupation || "Chưa cập nhật"}
+                            </Descriptions.Item>
+                            {user?.rentalLocation && (
+                              <Descriptions.Item label="Điểm thuê xe">
+                                {user.rentalLocation.name || `ID: ${user.rentalLocationId}`}
+                              </Descriptions.Item>
+                            )}
+                            
+                            <Descriptions.Item label="Ngày tham gia">
+                              {user?.createdAt ? dayjs(user.createdAt).format("DD/MM/YYYY HH:mm") : "N/A"}
+                            </Descriptions.Item>
+                            {user?.updatedAt && user.updatedAt !== user.createdAt && (
+                              <Descriptions.Item label="Cập nhật lần cuối">
+                                {dayjs(user.updatedAt).format("DD/MM/YYYY HH:mm")}
+                              </Descriptions.Item>
+                            )}
+                            {(user?.feedbackCount !== undefined || user?.rentalOrdersCount !== undefined || user?.paymentsCount !== undefined) && (
+                              <Descriptions.Item label="Thống kê">
+                                <div className="flex gap-4 flex-wrap">
+                                  {user.rentalOrdersCount !== undefined && (
+                                    <Tag icon={<ShoppingOutlined />} color="blue">
+                                      {user.rentalOrdersCount} đơn thuê
+                                    </Tag>
+                                  )}
+                                  {user.feedbackCount !== undefined && (
+                                    <Tag icon={<MessageOutlined />} color="purple">
+                                      {user.feedbackCount} đánh giá
+                                    </Tag>
+                                  )}
+                                  {user.paymentsCount !== undefined && (
+                                    <Tag icon={<DollarOutlined />} color="green">
+                                      {user.paymentsCount} thanh toán
+                                    </Tag>
+                                  )}
+                                </div>
+                              </Descriptions.Item>
+                            )}
+                          </Descriptions>
+                          <Button
+                            type="primary"
+                            icon={<EditOutlined />}
+                            onClick={() => setEditing(true)}
+                            className="mt-4 bg-blue-600 hover:bg-blue-700"
+                          >
+                            Chỉnh sửa thông tin
+                          </Button>
+                        </div>
                       </div>
                     ),
                   },

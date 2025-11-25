@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { Form, Input, DatePicker, Button, message, Checkbox, Radio, notification, Alert, Modal } from "antd";
-import { Calendar, MapPin, Phone, User as UserIcon, Search, Car as CarIcon, FileText, Download, Percent, Info, UserCheck } from "lucide-react";
+import { Calendar, MapPin, Phone, User as UserIcon, Search, Car as CarIcon, FileText, Download, Percent, Info, UserCheck, Mail, Home } from "lucide-react";
 import dayjs, { Dayjs } from "dayjs";
 import { carsApi, rentalOrderApi, rentalLocationApi, carRentalLocationApi, authApi, driverLicenseApi, citizenIdApi } from "@/services/api";
 import type { Car } from "@/types/car";
@@ -293,39 +293,46 @@ export default function BookingPage() {
           }
         }
 
-        // Load user
+        // ✅ Load user từ localStorage - Customer không có quyền gọi getProfileById
         if (authUtils.isAuthenticated()) {
           const userStr = localStorage.getItem("user");
           if (userStr) {
-            const userData = JSON.parse(userStr);
-            setUser(userData);
-            form.setFieldsValue({
-              name: userData.name || "",
-              phoneNumber: userData.phone || "",
-            });
-            
-            // Check if user has uploaded documents
             try {
-              const [licenseRes, citizenIdRes] = await Promise.all([
-                driverLicenseApi.getAll(),
-                citizenIdApi.getAll()
-              ]);
-              
-              const licenseData = licenseRes.data as any;
-              const hasLicense = licenseRes.success && licenseData && 
-                (Array.isArray(licenseData) ? licenseData.length > 0 : 
-                 (licenseData?.$values && Array.isArray(licenseData.$values) ? licenseData.$values.length > 0 : false));
-              
-              const citizenIdData = citizenIdRes.data as any;
-              const hasCitizenId = citizenIdRes.success && citizenIdData && 
-                (Array.isArray(citizenIdData) ? citizenIdData.length > 0 : 
-                 (citizenIdData?.$values && Array.isArray(citizenIdData.$values) ? citizenIdData.$values.length > 0 : false));
-              
-              setHasDocuments(hasLicense && hasCitizenId);
+              const userData = JSON.parse(userStr);
+              // Map phoneNumber từ backend sang phone nếu cần
+              const mappedUser: User = {
+                ...userData,
+                phone: (userData as User & { phoneNumber?: string }).phoneNumber || userData.phone,
+              };
+              setUser(mappedUser);
             } catch (error) {
-              console.error("Check documents error:", error);
-              setHasDocuments(false);
+              console.error("Error loading user from localStorage:", error);
             }
+          }
+          
+          // Check if user has uploaded documents
+          try {
+            console.log("[Booking] Loading driver license and citizen ID...");
+            const [licenseRes, citizenIdRes] = await Promise.all([
+              driverLicenseApi.getCurrent(),
+              citizenIdApi.getCurrent()
+            ]);
+            
+            console.log("[Booking] Driver license response:", licenseRes);
+            console.log("[Booking] Citizen ID response:", citizenIdRes);
+            
+            // getCurrent() trả về một object, không phải array
+            const hasLicense = licenseRes.success && licenseRes.data && 
+              licenseRes.data.id !== undefined && licenseRes.data.id !== null;
+            
+            const hasCitizenId = citizenIdRes.success && citizenIdRes.data && 
+              citizenIdRes.data.id !== undefined && citizenIdRes.data.id !== null;
+            
+            console.log("[Booking] Has license:", hasLicense, "Has citizen ID:", hasCitizenId);
+            setHasDocuments(hasLicense && hasCitizenId ? true : false);
+          } catch (error) {
+            console.error("Check documents error:", error);
+            setHasDocuments(false);
           }
         }
 
@@ -504,12 +511,13 @@ export default function BookingPage() {
       });
 
       if (response.success) {
-        // Lấy orderId từ nhiều nguồn khác nhau để đảm bảo lấy được
+        // Backend trả về CreateRentalOrderDTO (không có Id), nên cần lấy order mới nhất từ user orders
+        // Lấy orderId từ order mới nhất của user ngay sau khi tạo thành công
         let orderId: number | null = null;
         
+        // Thử lấy orderId từ response data (trường hợp backend có trả về)
         if (response.data) {
           const data = response.data as any;
-          // Thử nhiều cách lấy orderId
           orderId = data.id || 
                    data.Id || 
                    data.orderId ||
@@ -519,28 +527,40 @@ export default function BookingPage() {
                    (typeof data === 'number' ? data : null);
         }
         
-        // Nếu không lấy được từ data, thử lấy từ response trực tiếp
-        if (!orderId) {
-          const responseAny = response as any;
-          orderId = responseAny.id || 
-                   responseAny.Id || 
-                   responseAny.orderId ||
-                   responseAny.OrderId ||
-                   null;
-        }
-        
-        // Nếu vẫn không có, thử parse từ message hoặc string response
-        if (!orderId && response.message) {
-          const messageStr = String(response.message);
-          const idMatch = messageStr.match(/id[:\s]*(\d+)/i) || messageStr.match(/(\d+)/);
-          if (idMatch && idMatch[1]) {
-            orderId = parseInt(idMatch[1], 10);
+        // Nếu không có orderId từ response, lấy order mới nhất từ user orders
+        // Đây là cách đáng tin cậy nhất vì backend không trả về Id trong CreateRentalOrderDTO
+        if ((!orderId || orderId <= 0 || isNaN(orderId)) && user && user.id) {
+          try {
+            console.log('[Booking] Backend không trả về Id, lấy order mới nhất từ user orders...');
+            const userOrdersResponse = await rentalOrderApi.getByUserId(user.id);
+            if (userOrdersResponse.success && userOrdersResponse.data) {
+              const orders = Array.isArray(userOrdersResponse.data) 
+                ? userOrdersResponse.data 
+                : (userOrdersResponse.data as any)?.$values || [];
+              
+              if (orders.length > 0) {
+                // Lấy order mới nhất (theo createdAt hoặc orderDate)
+                const sortedOrders = orders.sort((a: any, b: any) => {
+                  const dateA = new Date(a.createdAt || a.CreatedAt || a.orderDate || a.OrderDate || 0);
+                  const dateB = new Date(b.createdAt || b.CreatedAt || b.orderDate || b.OrderDate || 0);
+                  return dateB.getTime() - dateA.getTime();
+                });
+                
+                const latestOrder = sortedOrders[0];
+                orderId = latestOrder.id || latestOrder.Id || latestOrder.orderId || latestOrder.OrderId;
+                
+                if (orderId && orderId > 0 && !isNaN(orderId)) {
+                  console.log('[Booking] Đã lấy được orderId từ order mới nhất:', orderId);
+                }
+              }
+            }
+          } catch (error) {
+            console.error('[Booking] Lỗi khi lấy order mới nhất:', error);
           }
         }
         
-        console.log('[Booking] Extracted OrderId:', orderId);
-        console.log('[Booking] Full response data:', JSON.stringify(response.data, null, 2));
-        console.log('[Booking] Full response object:', response);
+        console.log('[Booking] Final OrderId:', orderId);
+        console.log('[Booking] Response data:', JSON.stringify(response.data, null, 2));
         
         // Thử cập nhật OrderDate = thời gian khi ấn "Xác nhận" (nếu backend hỗ trợ)
         // Lưu ý: OrderDate đã được set khi tạo order, nên việc update này là optional
@@ -566,9 +586,9 @@ export default function BookingPage() {
             });
         }
         
-        // Thông báo đặt xe thành công và chuyển đến trang thanh toán
+        // Thông báo đặt xe thành công
         api.success({
-          message: "Đặt xe thành công!",
+          message: "Tạo Đơn Hàng Thành Công!",
           description: (
             <div>
               <p className="font-bold text-base mb-2">⚠️ QUAN TRỌNG: BẠN PHẢI THANH TOÁN CỌC NGAY!</p>
@@ -576,25 +596,18 @@ export default function BookingPage() {
               <p className="font-semibold text-red-600 mt-1">
                 Để đảm bảo đơn hàng được xác nhận, bạn cần thanh toán tiền đặt cọc ngay bây giờ.
               </p>
-              <p className="mt-1">Đang chuyển đến trang thanh toán...</p>
             </div>
           ),
           placement: "topRight",
-          duration: 3,
+          duration: 5,
         });
         
-        // Redirect đến trang checkout để thanh toán cọc ngay
-        // Giảm timeout để chuyển nhanh hơn
-        if (orderId && orderId > 0 && !isNaN(orderId)) {
-          setTimeout(() => {
-            router.push(`/checkout?orderId=${orderId}&autoPay=true`);
-          }, 800);
-        } else {
-          console.error('[Booking] OrderId không hợp lệ:', orderId);
-          console.error('[Booking] Response data:', response.data);
-          console.error('[Booking] Full response:', response);
+        // Nếu không có orderId, thử lấy order mới nhất từ user orders như fallback
+        if (!orderId || orderId <= 0 || isNaN(orderId)) {
+          console.warn('[Booking] OrderId không hợp lệ, thử lấy order mới nhất từ user orders...');
+          console.log('[Booking] Response data:', response.data);
+          console.log('[Booking] Full response:', response);
           
-          // Thử lấy order mới nhất từ user orders như fallback
           if (user && user.id) {
             try {
               const userOrdersResponse = await rentalOrderApi.getByUserId(user.id);
@@ -605,36 +618,44 @@ export default function BookingPage() {
                 
                 if (orders.length > 0) {
                   // Lấy order mới nhất (theo orderDate hoặc createdAt)
-                  const latestOrder = orders.sort((a: any, b: any) => {
+                  const sortedOrders = orders.sort((a: any, b: any) => {
                     const dateA = new Date(a.orderDate || a.OrderDate || a.createdAt || a.CreatedAt || 0);
                     const dateB = new Date(b.orderDate || b.OrderDate || b.createdAt || b.CreatedAt || 0);
                     return dateB.getTime() - dateA.getTime();
-                  })[0];
+                  });
                   
+                  const latestOrder = sortedOrders[0];
                   const latestOrderId = latestOrder.id || latestOrder.Id || latestOrder.orderId || latestOrder.OrderId;
                   
-                  if (latestOrderId && latestOrderId > 0) {
-                    console.log('[Booking] Using latest order as fallback:', latestOrderId);
-                    setTimeout(() => {
-                      router.push(`/checkout?orderId=${latestOrderId}&autoPay=true`);
-                    }, 800);
-                    return;
+                  if (latestOrderId && latestOrderId > 0 && !isNaN(latestOrderId)) {
+                    console.log('[Booking] Sử dụng order mới nhất làm fallback:', latestOrderId);
+                    orderId = latestOrderId;
                   }
                 }
               }
             } catch (fallbackError) {
-              console.error('[Booking] Fallback to get latest order failed:', fallbackError);
+              console.error('[Booking] Lỗi khi lấy order mới nhất:', fallbackError);
             }
           }
-          
-          api.error({
-            message: "Lỗi khi tạo đơn hàng",
-            description: "Không thể lấy được ID đơn hàng. Vui lòng kiểm tra lại trong 'Đơn hàng của tôi'.",
+        }
+        
+        // Tự động chuyển sang checkout để thanh toán cọc ngay sau khi tạo đơn thành công
+        // Lý do: Đơn hàng cần thanh toán cọc để được xác nhận, nên chuyển sang checkout ngay
+        if (orderId && orderId > 0 && !isNaN(orderId)) {
+          setTimeout(() => {
+            router.push(`/checkout?orderId=${orderId}&autoPay=true`);
+          }, 1500);
+        } else {
+          // Vẫn chuyển sang checkout nhưng không có orderId - để checkout hiển thị thông báo
+          console.warn('[Booking] Không tìm thấy orderId, vẫn chuyển sang checkout để xử lý');
+          api.warning({
+            message: "Đơn hàng đã được tạo",
+            description: "Đơn hàng đã được tạo thành công nhưng không thể tự động lấy ID. Vui lòng kiểm tra trong 'Đơn hàng của tôi'.",
             placement: "topRight",
-            duration: 5,
+            duration: 4,
           });
           setTimeout(() => {
-            router.push('/my-bookings');
+            router.push(`/checkout`);
           }, 2000);
         }
       } else {
@@ -817,34 +838,55 @@ export default function BookingPage() {
 
     
           <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Thông tin người thuê</h2>
-            <p className="text-sm text-gray-600 mb-4">
-              Vui lòng để lại thông tin liên lạc. Chúng tôi sẽ liên hệ bạn sớm nhất.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Form.Item
-                label="Họ Và Tên"
-                name="name"
-                rules={[{ required: true, message: "Vui lòng nhập tên" }]}
-              >
-                <Input
-                  size="large"
-                  placeholder="Nhập tên"
-                  prefix={<UserIcon className="w-4 h-4 text-gray-400" />}
-                />
-              </Form.Item>
-              <Form.Item
-                label="Số điện thoại"
-                name="phoneNumber"
-                rules={[{ required: true, message: "Vui lòng nhập số điện thoại" }]}
-              >
-                <Input
-                  size="large"
-                  placeholder="Nhập số điện thoại"
-                  prefix={<Phone className="w-4 h-4 text-gray-400" />}
-                />
-              </Form.Item>
-            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Thông tin người thuê</h2>
+            {user ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Họ Và Tên
+                  </label>
+                  <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <UserIcon className="w-4 h-4 text-gray-400" />
+                    <span className="text-gray-900">{user.fullName || "Chưa cập nhật"}</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Số điện thoại
+                  </label>
+                  <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <Phone className="w-4 h-4 text-gray-400" />
+                    <span className="text-gray-900">{user.phone || (user as User & { phoneNumber?: string })?.phoneNumber || "Chưa cập nhật"}</span>
+                  </div>
+                </div>
+                {user.email && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Email
+                    </label>
+                    <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <Mail className="w-4 h-4 text-gray-400" />
+                      <span className="text-gray-900">{user.email}</span>
+                    </div>
+                  </div>
+                )}
+                {user.address && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Địa chỉ
+                    </label>
+                    <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <Home className="w-4 h-4 text-gray-400" />
+                      <span className="text-gray-900">{user.address}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <p>Vui lòng đăng nhập để xem thông tin</p>
+              </div>
+            )}
           </div>
 
        

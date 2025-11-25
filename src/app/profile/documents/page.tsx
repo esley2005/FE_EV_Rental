@@ -23,7 +23,6 @@ import {
   message,
   Tag,
   DatePicker,
-  Select,
   Image,
   Descriptions,
 } from "antd";
@@ -159,7 +158,7 @@ export default function DocumentsPage() {
     loadUserProfile();
   }, [router, api, licenseForm, citizenIdForm]);
 
-  // Load orders and car info
+  // Load orders and car info - CHỈ LẤY ĐƠN HÀNG MỚI NHẤT (DocumentsSubmitted)
   useEffect(() => {
     const loadOrders = async () => {
       if (!user?.id) return;
@@ -172,9 +171,34 @@ export default function DocumentsPage() {
             ? ordersResponse.data
             : (ordersResponse.data as any)?.$values || [];
           
-          // Load car info for each order
+          // ✅ Lọc và sắp xếp: chỉ lấy đơn hàng có status = DocumentsSubmitted (1) hoặc DepositPending (2)
+          // Sắp xếp theo createdAt (mới nhất trước), lấy đơn hàng mới nhất
+          const filteredOrders = ordersData
+            .filter((order: RentalOrderData) => {
+              const status = typeof order.status === 'string' 
+                ? order.status.toLowerCase() 
+                : String(order.status);
+              
+              // Chỉ lấy đơn hàng ở trạng thái DocumentsSubmitted (1) - đã thanh toán cọc, chờ nộp giấy tờ
+              const isDocumentsSubmitted = status === 'documentssubmitted' || 
+                                          status === '1' || 
+                                          (typeof order.status === 'number' && order.status === 1);
+              
+              return isDocumentsSubmitted;
+            })
+            .sort((a: RentalOrderData, b: RentalOrderData) => {
+              // Sắp xếp theo createdAt (mới nhất trước)
+              const dateA = new Date(a.createdAt || a.orderDate || 0).getTime();
+              const dateB = new Date(b.createdAt || b.orderDate || 0).getTime();
+              return dateB - dateA;
+            });
+          
+          // Chỉ lấy đơn hàng MỚI NHẤT
+          const latestOrder = filteredOrders.length > 0 ? [filteredOrders[0]] : [];
+          
+          // Load car info for the latest order
           const ordersWithCars = await Promise.all(
-            ordersData.map(async (order: RentalOrderData) => {
+            latestOrder.map(async (order: RentalOrderData) => {
               try {
                 const carResponse = await carsApi.getById(order.carId.toString());
                 if (carResponse.success && carResponse.data) {
@@ -188,6 +212,11 @@ export default function DocumentsPage() {
           );
           
           setOrders(ordersWithCars);
+          
+          // ✅ Tự động chọn đơn hàng mới nhất nếu có
+          if (ordersWithCars.length > 0 && !selectedOrderId) {
+            setSelectedOrderId(ordersWithCars[0].id);
+          }
         }
       } catch (error) {
         console.error("Error loading orders:", error);
@@ -197,6 +226,7 @@ export default function DocumentsPage() {
     };
 
     loadOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   // Load orderId from URL query params
@@ -501,65 +531,62 @@ export default function DocumentsPage() {
 
           <h1 className="text-3xl font-bold mb-6">Upload Giấy Tờ</h1>
 
-          {/* === SELECT ORDER CARD === */}
+          {/* === ORDER INFO CARD (READ-ONLY) === */}
           <div style={{ width: "100%", marginBottom: 18 }}>
-            <Card title={<><CarOutlined /> Chọn đơn hàng thuê xe</>} className="shadow-lg rounded-xl">
-              <Form.Item label="Đơn hàng" required>
-                <Select
-                  placeholder="Chọn đơn hàng thuê xe"
-                  value={selectedOrderId}
-                  onChange={(value) => setSelectedOrderId(value)}
-                  loading={loadingOrders}
-                  style={{ width: "100%" }}
-                  size="large"
-                >
-                  {orders.map((order) => (
-                    <Select.Option key={order.id} value={order.id}>
-                      {order.car
-                        ? `${order.car.name} - Đơn hàng #${order.id} `
-                        : `Đơn hàng #${order.id} `}
-                    </Select.Option>
-                  ))}
-                </Select>
-              </Form.Item>
-
-              {selectedCar && (
-                <Card className="mt-4" style={{ backgroundColor: "#f9fafb" }}>
-                  <div className="flex gap-4">
-                    <div className="flex-shrink-0">
-                      <Image
-                        src={selectedCar.imageUrl}
-                        alt={selectedCar.name}
-                        width={200}
-                        height={150}
-                        style={{ objectFit: "cover", borderRadius: 8 }}
-                        fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='150'%3E%3Crect fill='%23ddd' width='200' height='150'/%3E%3Ctext fill='%23999' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Image%3C/text%3E%3C/svg%3E"
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="text-xl font-semibold mb-2">{selectedCar.name}</h3>
-                      <Descriptions column={1} size="small">
-                        <Descriptions.Item label="Model">{selectedCar.model}</Descriptions.Item>
-                        <Descriptions.Item label="Số chỗ ngồi">{selectedCar.seats}</Descriptions.Item>
-                        <Descriptions.Item label="Loại pin">{selectedCar.batteryType}</Descriptions.Item>
-                        <Descriptions.Item label="Giá thuê/ngày">
-                          {selectedCar.rentPricePerDay?.toLocaleString("vi-VN")} VNĐ
-                        </Descriptions.Item>
-                      </Descriptions>
-                    </div>
-                  </div>
-                </Card>
-              )}
-
-              {!selectedOrderId && orders.length > 0 && (
-                <div className="bg-yellow-50 border border-yellow-200 p-3 rounded mt-4 text-yellow-700 text-sm">
-                  <strong>Lưu ý:</strong> Vui lòng chọn đơn hàng thuê xe để upload giấy tờ.
+            <Card title={<><CarOutlined /> Đơn hàng thuê xe</>} className="shadow-lg rounded-xl">
+              {loadingOrders ? (
+                <div className="text-center py-4">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="mt-2 text-gray-600">Đang tải thông tin đơn hàng...</p>
                 </div>
-              )}
+              ) : orders.length > 0 && selectedOrderId ? (
+                <>
+                  <div className="bg-blue-50 border border-blue-200 p-3 rounded mb-4 text-blue-700 text-sm">
+                    <strong>Lưu ý:</strong> Chỉ được phép nộp giấy tờ cho đơn hàng mới nhất (đã thanh toán cọc).
+                  </div>
+                  
+                  <div className="mb-4">
+                    <Descriptions column={1} size="middle">
+                      <Descriptions.Item label="Mã đơn hàng">
+                        <strong>#{orders[0].id}</strong>
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Trạng thái">
+                        <Tag color="blue">Chờ nộp giấy tờ</Tag>
+                      </Descriptions.Item>
+                    </Descriptions>
+                  </div>
 
-              {orders.length === 0 && !loadingOrders && (
-                <div className="bg-gray-50 border border-gray-200 p-3 rounded mt-4 text-gray-600 text-sm">
-                  Bạn chưa có đơn hàng nào. Vui lòng đặt thuê xe trước.
+                  {selectedCar && (
+                    <Card className="mt-4" style={{ backgroundColor: "#f9fafb" }}>
+                      <div className="flex gap-4">
+                        <div className="flex-shrink-0">
+                          <Image
+                            src={selectedCar.imageUrl}
+                            alt={selectedCar.name}
+                            width={200}
+                            height={150}
+                            style={{ objectFit: "cover", borderRadius: 8 }}
+                            fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='150'%3E%3Crect fill='%23ddd' width='200' height='150'/%3E%3Ctext fill='%23999' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Image%3C/text%3E%3C/svg%3E"
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="text-xl font-semibold mb-2">{selectedCar.name}</h3>
+                          <Descriptions column={1} size="small">
+                            <Descriptions.Item label="Model">{selectedCar.model}</Descriptions.Item>
+                            <Descriptions.Item label="Số chỗ ngồi">{selectedCar.seats}</Descriptions.Item>
+                            <Descriptions.Item label="Loại pin">{selectedCar.batteryType}</Descriptions.Item>
+                            <Descriptions.Item label="Giá thuê/ngày">
+                              {selectedCar.rentPricePerDay?.toLocaleString("vi-VN")} VNĐ
+                            </Descriptions.Item>
+                          </Descriptions>
+                        </div>
+                      </div>
+                    </Card>
+                  )}
+                </>
+              ) : (
+                <div className="bg-gray-50 border border-gray-200 p-3 rounded text-gray-600 text-sm">
+                  Bạn chưa có đơn hàng nào ở trạng thái "Chờ nộp giấy tờ". Vui lòng hoàn tất thanh toán cọc trước khi nộp giấy tờ.
                 </div>
               )}
             </Card>

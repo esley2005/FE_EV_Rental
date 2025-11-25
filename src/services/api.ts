@@ -578,6 +578,7 @@ export interface User {
   phone?: string;
   address?: string;
   dateOfBirth?: string;
+  occupation?: string;
   avatar?: string;
   driverLicenseStatus?: number; // 0 = chưa cập nhật/chưa xác thực, 1 = đã xác thực, 2 = bị từ chối
   citizenIdStatus?: number; // 0 = chưa cập nhật/chưa xác thực, 1 = đã xác thực, 2 = bị từ chối
@@ -614,6 +615,7 @@ export interface UpdateProfileData {
   phone?: string;
   address?: string;
   dateOfBirth?: string;
+  occupation?: string;
   avatar?: string;
   userId?: number; // Optional userId, sẽ lấy từ localStorage nếu không có
 }
@@ -687,34 +689,59 @@ export const authApi = {
     }),
 
   // Lấy thông tin user hiện tại
-  // ✅ TẠM TẮT: Không gọi API, chỉ lấy từ localStorage
-  getProfile: () => {
-    // Tạm thời không gọi API, chỉ lấy từ localStorage
-    const userStr = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
-    if (userStr) {
-      try {
-        const userData = JSON.parse(userStr);
-        return Promise.resolve({
-          success: true,
-          data: userData as User,
-        });
-      } catch (e) {
-        console.warn('[Auth API] Failed to parse user from localStorage:', e);
+  // ✅ SỬA: Customer không có quyền gọi /User/GetById hoặc /User/GetAll, chỉ dùng localStorage
+  // Profile sẽ được cập nhật sau khi login hoặc update profile thành công
+  getProfile: async () => {
+    try {
+      // ✅ Chỉ lấy từ localStorage vì Customer không có quyền gọi User API
+      const userStr = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
+      if (userStr) {
+        try {
+          const userData = JSON.parse(userStr);
+          // Map phoneNumber từ backend sang phone nếu cần
+          const mappedUser: User = {
+            ...userData,
+            phone: (userData as User & { phoneNumber?: string }).phoneNumber || userData.phone,
+          };
+          return Promise.resolve({
+            success: true,
+            data: mappedUser,
+          });
+        } catch (e) {
+          console.warn('[Auth API] Failed to parse user from localStorage:', e);
+        }
       }
+
+      return {
+        success: false,
+        error: 'User not found in localStorage. Please login again.',
+      };
+    } catch (error) {
+      console.error('[Auth API] Error loading profile:', error);
+      
+      // Fallback về localStorage nếu có lỗi
+      const userStr = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
+      if (userStr) {
+        try {
+          const userData = JSON.parse(userStr);
+          return Promise.resolve({
+            success: true,
+            data: userData as User,
+          });
+        } catch (e) {
+          console.warn('[Auth API] Failed to parse user from localStorage:', e);
+        }
+      }
+      
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to load user profile',
+      };
     }
-    // Nếu không có trong localStorage, return error
-    return Promise.resolve({
-      success: false,
-      error: 'User not found in localStorage',
-    });
-    
-    // Code cũ - đã comment để tạm tắt API call
-    // return apiCall<User>('/user/profile', {
-    //   method: 'GET',
-    // });
   },
 
   // Lấy thông tin user theo ID
+  // ✅ SỬA: Loại bỏ fallback getAllUsers() vì Customer không có quyền
   getProfileById: async (userId: number) => {
     // Thử nhiều endpoint để tương thích với backend
     const candidates = [
@@ -728,6 +755,36 @@ export const authApi = {
       try {
         const res = await apiCall<User>(ep, { method: 'GET' });
         if (res.success && res.data) {
+          // ✅ Map phoneNumber từ backend sang phone - xử lý null
+          // Backend trả về format: { isSuccess: true, message: null, data: { phoneNumber: null, ... } }
+          // apiCall đã extract data.data thành res.data
+          const userData = res.data as User & { phoneNumber?: string | null };
+          
+          // Chỉ map nếu phoneNumber có giá trị hợp lệ (không phải null, undefined, hoặc empty string)
+          if (!userData.phone && userData.phoneNumber && userData.phoneNumber !== null) {
+            return {
+              success: true,
+              data: {
+                ...userData,
+                phone: userData.phoneNumber,
+              },
+            };
+          }
+          
+          // Nếu phoneNumber là null, đảm bảo phone cũng là undefined/null
+          if (userData.phoneNumber === null && userData.phone) {
+            // Giữ nguyên phone nếu đã có
+          } else if (userData.phoneNumber === null) {
+            // Nếu phoneNumber là null và phone chưa có, đảm bảo phone là undefined
+            return {
+              success: true,
+              data: {
+                ...userData,
+                phone: undefined,
+              },
+            };
+          }
+          
           return res;
         }
       } catch (error) {
@@ -735,14 +792,8 @@ export const authApi = {
       }
     }
     
-    // Fallback: lấy từ getAllUsers và filter
-    const allUsersRes = await authApi.getAllUsers();
-    if (allUsersRes.success && allUsersRes.data) {
-      const user = allUsersRes.data.find((u) => u.id === userId);
-      if (user) {
-        return { success: true, data: user };
-      }
-    }
+    // ✅ KHÔNG CÒN FALLBACK VỀ getAllUsers() - Customer không có quyền gọi API này
+    // Nếu không tìm thấy, trả về error
     
     return { success: false, error: 'Không tìm thấy user' };
   },
@@ -822,7 +873,7 @@ export const authApi = {
 
   // Cập nhật thông tin user
   updateProfile: async (data: UpdateProfileData) => {
-    // Backend yêu cầu endpoint /User/UpdateCustomerName với userId và fullName
+    // Backend yêu cầu endpoint /User/UpdateCustomerProfile với UpdateCustomerProfileDTO
     // Lấy userId từ data hoặc localStorage
     let userId: number | undefined = data.userId;
     
@@ -847,17 +898,69 @@ export const authApi = {
       };
     }
     
-    // Format dữ liệu theo yêu cầu backend: { userId, fullName }
-    const requestData = {
+    // Format dữ liệu theo yêu cầu backend: UpdateCustomerProfileDTO
+    // Schema: { userId, fullName, dateOfBirth, address, occupation, phoneNumber }
+    const requestData: {
+      userId: number;
+      fullName?: string;
+      dateOfBirth?: string;
+      address?: string;
+      occupation?: string;
+      phoneNumber?: string;
+    } = {
       userId: userId,
-      fullName: data.fullName || ''
     };
     
-    // Gọi endpoint đúng theo Swagger: PUT /User/UpdateCustomerName
-    return await apiCall<User>('/User/UpdateCustomerName', {
+    // Thêm các trường có giá trị (theo schema backend)
+    // fullName là required, các trường khác là optional
+    if (data.fullName) {
+      requestData.fullName = data.fullName;
+    } else {
+      // Nếu không có fullName, trả về lỗi
+      return {
+        success: false,
+        error: 'Họ và tên là bắt buộc'
+      };
+    }
+    
+    // Các trường optional - chỉ gửi nếu có giá trị
+    if (data.phone !== undefined && data.phone !== null && data.phone !== '') {
+      requestData.phoneNumber = data.phone; // Backend yêu cầu phoneNumber (camelCase)
+    }
+    if (data.address !== undefined && data.address !== null && data.address !== '') {
+      requestData.address = data.address;
+    }
+    if (data.dateOfBirth !== undefined && data.dateOfBirth !== null && data.dateOfBirth !== '') {
+      requestData.dateOfBirth = data.dateOfBirth; // ISO string format
+    }
+    if (data.occupation !== undefined && data.occupation !== null && data.occupation !== '') {
+      requestData.occupation = data.occupation;
+    }
+    
+    console.log('[UpdateProfile API] Request data:', JSON.stringify(requestData, null, 2));
+    
+    // Gọi endpoint đúng theo Controller: PUT /User/UpdateCustomerProfile
+    const response = await apiCall<User & { phoneNumber?: string }>('/User/UpdateCustomerProfile', {
       method: 'PUT',
       body: JSON.stringify(requestData),
     });
+    
+    console.log('[UpdateProfile API] Response:', response);
+    
+    // Backend có thể trả về User object trực tiếp hoặc wrapped trong response object
+    // apiCall đã xử lý, nên response.data sẽ là User object
+    // Map phoneNumber từ backend sang phone
+    if (response.success && response.data) {
+      const userData = response.data as User & { phoneNumber?: string };
+      if (userData.phoneNumber && !userData.phone) {
+        userData.phone = userData.phoneNumber;
+      }
+      return {
+        ...response,
+        data: userData as User,
+      };
+    }
+    return response;
   },
 
   // Cập nhật trạng thái active của user (Admin/Staff only)
@@ -1498,13 +1601,41 @@ export enum PaymentGateway {
 }
 
 // MoMo Payment Response Interface
+// ✅ Theo tài liệu MoMo Payment Notification:
+// - Backend gọi CreateMomoPayment trả về payUrl và momoOrderId
+// - Frontend redirect user đến payUrl
+// - Sau khi thanh toán, MoMo redirect về payment-success với query params
+// - Backend IPN tự động xử lý payment status
+// - Frontend có thể gọi GetByMomoOrderId để lấy trạng thái payment
 export interface CreateMomoPaymentResponse {
-  momoPayUrl?: string; // URL để redirect user đến MoMo
-  payUrl?: string; // Alias cho momoPayUrl
-  momoOrderId?: string;
+  payUrl?: string; // ✅ URL để redirect user đến MoMo (theo flow mẫu)
+  momoPayUrl?: string; // Alias cho payUrl
+  momoOrderId?: string; // ✅ Mã đơn hàng MoMo (dùng để gọi GetByMomoOrderId)
   momoRequestId?: string;
   requestId?: string; // Alias cho momoRequestId
-  status?: string;
+  status?: string; // Payment status: Completed / Failed / Pending
+}
+
+// MoMo IPN Payload Interface
+// ✅ Theo tài liệu MoMo Payment Notification:
+// Payload từ MoMo IPN callback chứa các tham số sau:
+export interface MoMoIpnPayload {
+  partnerCode?: string; // Thông tin tích hợp
+  orderId?: string; // Mã đơn hàng của đối tác (momoOrderId)
+  requestId?: string; // requestId của đối tác
+  amount?: number; // Số tiền thanh toán
+  orderInfo?: string; // Thông tin đơn hàng
+  orderType?: string; // momo_wallet
+  transId?: number; // Mã giao dịch của MoMo
+  resultCode?: number; // Trạng thái giao dịch (0 = thành công)
+  message?: string; // Mô tả lỗi
+  payType?: string; // Hình thức thanh toán: webApp, app, qr, miniapp, aio_qr, banktransfer_qr
+  responseTime?: number; // Thời gian trả kết quả (timestamp)
+  extraData?: string; // Thông tin thêm
+  signature?: string; // Chữ ký để xác nhận giao dịch
+  paymentOption?: string; // Tài khoản/Thẻ: momo, pay_later
+  userFee?: number; // User Fee
+  promotionInfo?: unknown; // Thông tin khuyến mãi
 }
 
 // Create Payment with Gateway Response Interface
@@ -1557,18 +1688,64 @@ export const paymentApi = {
       method: "GET",
     }),
 
-  // Lấy payment theo MoMo Order ID
-  getByMomoOrderId: (momoOrderId: string) =>
-    apiCall<PaymentData>(`/Payment/GetByMomoOrderId?momoOrderId=${momoOrderId}`, {
+  // ✅ Lấy payment theo MoMo Order ID
+  // Sau khi user thanh toán xong, có thể gọi API này để lấy trạng thái payment
+  // GET /api/Payment/GetByMomoOrderId?momoOrderId=${momoOrderId}
+  // Response: { status: "Completed" | "Failed" | "Pending", ... }
+  getByMomoOrderId: (momoOrderId: string) => {
+    console.log('[Payment API] Getting payment by MoMo orderId:', momoOrderId);
+    return apiCall<PaymentData>(`/Payment/GetByMomoOrderId?momoOrderId=${momoOrderId}`, {
       method: "GET",
-    }),
+    });
+  },
 
-  // Tạo MoMo payment - trả về payUrl để redirect user
+  // ✅ Xử lý MoMo IPN (Instant Payment Notification)
+  // ⚠️ LƯU Ý: Endpoint này thường được MoMo gọi trực tiếp từ server của họ
+  // Chỉ dùng API này để test hoặc trigger thủ công trong development
+  // POST /api/Payment/MomoIPN
+  // Payload: MoMoIpnPayload từ MoMo (chứa orderId, resultCode, signature, message, transId, payType, ...)
+  // Response: { success: boolean, data: boolean }
+  processMomoIpn: async (payload: MoMoIpnPayload): Promise<ApiResponse<boolean>> => {
+    console.log('[Payment API] Processing MoMo IPN:', payload);
+    
+    // Backend expect JObject format
+    const response = await apiCall<boolean>(
+      '/Payment/MomoIPN',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    );
+
+    if (response.success) {
+      console.log('[Payment API] MoMo IPN processed successfully');
+    } else {
+      console.error('[Payment API] MoMo IPN processing failed:', response.error);
+    }
+
+    return response;
+  },
+
+  // ✅ Tạo MoMo payment - trả về payUrl để redirect user
+  // Flow:
+  // 1. Gọi API: POST /api/Payment/CreateMomoPayment?rentalOrderId=123&userId=10&amount=150000
+  // 2. Backend trả về: { payUrl, momoOrderId, status }
+  // 3. Frontend redirect: window.location.href = data.payUrl
+  // 4. Sau khi thanh toán, MoMo redirect về payment-success với query params
+  // 5. Backend IPN tự động xử lý payment status
+  // 6. Frontend có thể gọi GetByMomoOrderId để lấy trạng thái: GET /api/Payment/GetByMomoOrderId?momoOrderId=...
   createMomoPayment: async (
     rentalOrderId: number,
     userId: number,
     amount: number
   ): Promise<ApiResponse<CreateMomoPaymentResponse>> => {
+    console.log('[Payment API] Creating MoMo payment:', {
+      rentalOrderId,
+      userId,
+      amount,
+      endpoint: `/Payment/CreateMomoPayment?rentalOrderId=${rentalOrderId}&userId=${userId}&amount=${amount}`
+    });
+    
     // Backend trả về format: { isSuccess, data, message }
     // apiCall sẽ tự động parse và trả về format ApiResponse
     const response = await apiCall<CreateMomoPaymentResponse>(
@@ -1577,6 +1754,14 @@ export const paymentApi = {
         method: "POST",
       }
     );
+
+    if (response.success && response.data) {
+      console.log('[Payment API] MoMo payment created:', {
+        payUrl: response.data.payUrl || response.data.momoPayUrl,
+        momoOrderId: response.data.momoOrderId,
+        status: response.data.status
+      });
+    }
 
     // apiCall đã xử lý response format từ backend
     // Nếu backend trả về { isSuccess, data, message }, apiCall sẽ convert thành { success, data, error }
@@ -1591,24 +1776,41 @@ export const paymentApi = {
   },
 
   // Tạo payment với gateway được chọn (MoMo, PayOS, Cash, BankTransfer)
+  // ✅ SỬA: Backend C# expect PascalCase format
   createPaymentWithGateway: async (
     rentalOrderId: number,
     userId: number,
     amount: number,
     gateway: PaymentGateway
   ): Promise<ApiResponse<CreatePaymentWithGatewayResponse>> => {
+    // Backend C# thường expect PascalCase
+    const requestData = {
+      RentalOrderId: rentalOrderId,
+      UserId: userId,
+      Amount: amount,
+      Gateway: gateway
+    };
+    
+    console.log('[Payment API] Creating payment with gateway:', {
+      rentalOrderId,
+      userId,
+      amount,
+      gateway,
+      requestData
+    });
+    
     const response = await apiCall<CreatePaymentWithGatewayResponse>(
       '/Payment/CreatePaymentWithGateway',
       {
         method: 'POST',
-        body: JSON.stringify({
-          rentalOrderId,
-          userId,
-          amount,
-          gateway
-        }),
+        body: JSON.stringify(requestData),
       }
     );
+    
+    if (!response.success) {
+      console.error('[Payment API] CreatePaymentWithGateway failed:', response.error);
+    }
+    
     return response;
   },
 

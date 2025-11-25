@@ -236,16 +236,72 @@ export default function CheckoutPage() {
     return 0;
   };
 
-  // Kiểm tra xem có thể thanh toán không (có deposit hoặc total > 0)
+  // Kiểm tra xem có thể thanh toán không
+  // ✅ QUAN TRỌNG: Chỉ cho phép thanh toán khi order status == 0 (Pending)
   const canMakePayment = () => {
     if (!order) return false;
+    
+    // Check order status - phải là Pending (0)
+    const orderStatus = typeof order.status === 'string' 
+      ? order.status.toLowerCase() 
+      : String(order.status);
+    
+    const isPending = orderStatus === 'pending' || 
+                     orderStatus === '0' || 
+                     orderStatus === 'chờ xác nhận' ||
+                     (typeof order.status === 'number' && order.status === 0);
+    
+    if (!isPending) {
+      return false;
+    }
+    
+    // Kiểm tra có số tiền cần thanh toán
     return getPaymentAmount() > 0;
+  };
+  
+  // Lấy thông báo lý do không thể thanh toán
+  const getPaymentBlockReason = (): string => {
+    if (!order) return "Không tìm thấy thông tin đơn hàng";
+    
+    const orderStatus = typeof order.status === 'string' 
+      ? order.status.toLowerCase() 
+      : String(order.status);
+    
+    const isPending = orderStatus === 'pending' || 
+                     orderStatus === '0' || 
+                     orderStatus === 'chờ xác nhận' ||
+                     (typeof order.status === 'number' && order.status === 0);
+    
+    if (!isPending) {
+      return `Đơn hàng đang ở trạng thái "${order.status}". Chỉ có thể thanh toán khi đơn hàng ở trạng thái "Chờ xác nhận" (Pending).`;
+    }
+    
+    if (getPaymentAmount() <= 0) {
+      return "Không có số tiền cần thanh toán. Đơn hàng chưa có thông tin giá. Vui lòng liên hệ nhân viên để được hỗ trợ.";
+    }
+    
+    return "Không thể thanh toán";
   };
 
   // Hàm xử lý thanh toán khi user bấm nút xác nhận
   const handleConfirmPayment = async () => {
     if (!order || !user) {
       message.error("Thông tin đơn hàng hoặc người dùng không hợp lệ");
+      return;
+    }
+
+    // ✅ QUAN TRỌNG: Kiểm tra order status phải là Pending (0) trước khi cho phép thanh toán
+    const orderStatus = typeof order.status === 'string' 
+      ? order.status.toLowerCase() 
+      : String(order.status);
+    
+    const isPending = orderStatus === 'pending' || 
+                     orderStatus === '0' || 
+                     orderStatus === 'chờ xác nhận' ||
+                     (typeof order.status === 'number' && order.status === 0);
+    
+    if (!isPending) {
+      message.error(`Không thể thanh toán. Đơn hàng đang ở trạng thái "${order.status}". Chỉ có thể thanh toán khi đơn hàng ở trạng thái "Chờ xác nhận" (Pending).`);
       return;
     }
 
@@ -271,6 +327,17 @@ export default function CheckoutPage() {
         selectedGateway
       );
 
+      if (!response.success) {
+        // ✅ Xử lý lỗi HotReloadException từ backend
+        if (response.error?.includes('HotReloadException')) {
+          message.error('Backend đang trong quá trình reload. Vui lòng đợi vài giây rồi thử lại, hoặc yêu cầu admin restart backend server.');
+        } else {
+          message.error(response.error || 'Không thể tạo yêu cầu thanh toán. Vui lòng thử lại.');
+        }
+        setIsProcessingPayment(false);
+        return;
+      }
+
       if (response.success && response.data) {
         const paymentData = response.data;
 
@@ -282,8 +349,16 @@ export default function CheckoutPage() {
 
         // Xử lý theo gateway
         if (selectedGateway === PaymentGateway.MoMo) {
-          const paymentUrl = paymentData.momoPayUrl;
+          // ✅ MoMo Payment Flow:
+          // 1. Backend tạo payment và trả về payUrl (hoặc momoPayUrl)
+          // 2. Frontend redirect user đến payUrl
+          // 3. Sau khi thanh toán, MoMo redirect về payment-success với query params
+          // 4. Backend IPN tự động xử lý payment status
+          // 5. Frontend có thể gọi GetByMomoOrderId để lấy trạng thái payment
+          const paymentUrl = paymentData.payUrl || paymentData.momoPayUrl;
           if (paymentUrl) {
+            console.log('[Checkout] MoMo payment URL received:', paymentUrl);
+            console.log('[Checkout] MoMo orderId:', paymentData.momoOrderId || (paymentData as any).momoOrderId);
             message.success("Đang chuyển đến trang thanh toán MoMo...", 2);
             setTimeout(() => {
               window.location.href = paymentUrl;
@@ -406,7 +481,7 @@ export default function CheckoutPage() {
             >
               Quay lại
             </Button>
-            <h1 className="text-3xl font-bold text-gray-800">Thanh toán đơn hàng</h1>
+            <h1 className="text-3xl font-bold text-gray-800">Thanh toán Giữ Xe</h1>
             <p className="text-gray-600 mt-2">Mã đơn hàng: #{order.id}</p>
           </motion.div>
 
@@ -495,7 +570,7 @@ export default function CheckoutPage() {
                   )}
                   {(order.deposit || paymentAmount > 0) && (
                     <div className="flex justify-between text-blue-600">
-                      <span>Tiền đặt cọc:</span>
+                      <span>Tiền cọc giữ xe:</span>
                       <span className="font-semibold">
                         {formatCurrency(order.deposit || paymentAmount)}
                         {!order.deposit && <Tag color="orange" className="ml-2">Tạm tính (30%)</Tag>}
@@ -509,7 +584,7 @@ export default function CheckoutPage() {
                     </div>
                   )}
                   <div className="flex justify-between pt-3 border-t border-gray-300">
-                    <span className="text-lg font-semibold text-gray-800">Tổng cần thanh toán:</span>
+                    <span className="text-lg font-semibold text-gray-800">Cần Thanh Toán Giữ Xe:</span>
                     <span className="text-xl font-bold text-green-600">
                       {formatCurrency(paymentAmount)}
                     </span>
@@ -593,7 +668,7 @@ export default function CheckoutPage() {
                         icon={<WalletOutlined />}
                         onClick={handleConfirmPayment}
                         loading={isProcessingPayment}
-                        disabled={isProcessingPayment || !order || !user}
+                        disabled={isProcessingPayment || !order || !user || !canMakePayment()}
                         className="bg-pink-600 hover:bg-pink-700 h-12 text-lg font-semibold"
                       >
                         {isProcessingPayment ? "Đang xử lý..." : "Xác nhận thanh toán"}
@@ -601,8 +676,8 @@ export default function CheckoutPage() {
                     </>
                   ) : (
                     <Alert
-                      message="Không có số tiền cần thanh toán"
-                      description="Đơn hàng chưa có thông tin giá. Vui lòng liên hệ nhân viên để được hỗ trợ."
+                      message="Không thể thanh toán"
+                      description={getPaymentBlockReason()}
                       type="warning"
                       showIcon
                     />
