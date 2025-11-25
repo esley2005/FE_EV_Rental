@@ -1812,6 +1812,10 @@ export const paymentApi = {
     userId: number,
     amount: number
   ): Promise<ApiResponse<CreateMomoPaymentResponse>> => {
+<<<<<<< Updated upstream
+=======
+<<<<<<< HEAD
+>>>>>>> Stashed changes
     // Xác định ReturnUrl dựa trên môi trường
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
     const returnUrl = `${baseUrl}/checkout/payment-callback-momo`;
@@ -1824,6 +1828,11 @@ export const paymentApi = {
       endpoint: `/Payment/CreateMomoPayment?rentalOrderId=${rentalOrderId}&userId=${userId}&amount=${amount}`
     });
     
+<<<<<<< Updated upstream
+=======
+=======
+>>>>>>> parent of 2041331 (Merge branch 'Thanh-Duy-ai' into Cơ-hội-cuối)
+>>>>>>> Stashed changes
     // Backend trả về format: { isSuccess, data, message }
     // apiCall sẽ tự động parse và trả về format ApiResponse
     // Thêm ReturnUrl vào request body
