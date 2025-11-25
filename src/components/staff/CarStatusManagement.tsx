@@ -122,17 +122,18 @@ export default function CarStatusManagement() {
             (order: RentalOrderData) => order.carId === car.id
           );
 
-          // Xác định trạng thái từ car.status (0 = Disabled, 1 = Available)
-          const carStatusNum = typeof car.status === "number" 
-            ? car.status 
-            : (car.status === 1 || car.status === "1" ? 1 : 0);
+          // Xác định trạng thái từ car.isActive (false = Disabled, true = Available)
+          // Handle both boolean and number/string formats for backward compatibility
+          const isActive = typeof car.isActive === "boolean" 
+            ? car.isActive 
+            : (car.isActive === 1 || car.isActive === "1" || String(car.isActive).toLowerCase() === "true");
           
-          // Nếu xe bị disabled (status = 0), đánh dấu là maintenance/disabled
-          let status: "available" | "booked" | "renting" | "maintenance" = carStatusNum === 0 ? "maintenance" : "available";
+          // Nếu xe bị disabled (isActive = false), đánh dấu là maintenance/disabled
+          let status: "available" | "booked" | "renting" | "maintenance" = !isActive ? "maintenance" : "available";
           let currentOrder: (RentalOrderData & { user?: any }) | undefined;
 
           // Chỉ kiểm tra đơn hàng nếu xe không bị disabled
-          if (carStatusNum === 1) {
+          if (isActive) {
             // Kiểm tra đơn hàng đang thuê (status = 4: Renting)
             const rentingOrder = relatedOrders.find(
               (order: RentalOrderData) => {
@@ -187,7 +188,7 @@ export default function CarStatusManagement() {
           return {
             ...car,
             status,
-            originalStatus: carStatusNum, // Lưu status gốc từ database
+            originalStatus: isActive ? 1 : 0, // Lưu isActive dưới dạng số (1 = true, 0 = false) để backward compatibility
             currentOrder,
           };
         });
@@ -279,12 +280,14 @@ export default function CarStatusManagement() {
       key: "status",
       width: 150,
       render: (_: any, record: CarWithStatus) => {
-        // Lấy trạng thái gốc từ database (0 = Hết xe, 1 = Còn xe)
+        // Lấy trạng thái gốc từ database (false = Hết xe, true = Còn xe)
+        // Handle both boolean and number/string formats for backward compatibility
+        const isActiveValue = typeof record.isActive === "boolean" 
+          ? record.isActive 
+          : (record.isActive === 1 || record.isActive === "1" || String(record.isActive).toLowerCase() === "true");
         const carStatusNum = record.originalStatus !== undefined 
           ? record.originalStatus 
-          : (typeof (record as Car).status === "number" 
-            ? (record as Car).status 
-            : ((record as Car).status === 1 || (record as Car).status === "1" ? 1 : 0));
+          : (isActiveValue ? 1 : 0);
         
         // Chỉ hiển thị 2 trạng thái: Còn xe (xanh lá) hoặc Hết xe (đỏ)
         if (carStatusNum === 1) {

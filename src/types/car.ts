@@ -20,12 +20,12 @@ export interface Car {
   imageUrl: string;
   imageUrl2?: string;
   imageUrl3?: string;
-  status: number;
   createdAt: string; 
   updatedAt: string | null;
   isActive: boolean;
   isDeleted: boolean;
-  carRentalLocations: any | null; // replace `any` with a specific type if you have one
+  rentalLocationId?: number; // Mỗi xe chỉ ở 1 địa điểm cố định
+  carRentalLocations?: any | null; // Deprecated - giữ lại để backward compatibility
   rentalOrders: any | null;       // same here
   rentalOrderId?: number ;
 }
