@@ -758,7 +758,7 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
       const [pickupTime, expectedReturnTime] = values.dateRange;
       
       // Đảm bảo userId là number
-      const userId = Number(user.id || user.userId);
+      const userId = Number(user.id || (user as any).userId);
       if (!userId || isNaN(userId)) {
         message.error("Không tìm thấy ID người dùng. Vui lòng đăng nhập lại.");
         setLoading(false);
@@ -773,10 +773,22 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
         return;
       }
       
+      // Format thời gian theo local time (không convert sang UTC)
+      // Format: YYYY-MM-DDTHH:mm:ss (local time, không có Z)
+      const formatLocalTime = (date: Dayjs) => {
+        const year = date.year();
+        const month = String(date.month() + 1).padStart(2, '0');
+        const day = String(date.date()).padStart(2, '0');
+        const hours = String(date.hour()).padStart(2, '0');
+        const minutes = String(date.minute()).padStart(2, '0');
+        const seconds = String(date.second()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+      };
+      
       const orderData: CreateRentalOrderData = {
         phoneNumber: values.phoneNumber,
-        pickupTime: pickupTime.toISOString(),
-        expectedReturnTime: expectedReturnTime.toISOString(),
+        pickupTime: formatLocalTime(pickupTime),
+        expectedReturnTime: formatLocalTime(expectedReturnTime),
         withDriver: values.withDriver || false,
         userId: userId,
         carId: carIdNum,
@@ -787,7 +799,7 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
         ...orderData,
         userId: userId,
         carId: carIdNum,
-        user: { id: user.id, userId: user.userId, email: user.email }
+        user: { id: user.id, userId: (user as any).userId, email: user.email }
       });
 
       const response = await rentalOrderApi.create(orderData);

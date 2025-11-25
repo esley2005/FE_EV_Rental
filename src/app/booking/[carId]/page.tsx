@@ -391,12 +391,27 @@ export default function BookingPage() {
               return orderCarId === carIdNum;
             });
 
-            // Lọc các đơn hàng có status không phải Cancelled hoặc Completed
+            // Chỉ lấy các đơn hàng có status OrderDepositConfirmed (1), CheckedIn (2), hoặc Renting (3) để disable ngày
+            // Không disable các đơn Pending (0), Cancelled (7), Completed (9)
             const activeOrders = carOrders.filter((order: any) => {
-              const status = order.status || order.Status || '';
-              const statusStr = status.toString().toLowerCase();
-              // Chỉ lấy các đơn hàng đang active (không phải cancelled hoặc completed)
-              return !statusStr.includes('cancelled') && !statusStr.includes('completed') && statusStr !== '7' && statusStr !== '8';
+              const status = order.status || order.Status;
+              let statusNum: number | null = null;
+              
+              if (typeof status === 'number') {
+                statusNum = status;
+              } else if (typeof status === 'string') {
+                const statusLower = status.toLowerCase();
+                if (statusLower === 'orderdepositconfirmed' || status === '1') statusNum = 1;
+                else if (statusLower === 'checkedin' || status === '2') statusNum = 2;
+                else if (statusLower === 'renting' || status === '3') statusNum = 3;
+                else {
+                  const parsed = parseInt(status);
+                  if (!isNaN(parsed)) statusNum = parsed;
+                }
+              }
+              
+              // Chỉ disable ngày nếu status là OrderDepositConfirmed (1), CheckedIn (2), hoặc Renting (3)
+              return statusNum === 1 || statusNum === 2 || statusNum === 3;
             });
 
             // Parse các khoảng thời gian đã được thuê
@@ -668,10 +683,10 @@ export default function BookingPage() {
       const phoneNumber = values.phoneNumber || values.PhoneNumber || (user as any)?.phoneNumber || (user as any)?.PhoneNumber || "";
       
       // Đảm bảo userId là number
-      const userId = Number(user.id || user.userId);
+      const userId = Number(user.id || (user as any).userId);
       if (!userId || isNaN(userId)) {
         message.error("Không tìm thấy ID người dùng. Vui lòng đăng nhập lại.");
-        setLoading(false);
+        setSubmitting(false);
         return;
       }
       
@@ -679,14 +694,26 @@ export default function BookingPage() {
       const carIdNum = Number(car.id);
       if (!carIdNum || isNaN(carIdNum)) {
         message.error("Thông tin xe không hợp lệ.");
-        setLoading(false);
+        setSubmitting(false);
         return;
       }
       
+      // Format thời gian theo local time (không convert sang UTC)
+      // Format: YYYY-MM-DDTHH:mm:ss (local time, không có Z)
+      const formatLocalTime = (date: Dayjs) => {
+        const year = date.year();
+        const month = String(date.month() + 1).padStart(2, '0');
+        const day = String(date.date()).padStart(2, '0');
+        const hours = String(date.hour()).padStart(2, '0');
+        const minutes = String(date.minute()).padStart(2, '0');
+        const seconds = String(date.second()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+      };
+
       const orderData: CreateRentalOrderData = {
         phoneNumber: phoneNumber,
-        pickupTime: pickupTime.toISOString(),
-        expectedReturnTime: expectedReturnTime.toISOString(),
+        pickupTime: formatLocalTime(pickupTime),
+        expectedReturnTime: formatLocalTime(expectedReturnTime),
         withDriver: withDriverValue,
         userId: userId,
         carId: carIdNum,
@@ -698,7 +725,7 @@ export default function BookingPage() {
         ...orderData,
         userId: userId,
         carId: carIdNum,
-        user: { id: user.id, userId: user.userId, email: user.email }
+        user: { id: user.id, userId: (user as any).userId, email: user.email }
       });
 
       const response = await rentalOrderApi.create(orderData);
@@ -1004,14 +1031,14 @@ export default function BookingPage() {
                         className="w-full"
                         placeholder={["Thời gian nhận xe", "Thời gian trả xe"]}
                         disabled={!!(pickupTimeFromUrl && returnTimeFromUrl)}
-                        onChange={(dates) => {
+                        onChange={(dates: [Dayjs | null, Dayjs | null] | null) => {
                           if (dates && dates[0] && dates[1]) {
                             setDateRangeValue([dates[0], dates[1]]);
                           } else {
                             setDateRangeValue(null);
                           }
                         }}
-                        disabledDate={(current) => {
+                        disabledDate={(current: Dayjs | null) => {
                           if (!current) return false;
                           
                           // Chặn các ngày trong quá khứ
@@ -1031,7 +1058,7 @@ export default function BookingPage() {
 
                           return isBooked;
                         }}
-                        cellRender={(current, info) => {
+                        cellRender={(current: any, info: any) => {
                           if (info.type !== 'date') {
                             return info.originNode;
                           }
@@ -1064,7 +1091,7 @@ export default function BookingPage() {
 
                           return info.originNode;
                         }}
-                        disabledTime={(value, type) => {
+                        disabledTime={(value: Dayjs | null, type: 'start' | 'end') => {
                           const now = dayjs();
                           const isToday = value && value.isSame(now, 'day');
                           
