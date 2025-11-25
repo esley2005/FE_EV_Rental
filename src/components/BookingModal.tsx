@@ -10,6 +10,7 @@ import { CheckCircle, XCircle, Upload as UploadIcon, IdCard, MapPin, Phone, Cale
 import dayjs, { Dayjs } from "dayjs";
 import { authUtils } from "@/utils/auth";
 import { geocodeAddress } from "@/utils/geocode";
+import { getValidImageUrl } from "@/utils/imageUtils";
 import CarMap from "@/components/CarMap";
 import Link from "next/link";
 
@@ -911,7 +912,7 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
                 <div className="relative flex items-center gap-6">
                   <div className="w-28 h-28 bg-white rounded-xl flex items-center justify-center overflow-hidden shadow-lg ring-4 ring-white/50">
                     <img
-                      src={car.imageUrl || '/logo_ev.png'}
+                      src={getValidImageUrl(car.imageUrl)}
                       alt={car.name}
                       className="w-full h-full object-cover"
                       onError={(e) => {

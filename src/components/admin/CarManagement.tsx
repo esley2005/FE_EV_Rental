@@ -24,6 +24,7 @@ import { carsApi, rentalLocationApi } from "@/services/api";
 import type { Car } from "@/types/car";
 import type { RentalLocationData } from "@/services/api";
 import type { UploadRequestOption as RcCustomRequestOptions } from "rc-upload/lib/interface";
+import { getValidImageUrl } from "@/utils/imageUtils";
 
 type DotNetList<T> = {
   $values?: T[];
@@ -666,7 +667,7 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
       width: 80,
       render: (url: string, record: Car) => (
         <img
-          src={url || '/logo_ev.png'}
+          src={getValidImageUrl(url)}
           alt={record.name}
           className="w-16 h-16 object-cover rounded"
           onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {

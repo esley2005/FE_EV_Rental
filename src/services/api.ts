@@ -1330,6 +1330,26 @@ export interface RevenueByLocationData {
   totalOrders: number;
 }
 
+// Revenue by Location with Order Times (for line chart)
+export interface OrderTimeData {
+  orderId: number;
+  orderDate: string;
+  pickupTime: string;
+  expectedReturnTime: string;
+  actualReturnTime: string | null;
+  total: number;
+}
+
+export interface RevenueByLocationWithOrdersData {
+  rentalLocationName: string;
+  totalRevenue: number;
+  orderCount: number;
+  orderTimes: {
+    $values?: OrderTimeData[];
+    $id?: string;
+  };
+}
+
 export interface CreatePaymentDTO {
   userId?: number;
   rentalOrderId?: number;
@@ -1786,6 +1806,12 @@ export const paymentApi = {
   // Lấy doanh thu theo từng điểm thuê (Admin/Staff)
   getRevenueByLocation: () =>
     apiCall<RevenueByLocationData[]>("/Payment/ByRentalLocation", {
+      method: "GET",
+    }),
+
+  // Lấy doanh thu theo từng điểm thuê kèm chi tiết đơn hàng (Admin/Staff) - cho biểu đồ line
+  getRevenueByLocationWithOrders: () =>
+    apiCall<RevenueByLocationWithOrdersData[]>("/Payment/byRentalLocation", {
       method: "GET",
     }),
 

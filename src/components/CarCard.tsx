@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Car } from "@/types/car";
 import { Zap, Users, MapPin, Star, Car as CarIcon } from "lucide-react";
 import { motion } from "framer-motion";
+import { getValidImageUrl } from "@/utils/imageUtils";
 interface CarCardProps {
   car: Car;
 }
@@ -169,7 +170,7 @@ export default function CarCard({ car }: CarCardProps) {
       <div className="relative" onClick={() => router.push(`/cars/${car.id}`)}>
         <div className="relative h-48 overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200">
           <motion.img
-            src={car.imageUrl || '/logo_ev.png'}
+            src={getValidImageUrl(car.imageUrl)}
             alt={car.name}
             className="w-full h-full object-cover"
             whileHover={{ scale: 1.1 }}

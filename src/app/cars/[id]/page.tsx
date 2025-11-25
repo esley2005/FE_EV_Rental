@@ -21,6 +21,7 @@ import type { Car } from "@/types/car";
 import type { User } from "@/services/api";
 import { authUtils } from "@/utils/auth";
 import { geocodeAddress } from "@/utils/geocode";
+import { getValidImageUrl } from "@/utils/imageUtils";
 import {
   MapPin,
   Bluetooth,
@@ -1164,7 +1165,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               }}
             >
               <img
-                src={car.imageUrl || '/logo_ev.png'}
+                src={getValidImageUrl(car.imageUrl)}
                 alt={car.name}
                 className="w-full h-full md:h-96 object-cover rounded-lg transition-transform duration-300 group-hover:scale-105"
                 onError={(e) => {
@@ -1175,7 +1176,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
             {/* Ảnh phụ 1 và 2 - chia đều chiều cao */}
             <div className="grid grid-cols-1 gap-4 h-full md:h-96">
-              {car.imageUrl2 ? (
+              {getValidImageUrl(car.imageUrl2) !== '/logo_ev.png' ? (
                 <div
                   className="flex-1 cursor-pointer group relative overflow-hidden rounded-lg"
                   onClick={() => {
@@ -1184,7 +1185,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                   }}
                 >
                   <img
-                    src={car.imageUrl2}
+                    src={getValidImageUrl(car.imageUrl2)}
                     alt={`${car.name} - Ảnh 2`}
                     className="w-full h-full object-cover rounded-lg transition-transform duration-300 group-hover:scale-105"
                     onError={(e) => {
@@ -1239,9 +1240,9 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               <div className="w-full flex justify-center mb-4">
                 <img
                   src={
-                    selectedImageIndex === 0 ? (car.imageUrl || '/logo_ev.png') :
-                      selectedImageIndex === 1 ? (car.imageUrl2 || '/logo_ev.png') :
-                        (car.imageUrl3 || '/logo_ev.png')
+                    selectedImageIndex === 0 ? getValidImageUrl(car.imageUrl) :
+                      selectedImageIndex === 1 ? getValidImageUrl(car.imageUrl2) :
+                        getValidImageUrl(car.imageUrl3)
                   }
                   alt={car.name}
                   className="max-h-[70vh] max-w-full object-contain rounded-lg"
@@ -1253,9 +1254,9 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
 
               {/* Thumbnail navigation */}
               <div className="flex gap-3 mt-4 justify-center">
-                {car.imageUrl && (
+                {getValidImageUrl(car.imageUrl) !== '/logo_ev.png' && (
                   <img
-                    src={car.imageUrl}
+                    src={getValidImageUrl(car.imageUrl)}
                     alt={`${car.name} - Ảnh 1`}
                     className={`w-20 h-20 object-cover rounded-lg cursor-pointer border-2 transition-all ${selectedImageIndex === 0 ? 'border-blue-600 scale-105 shadow-md' : 'border-transparent hover:border-gray-300'
                       }`}
@@ -1265,9 +1266,9 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                     }}
                   />
                 )}
-                {car.imageUrl2 && (
+                {getValidImageUrl(car.imageUrl2) !== '/logo_ev.png' && (
                   <img
-                    src={car.imageUrl2}
+                    src={getValidImageUrl(car.imageUrl2)}
                     alt={`${car.name} - Ảnh 2`}
                     className={`w-20 h-20 object-cover rounded-lg cursor-pointer border-2 transition-all ${selectedImageIndex === 1 ? 'border-blue-600 scale-105 shadow-md' : 'border-transparent hover:border-gray-300'
                       }`}
@@ -1277,9 +1278,9 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                     }}
                   />
                 )}
-                {car.imageUrl3 && (
+                {getValidImageUrl(car.imageUrl3) !== '/logo_ev.png' && (
                   <img
-                    src={car.imageUrl3}
+                    src={getValidImageUrl(car.imageUrl3)}
                     alt={`${car.name} - Ảnh 3`}
                     className={`w-20 h-20 object-cover rounded-lg cursor-pointer border-2 transition-all ${selectedImageIndex === 2 ? 'border-blue-600 scale-105 shadow-md' : 'border-transparent hover:border-gray-300'
                       }`}
@@ -2229,7 +2230,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                   <Link key={otherCar.id} href={`/cars/${otherCar.id}`}>
                     <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow cursor-pointer">
                       <img
-                        src={otherCar.imageUrl || '/logo_ev.png'}
+                        src={getValidImageUrl(otherCar.imageUrl)}
                         alt={otherCar.name}
                         className="w-full h-48 object-cover"
                         onError={(e) => {

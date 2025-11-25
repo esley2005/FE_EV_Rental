@@ -9,6 +9,7 @@ import { TrendingUp, TrendingDown, Car as CarIcon, Clock } from "lucide-react";
 import { rentalOrderApi, carsApi } from "@/services/api";
 import type { RentalOrderData } from "@/services/api";
 import type { Car } from "@/types/car";
+import { getValidImageUrl } from "@/utils/imageUtils";
 
 const { Title, Text } = Typography;
 
@@ -190,7 +191,7 @@ export default function CarUtilizationRate() {
           <div style={{ position: "relative", height: "200px", overflow: "hidden" }}>
             <img
               alt={car.name}
-              src={car.imageUrl || "/logo_ev.png"}
+              src={getValidImageUrl(car.imageUrl)}
               style={{
                 width: "100%",
                 height: "100%",

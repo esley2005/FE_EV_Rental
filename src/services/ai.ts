@@ -1,6 +1,103 @@
 /* eslint-disable no-console */
 import { apiCall } from '@/services/api';
 
+// New comprehensive Analysis Response
+export interface Summary {
+  totalCars: number;
+  totalOrders: number;
+  totalUsers: number;
+  totalFeedbacks: number;
+  totalRevenue: number;
+  avgRating: number;
+}
+
+export interface CarStatistics {
+  bySizeType: Array<{
+    sizeType: string;
+    count: number;
+    avgPrice: number;
+    avgBattery: number;
+  }>;
+  topCars: Array<{
+    id: number;
+    name: string;
+    model: string;
+    seats: number;
+    batteryDuration: number;
+    rentPricePerDay: number;
+    sizeType: string;
+    batteryType: string;
+  }>;
+}
+
+export interface OrderStatistics {
+  byStatus: Array<{
+    status: string;
+    count: number;
+    totalRevenue: number;
+  }>;
+  driverOption: {
+    withDriverCount: number;
+    withoutDriverCount: number;
+    withDriverPercentage: number;
+    withoutDriverPercentage: number;
+  };
+  recentOrders: Array<{
+    id: number;
+    orderDate: string;
+    pickupTime: string;
+    expectedReturnTime: string;
+    actualReturnTime: string | null;
+    carName: string;
+    locationName: string;
+    total: number;
+    status: string;
+  }>;
+}
+
+export interface FeedbackStatistics {
+  byRating: Array<{
+    rating: number;
+    count: number;
+  }>;
+  recentFeedbacks: Array<{
+    id: number;
+    title: string;
+    content: string;
+    rating: number;
+    userName: string;
+    createdAt: string;
+  }>;
+}
+
+export interface PaymentStatistics {
+  byMethod: Array<{
+    paymentMethod: string;
+    count: number;
+    totalAmount: number;
+  }>;
+}
+
+export interface LocationStatistics {
+  locations: Array<{
+    name: string;
+    address: string;
+    carCount: number;
+    orderCount: number;
+  }>;
+}
+
+export interface AnalysisResponse {
+  aiAnalysis: string;
+  summary: Summary;
+  carStatistics: CarStatistics;
+  orderStatistics: OrderStatistics;
+  feedbackStatistics: FeedbackStatistics;
+  paymentStatistics: PaymentStatistics;
+  locationStatistics: LocationStatistics;
+}
+
+// Legacy types for backward compatibility
 type AnalyzeResponse = {
   response?: string;
   analysis?: string;
@@ -13,7 +110,7 @@ type AnalyzeResponse = {
 
 export async function analyzeAI(): Promise<{
   success: boolean;
-  data?: AnalyzeResponse;
+  data?: AnalysisResponse | AnalyzeResponse;
   error?: string;
 }> {
   try {
@@ -35,7 +132,14 @@ export async function analyzeAI(): Promise<{
         console.log('[AI Service] Retry response:', retryResult);
         
         if (retryResult.success && retryResult.data) {
-          // Normalize response format
+          // Check if new format (has summary, carStatistics, etc.)
+          if (retryResult.data.summary || retryResult.data.carStatistics) {
+            return {
+              success: true,
+              data: normalizeNewAnalysisResponse(retryResult.data),
+            };
+          }
+          // Normalize response format (legacy)
           const normalizedData = normalizeAIResponse(retryResult.data);
           return {
             success: true,
@@ -47,7 +151,14 @@ export async function analyzeAI(): Promise<{
     }
 
     if (result.data) {
-      // Normalize response format - backend có thể trả về nhiều format
+      // Check if new format (has summary, carStatistics, etc.)
+      if (result.data.summary || result.data.carStatistics) {
+        return {
+          success: true,
+          data: normalizeNewAnalysisResponse(result.data),
+        };
+      }
+      // Normalize response format - backend có thể trả về nhiều format (legacy)
       const normalizedData = normalizeAIResponse(result.data);
       return {
         success: true,
@@ -66,6 +177,53 @@ export async function analyzeAI(): Promise<{
       error: error?.message || 'Đã xảy ra lỗi khi gọi API',
     };
   }
+}
+
+// Normalize new comprehensive analysis response
+function normalizeNewAnalysisResponse(data: any): AnalysisResponse {
+  // Handle $values arrays from .NET
+  const normalizeArray = (arr: any) => {
+    if (!arr) return [];
+    if (Array.isArray(arr)) return arr;
+    if (arr.$values && Array.isArray(arr.$values)) return arr.$values;
+    return [];
+  };
+
+  return {
+    aiAnalysis: data.aiAnalysis || data.analysis || data.response || '',
+    summary: data.summary || {
+      totalCars: 0,
+      totalOrders: 0,
+      totalUsers: 0,
+      totalFeedbacks: 0,
+      totalRevenue: 0,
+      avgRating: 0,
+    },
+    carStatistics: {
+      bySizeType: normalizeArray(data.carStatistics?.bySizeType || []),
+      topCars: normalizeArray(data.carStatistics?.topCars || []),
+    },
+    orderStatistics: {
+      byStatus: normalizeArray(data.orderStatistics?.byStatus || []),
+      driverOption: data.orderStatistics?.driverOption || {
+        withDriverCount: 0,
+        withoutDriverCount: 0,
+        withDriverPercentage: 0,
+        withoutDriverPercentage: 0,
+      },
+      recentOrders: normalizeArray(data.orderStatistics?.recentOrders || []),
+    },
+    feedbackStatistics: {
+      byRating: normalizeArray(data.feedbackStatistics?.byRating || []),
+      recentFeedbacks: normalizeArray(data.feedbackStatistics?.recentFeedbacks || []),
+    },
+    paymentStatistics: {
+      byMethod: normalizeArray(data.paymentStatistics?.byMethod || []),
+    },
+    locationStatistics: {
+      locations: normalizeArray(data.locationStatistics?.locations || []),
+    },
+  };
 }
 
 type AnalyzeCarUsageResponse = {
