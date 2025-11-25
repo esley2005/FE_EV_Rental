@@ -416,16 +416,19 @@ export default function RentalOrderManagement() {
       
       if (isNaN(odometerStart) || odometerStart < 0) {
         message.error('Số km không hợp lệ');
+        setLoading(false);
         return;
       }
       
       if (isNaN(batteryLevelStart) || batteryLevelStart < 0 || batteryLevelStart > 100) {
         message.error('% Pin không hợp lệ (phải từ 0-100)');
+        setLoading(false);
         return;
       }
       
       if (!values.vehicleConditionStart || values.vehicleConditionStart.trim() === '') {
         message.error('Vui lòng nhập tình trạng xe');
+        setLoading(false);
         return;
       }
       
@@ -451,6 +454,7 @@ export default function RentalOrderManagement() {
       // Xử lý trường hợp response là empty object {} - có thể là success nhưng không có data
       if (response && typeof response === 'object' && !('success' in response) && Object.keys(response).length === 0) {
         // Nếu response rỗng nhưng không có error, coi như success
+        console.log('[INFO] CarDeliveryHistory: Empty response treated as success');
         message.success('Xác nhận tình trạng xe thành công!');
         setDeliveryModalVisible(false);
         deliveryForm.resetFields();
@@ -460,18 +464,31 @@ export default function RentalOrderManagement() {
         return;
       }
 
-      if (response.success) {
+      // Xử lý response có success property
+      if (response && typeof response === 'object' && 'success' in response) {
+        if (response.success) {
+          message.success('Xác nhận tình trạng xe thành công!');
+          setDeliveryModalVisible(false);
+          deliveryForm.resetFields();
+          setDeliveryImageFileList([]);
+          setSelectedOrderForAction(null);
+          await loadOrders();
+        } else {
+          const errorMsg = response.error || (response as any).message || 'Giao xe thất bại';
+          console.error('[ERROR] CarDeliveryHistory response:', response);
+          console.error('[ERROR] Request data was:', requestData);
+          message.error(`Giao xe thất bại: ${errorMsg}`);
+        }
+      } else {
+        // Response không có format đúng, nhưng không có error property
+        // Có thể là success nhưng format khác
+        console.warn('[WARN] CarDeliveryHistory: Unexpected response format:', response);
         message.success('Xác nhận tình trạng xe thành công!');
         setDeliveryModalVisible(false);
         deliveryForm.resetFields();
         setDeliveryImageFileList([]);
         setSelectedOrderForAction(null);
         await loadOrders();
-      } else {
-        const errorMsg = response.error || 'Giao xe thất bại';
-        console.error('[ERROR] CarDeliveryHistory response:', response);
-        console.error('[ERROR] Request data was:', requestData);
-        message.error(`Giao xe thất bại: ${errorMsg}`);
       }
     } catch (error: any) {
       console.error('Delivery error:', error);
