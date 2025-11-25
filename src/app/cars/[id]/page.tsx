@@ -978,7 +978,12 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     const checkUserOrders = async () => {
       setCheckingReviewEligibility(true);
       try {
-        const response = await rentalOrderApi.getByUserId(Number(user.id));
+        const userId = user?.id || user?.userId;
+        if (!userId || isNaN(Number(userId))) {
+          setCheckingReviewEligibility(false);
+          return;
+        }
+        const response = await rentalOrderApi.getByUserId(Number(userId));
         if (response.success && response.data) {
           const raw = response.data as any;
           const orders = Array.isArray(raw)

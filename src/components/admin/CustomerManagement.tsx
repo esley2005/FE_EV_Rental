@@ -267,46 +267,50 @@ export default function CustomerManagement() {
     
     setLoadingDocuments(true);
     try {
-      // Lấy tất cả orders của customer
-      const ordersResponse = await rentalOrderApi.getByUserId(customer.id);
-      if (!ordersResponse.success || !ordersResponse.data) {
-        setDriverLicenses([]);
-        setCitizenIds([]);
-        return;
-      }
-
-      const orders = Array.isArray(ordersResponse.data)
-        ? ordersResponse.data
-        : (ordersResponse.data as any)?.$values || [];
-      
-      const orderIds = orders.map((order: RentalOrderData) => order.id);
-
-      // Lấy tất cả documents
-      const [licenseRes, citizenRes] = await Promise.all([
-        driverLicenseApi.getAll(),
-        citizenIdApi.getAll(),
-      ]);
-
-      // Filter documents theo orderIds của customer
+      // Thử lấy GPLX trực tiếp theo userId trước
       let customerLicenses: DriverLicenseData[] = [];
       let customerCitizenIds: CitizenIdData[] = [];
+      
+      try {
+        const licenseByUserIdRes = await driverLicenseApi.getByUserId(customer.id);
+        if (licenseByUserIdRes.success && licenseByUserIdRes.data) {
+          customerLicenses = [licenseByUserIdRes.data];
+        }
+      } catch (e) {
+        // Nếu không có, thử lấy từ orders
+        const ordersResponse = await rentalOrderApi.getByUserId(customer.id);
+        if (ordersResponse.success && ordersResponse.data) {
+          const orders = Array.isArray(ordersResponse.data)
+            ? ordersResponse.data
+            : (ordersResponse.data as any)?.$values || [];
+          
+          const orderIds = orders.map((order: RentalOrderData) => order.id);
 
-      if (licenseRes.success && licenseRes.data) {
-        const allLicenses = Array.isArray(licenseRes.data)
-          ? licenseRes.data
-          : (licenseRes.data as any)?.$values || [];
-        customerLicenses = allLicenses.filter((license: DriverLicenseData) =>
-          license.rentalOrderId && orderIds.includes(license.rentalOrderId)
-        );
-      }
+          // Lấy tất cả documents
+          const [licenseRes, citizenRes] = await Promise.all([
+            driverLicenseApi.getAll(),
+            citizenIdApi.getAll(),
+          ]);
 
-      if (citizenRes.success && citizenRes.data) {
-        const allCitizenIds = Array.isArray(citizenRes.data)
-          ? citizenRes.data
-          : (citizenRes.data as any)?.$values || [];
-        customerCitizenIds = allCitizenIds.filter((citizenId: CitizenIdData) =>
-          citizenId.rentalOrderId && orderIds.includes(citizenId.rentalOrderId)
-        );
+          // Filter documents theo orderIds của customer
+          if (licenseRes.success && licenseRes.data) {
+            const allLicenses = Array.isArray(licenseRes.data)
+              ? licenseRes.data
+              : (licenseRes.data as any)?.$values || [];
+            customerLicenses = allLicenses.filter((license: DriverLicenseData) =>
+              license.rentalOrderId && orderIds.includes(license.rentalOrderId)
+            );
+          }
+
+          if (citizenRes.success && citizenRes.data) {
+            const allCitizenIds = Array.isArray(citizenRes.data)
+              ? citizenRes.data
+              : (citizenRes.data as any)?.$values || [];
+            customerCitizenIds = allCitizenIds.filter((citizenId: CitizenIdData) =>
+              citizenId.rentalOrderId && orderIds.includes(citizenId.rentalOrderId)
+            );
+          }
+        }
       }
 
       setDriverLicenses(customerLicenses);
@@ -366,6 +370,84 @@ export default function CustomerManagement() {
     setOrderHistoryCustomer(customer);
     setOrderHistoryVisible(true);
     loadCustomerOrders(customer);
+  };
+
+  const handleVerifyLicense = async (licenseId: number, status: 0 | 1 | 2) => {
+    setLoadingDocuments(true);
+    try {
+      const response = await driverLicenseApi.updateStatus(licenseId, status);
+      if (response.success) {
+        const statusText = status === 1 ? "xác thực" : status === 2 ? "từ chối" : "chờ xác thực";
+        api.success({
+          message: `Cập nhật trạng thái GPLX thành công`,
+          description: `GPLX đã được ${statusText}.`,
+          placement: "topRight",
+          icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
+        });
+        // Reload documents
+        if (selectedCustomer) {
+          await loadCustomerDocuments(selectedCustomer);
+        }
+        // Reload customers để cập nhật status trong bảng
+        await loadCustomers();
+      } else {
+        api.error({
+          message: "Lỗi cập nhật trạng thái",
+          description: response.error || "Không thể cập nhật trạng thái GPLX!",
+          placement: "topRight",
+          icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+        });
+      }
+    } catch (error) {
+      console.error("Verify license error:", error);
+      api.error({
+        message: "Có lỗi xảy ra",
+        description: "Không thể cập nhật trạng thái GPLX. Vui lòng thử lại!",
+        placement: "topRight",
+        icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+      });
+    } finally {
+      setLoadingDocuments(false);
+    }
+  };
+
+  const handleVerifyCitizenId = async (citizenId: number, status: 0 | 1 | 2) => {
+    setLoadingDocuments(true);
+    try {
+      const response = await citizenIdApi.updateStatus(citizenId, status);
+      if (response.success) {
+        const statusText = status === 1 ? "xác thực" : status === 2 ? "từ chối" : "chờ xác thực";
+        api.success({
+          message: `Cập nhật trạng thái CCCD thành công`,
+          description: `CCCD đã được ${statusText}.`,
+          placement: "topRight",
+          icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
+        });
+        // Reload documents
+        if (selectedCustomer) {
+          await loadCustomerDocuments(selectedCustomer);
+        }
+        // Reload customers để cập nhật status trong bảng
+        await loadCustomers();
+      } else {
+        api.error({
+          message: "Lỗi cập nhật trạng thái",
+          description: response.error || "Không thể cập nhật trạng thái CCCD!",
+          placement: "topRight",
+          icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+        });
+      }
+    } catch (error) {
+      console.error("Verify citizen ID error:", error);
+      api.error({
+        message: "Có lỗi xảy ra",
+        description: "Không thể cập nhật trạng thái CCCD. Vui lòng thử lại!",
+        placement: "topRight",
+        icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
+      });
+    } finally {
+      setLoadingDocuments(false);
+    }
   };
 
   const handleToggleActive = async (customer: User, isActive: boolean) => {
@@ -685,6 +767,27 @@ export default function CustomerManagement() {
                                   : "-"}
                               </Descriptions.Item>
                             </Descriptions>
+                            {license.id && (
+                              <div className="mt-4 flex gap-2">
+                                <Button
+                                  type="primary"
+                                  icon={<CheckCircleOutlined />}
+                                  onClick={() => handleVerifyLicense(license.id!, 1)}
+                                  disabled={license.status === 1 || license.status === '1' || license.status === 'approved'}
+                                  className="bg-green-600 hover:bg-green-700"
+                                >
+                                  Xác thực
+                                </Button>
+                                <Button
+                                  danger
+                                  icon={<CloseCircleOutlined />}
+                                  onClick={() => handleVerifyLicense(license.id!, 2)}
+                                  disabled={license.status === 2 || license.status === '2' || license.status === 'rejected'}
+                                >
+                                  Từ chối
+                                </Button>
+                              </div>
+                            )}
                             <div className="grid grid-cols-2 gap-4">
                               <div>
                                 <Title level={5}>Mặt trước</Title>
@@ -754,6 +857,27 @@ export default function CustomerManagement() {
                                   : "-"}
                               </Descriptions.Item>
                             </Descriptions>
+                            {citizenId.id && (
+                              <div className="mt-4 flex gap-2">
+                                <Button
+                                  type="primary"
+                                  icon={<CheckCircleOutlined />}
+                                  onClick={() => handleVerifyCitizenId(citizenId.id!, 1)}
+                                  disabled={citizenId.status === 1 || citizenId.status === '1' || citizenId.status === 'approved'}
+                                  className="bg-green-600 hover:bg-green-700"
+                                >
+                                  Xác thực
+                                </Button>
+                                <Button
+                                  danger
+                                  icon={<CloseCircleOutlined />}
+                                  onClick={() => handleVerifyCitizenId(citizenId.id!, 2)}
+                                  disabled={citizenId.status === 2 || citizenId.status === '2' || citizenId.status === 'rejected'}
+                                >
+                                  Từ chối
+                                </Button>
+                              </div>
+                            )}
                             <div className="grid grid-cols-2 gap-4">
                               <div>
                                 <Title level={5}>Mặt trước</Title>

@@ -20,9 +20,9 @@ import {
   UserOutlined,
   CloseCircleOutlined,
 } from "@ant-design/icons";
-import { carsApi, rentalOrderApi, authApi, rentalLocationApi, carRentalLocationApi } from "@/services/api";
+import { carsApi, rentalOrderApi, authApi, rentalLocationApi, carRentalLocationApi, paymentApi } from "@/services/api";
 import type { Car } from "@/types/car";
-import type { RentalOrderData, RentalLocationData, CarRentalLocationData } from "@/services/api";
+import type { RentalOrderData, RentalLocationData, CarRentalLocationData, PaymentData } from "@/services/api";
 import dayjs from "dayjs";
 import { MapPin } from "lucide-react";
 
@@ -40,6 +40,7 @@ export default function CarStatusManagement() {
   const [searchText, setSearchText] = useState("");
   const [activeTab, setActiveTab] = useState<string>("all");
   const [rentalLocations, setRentalLocations] = useState<RentalLocationData[]>([]);
+  const [payments, setPayments] = useState<PaymentData[]>([]);
 
   useEffect(() => {
     loadData();
@@ -80,6 +81,15 @@ export default function CarStatusManagement() {
       const usersRes = await authApi.getAllUsers();
       const users = usersRes.success && usersRes.data ? usersRes.data : [];
       const userMap = new Map(users.map((u: any) => [u.id || u.userId, u]));
+
+      // Load tất cả payments
+      const paymentsRes = await paymentApi.getAll();
+      const paymentsList = paymentsRes.success && paymentsRes.data
+        ? (Array.isArray(paymentsRes.data)
+            ? paymentsRes.data
+            : (paymentsRes.data as any)?.$values || [])
+        : [];
+      setPayments(paymentsList);
 
       // Load car rental locations cho tất cả xe
       const carsWithLocations = await Promise.all(
@@ -353,6 +363,78 @@ export default function CarStatusManagement() {
           );
         }
         return <span className="text-gray-400">Chưa cập nhật</span>;
+      },
+    },
+    {
+      title: "Thanh toán",
+      key: "payment",
+      width: 180,
+      render: (_: any, record: CarWithStatus) => {
+        if (!record.currentOrder) {
+          return <span className="text-gray-400">Chưa có đơn</span>;
+        }
+
+        // Tìm payments liên quan đến đơn hàng này
+        const orderPayments = payments.filter(
+          (payment: PaymentData) => payment.rentalOrderId === record.currentOrder?.id || payment.rentalOrderId === record.currentOrder?.orderId
+        );
+
+        if (orderPayments.length === 0) {
+          return <Tag color="default">Chưa thanh toán</Tag>;
+        }
+
+        // Tính tổng số tiền đã thanh toán
+        const totalPaid = orderPayments
+          .filter((p: PaymentData) => {
+            const status = typeof p.status === "number" ? p.status : parseInt(String(p.status || "0"), 10);
+            return status === 1 || status === 2; // Completed hoặc Confirmed
+          })
+          .reduce((sum: number, p: PaymentData) => sum + (p.amount || 0), 0);
+
+        // Tổng số tiền cần thanh toán (từ đơn hàng)
+        const totalAmount = record.currentOrder.total || record.currentOrder.subTotal || 0;
+
+        // Kiểm tra trạng thái thanh toán
+        const hasCompletedPayment = orderPayments.some((p: PaymentData) => {
+          const status = typeof p.status === "number" ? p.status : parseInt(String(p.status || "0"), 10);
+          return status === 1 || status === 2; // Completed hoặc Confirmed
+        });
+
+        const hasPendingPayment = orderPayments.some((p: PaymentData) => {
+          const status = typeof p.status === "number" ? p.status : parseInt(String(p.status || "0"), 10);
+          return status === 0; // Pending
+        });
+
+        if (hasCompletedPayment && totalPaid >= totalAmount) {
+          return (
+            <div>
+              <Tag color="success">Đã thanh toán</Tag>
+              <div className="text-xs text-gray-600 mt-1">
+                {totalPaid.toLocaleString("vi-VN")} đ
+              </div>
+            </div>
+          );
+        } else if (hasCompletedPayment && totalPaid < totalAmount) {
+          return (
+            <div>
+              <Tag color="warning">Đã cọc</Tag>
+              <div className="text-xs text-gray-600 mt-1">
+                {totalPaid.toLocaleString("vi-VN")} / {totalAmount.toLocaleString("vi-VN")} đ
+              </div>
+            </div>
+          );
+        } else if (hasPendingPayment) {
+          return (
+            <div>
+              <Tag color="processing">Đang chờ</Tag>
+              <div className="text-xs text-gray-600 mt-1">
+                {orderPayments[0]?.amount?.toLocaleString("vi-VN") || 0} đ
+              </div>
+            </div>
+          );
+        }
+
+        return <Tag color="default">Chưa thanh toán</Tag>;
       },
     },
     {

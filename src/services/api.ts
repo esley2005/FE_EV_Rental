@@ -649,6 +649,7 @@ export interface UpdateProfileData {
   address?: string;
   dateOfBirth?: string;
   avatar?: string;
+  citizenIdNumber?: string;
   userId?: number; // Optional userId, sẽ lấy từ localStorage nếu không có
 }
 
@@ -724,34 +725,10 @@ export const authApi = {
   // Lấy thông tin user hiện tại
   // ✅ TẠM TẮT: Không gọi API, chỉ lấy từ localStorage
   getProfile: async () => {
-    // Thử lấy từ localStorage trước
+    // Luôn gọi API để lấy dữ liệu mới nhất, không dựa vào localStorage
     const userStr = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
-    if (userStr) {
-      try {
-        const userData = JSON.parse(userStr);
-        // Nếu có phoneNumber/phone trong localStorage, trả về luôn
-        const hasPhone = userData.phoneNumber || userData.PhoneNumber || userData.phone;
-        if (hasPhone) {
-          return Promise.resolve({
-            success: true,
-            data: userData as User,
-          });
-        }
-      } catch (e) {
-        console.warn('[Auth API] Failed to parse user from localStorage:', e);
-      }
-    }
     
-    // Nếu không có phoneNumber trong localStorage, thử gọi API để lấy profile mới nhất
-    // Thử nhiều endpoint để tương thích với backend
-    const candidates = [
-      '/User/GetById', // Cần userId từ localStorage
-      '/User/GetProfile',
-      '/user/profile',
-      '/auth/profile',
-    ];
-    
-    // Lấy userId từ localStorage nếu có
+    // Lấy userId từ localStorage để gọi API
     let userId: number | null = null;
     if (userStr) {
       try {
@@ -762,31 +739,63 @@ export const authApi = {
       }
     }
     
-    // Nếu có userId, thử gọi API với userId
+    // Nếu có userId, gọi API để lấy profile mới nhất
     if (userId) {
       try {
         const res = await apiCall<User>(`/User/GetById?id=${userId}`, { method: 'GET' });
         if (res.success && res.data) {
-          // Normalize phoneNumber từ API response - lưu cả 3 format để tương thích
+          // Normalize phoneNumber và email từ API response
           const phoneValue = res.data.phone || (res.data as any).phoneNumber || (res.data as any).PhoneNumber || "";
+          const emailValue = res.data.email || (res.data as any).Email || "";
           const normalizedUser = {
             ...res.data,
+            email: emailValue,
             phone: phoneValue,
             phoneNumber: phoneValue,
             PhoneNumber: phoneValue,
           } as any;
-          // Cập nhật localStorage
+          // Cập nhật localStorage với dữ liệu mới nhất
           if (typeof window !== 'undefined') {
             localStorage.setItem('user', JSON.stringify(normalizedUser));
           }
           return { success: true, data: normalizedUser };
         }
       } catch (error) {
-        // Continue to fallback
+        console.warn('[Auth API] Failed to get profile from API:', error);
       }
     }
     
-    // Fallback: trả về từ localStorage nếu có (dù không có phoneNumber)
+    // Fallback: thử các endpoint khác
+    const candidates = [
+      '/User/GetProfile',
+      '/user/profile',
+      '/auth/profile',
+    ];
+    
+    for (const ep of candidates) {
+      try {
+        const res = await apiCall<User>(ep, { method: 'GET' });
+        if (res.success && res.data) {
+          const phoneValue = res.data.phone || (res.data as any).phoneNumber || (res.data as any).PhoneNumber || "";
+          const emailValue = res.data.email || (res.data as any).Email || "";
+          const normalizedUser = {
+            ...res.data,
+            email: emailValue,
+            phone: phoneValue,
+            phoneNumber: phoneValue,
+            PhoneNumber: phoneValue,
+          } as any;
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('user', JSON.stringify(normalizedUser));
+          }
+          return { success: true, data: normalizedUser };
+        }
+      } catch (error) {
+        continue;
+      }
+    }
+    
+    // Cuối cùng, fallback về localStorage nếu API không hoạt động
     if (userStr) {
       try {
         const userData = JSON.parse(userStr);
@@ -927,7 +936,6 @@ export const authApi = {
 
   // Cập nhật thông tin user
   updateProfile: async (data: UpdateProfileData) => {
-    // Backend yêu cầu endpoint /User/UpdateCustomerName với userId và fullName
     // Lấy userId từ data hoặc localStorage
     let userId: number | undefined = data.userId;
     
@@ -952,7 +960,30 @@ export const authApi = {
       };
     }
     
-    // Format dữ liệu theo yêu cầu backend: { userId, fullName }
+    // Thử endpoint UpdateCustomerInfo trước (hỗ trợ nhiều field hơn)
+    if (data.citizenIdNumber || data.phone) {
+      try {
+        const requestData = {
+          UserId: userId,
+          FullName: data.fullName || '',
+          Phone: data.phone || '',
+          CitizenIdNumber: data.citizenIdNumber || '',
+        };
+        
+        const res = await apiCall<User>('/User/UpdateCustomerInfo', {
+          method: 'PUT',
+          body: JSON.stringify(requestData),
+        });
+        
+        if (res.success) {
+          return res;
+        }
+      } catch (e) {
+        console.warn('[Auth API] UpdateCustomerInfo failed, trying UpdateCustomerName:', e);
+      }
+    }
+    
+    // Fallback: chỉ update fullName nếu không có citizenIdNumber hoặc phone
     const requestData = {
       userId: userId,
       fullName: data.fullName || ''

@@ -128,19 +128,23 @@ export default function MyBookingsPage() {
       const userResponse = await authApi.getProfile();
       if (userResponse.success && 'data' in userResponse && userResponse.data) {
         setUser(userResponse.data);
-        await loadBookings(userResponse.data.id);
-        // Check GPLX status từ DB
-        await checkLicenseStatus(userResponse.data.id);
+        const userId = userResponse.data.id || userResponse.data.userId;
+        if (userId && typeof userId === 'number' && !isNaN(userId)) {
+          await loadBookings(userId);
+          // Check GPLX status từ DB
+          await checkLicenseStatus(userId);
+        }
       } else {
 
         const userStr = localStorage.getItem('user');
         if (userStr) {
           const userData = JSON.parse(userStr);
           setUser(userData);
-          await loadBookings(userData.id);
-          // Check GPLX status từ DB
-          if (userData.id) {
-            await checkLicenseStatus(userData.id);
+          const userId = userData.id || userData.userId;
+          if (userId && typeof userId === 'number' && !isNaN(userId)) {
+            await loadBookings(userId);
+            // Check GPLX status từ DB
+            await checkLicenseStatus(userId);
           }
         }
       }
@@ -159,6 +163,10 @@ export default function MyBookingsPage() {
 
   // Check GPLX status từ DB
   const checkLicenseStatus = async (userId: number) => {
+    if (!userId || typeof userId !== 'number' || isNaN(userId)) {
+      console.warn('Invalid userId for checkLicenseStatus:', userId);
+      return;
+    }
     try {
       const licenseResponse = await driverLicenseApi.getByUserId(userId);
       if (licenseResponse.success && licenseResponse.data) {
@@ -186,8 +194,13 @@ export default function MyBookingsPage() {
   };
 
   const loadBookings = async (userId: number) => {
+    if (!userId || typeof userId !== 'number' || isNaN(userId)) {
+      console.warn('Invalid userId for loadBookings:', userId);
+      setBookings([]);
+      setLoading(false);
+      return;
+    }
     try {
-
       const ordersResponse = await rentalOrderApi.getByUserId(userId);
       
       if (!ordersResponse.success) {
@@ -826,7 +839,7 @@ export default function MyBookingsPage() {
               description={
                 <div>
                   <p className="mb-2">
-                    GPLX của bạn đã được upload và đang chờ admin xác thực. Vui lòng chờ trong giây lát.
+                    GPLX của bạn đã được upload và đang chờ staff xác thực. Vui lòng chờ trong giây lát.
                   </p>
                   <Button
                     type="link"

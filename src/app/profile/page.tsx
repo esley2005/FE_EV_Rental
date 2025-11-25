@@ -251,11 +251,28 @@ export default function ProfilePage() {
           setUser({ ...updatedUser });
           localStorage.setItem("user", JSON.stringify(updatedUser));
           
-          // Cập nhật form values
+          // Cũng cập nhật userProfile để giữ lại khi logout
           const phoneValue = updateData.phone || (updatedUser as any).PhoneNumber || (updatedUser as any).phoneNumber || updatedUser.phone || "";
+          const emailValue = updatedUser.email || (updatedUser as any).Email || user?.email || "";
+          const citizenIdValue = (updatedUser as any).citizenIdNumber || (updatedUser as any).CitizenIdNumber || "";
+          const profileData = {
+            id: updatedUser.id || (updatedUser as any).userId,
+            email: emailValue,
+            fullName: trimmedFullName,
+            phone: phoneValue,
+            phoneNumber: phoneValue,
+            PhoneNumber: phoneValue,
+            citizenIdNumber: citizenIdValue,
+            CitizenIdNumber: citizenIdValue,
+            role: updatedUser.role,
+            createdAt: updatedUser.createdAt,
+          };
+          localStorage.setItem("userProfile", JSON.stringify(profileData));
+          
+          // Cập nhật form values
           profileForm.setFieldsValue({
             fullName: trimmedFullName,
-            email: updatedUser.email || user?.email,
+            email: emailValue,
             phone: phoneValue,
           });
         }
