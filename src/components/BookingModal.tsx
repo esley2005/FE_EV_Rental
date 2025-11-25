@@ -757,6 +757,7 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
     try {
       const [pickupTime, expectedReturnTime] = values.dateRange;
       
+<<<<<<< HEAD
       // Đảm bảo userId là number
       const userId = Number(user.id || user.userId);
       if (!userId || isNaN(userId)) {
@@ -772,11 +773,24 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
         setLoading(false);
         return;
       }
+=======
+      // Format thời gian theo local time (không convert sang UTC)
+      // Format: YYYY-MM-DDTHH:mm:ss (local time, không có Z)
+      const formatLocalTime = (date: Dayjs) => {
+        const year = date.year();
+        const month = String(date.month() + 1).padStart(2, '0');
+        const day = String(date.date()).padStart(2, '0');
+        const hours = String(date.hour()).padStart(2, '0');
+        const minutes = String(date.minute()).padStart(2, '0');
+        const seconds = String(date.second()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+      };
+>>>>>>> origin/tiger_fix_7
       
       const orderData: CreateRentalOrderData = {
         phoneNumber: values.phoneNumber,
-        pickupTime: pickupTime.toISOString(),
-        expectedReturnTime: expectedReturnTime.toISOString(),
+        pickupTime: formatLocalTime(pickupTime),
+        expectedReturnTime: formatLocalTime(expectedReturnTime),
         withDriver: values.withDriver || false,
         userId: userId,
         carId: carIdNum,

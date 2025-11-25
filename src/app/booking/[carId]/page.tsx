@@ -391,12 +391,27 @@ export default function BookingPage() {
               return orderCarId === carIdNum;
             });
 
-            // Lọc các đơn hàng có status không phải Cancelled hoặc Completed
+            // Chỉ lấy các đơn hàng có status OrderDepositConfirmed (1), CheckedIn (2), hoặc Renting (3) để disable ngày
+            // Không disable các đơn Pending (0), Cancelled (7), Completed (9)
             const activeOrders = carOrders.filter((order: any) => {
-              const status = order.status || order.Status || '';
-              const statusStr = status.toString().toLowerCase();
-              // Chỉ lấy các đơn hàng đang active (không phải cancelled hoặc completed)
-              return !statusStr.includes('cancelled') && !statusStr.includes('completed') && statusStr !== '7' && statusStr !== '8';
+              const status = order.status || order.Status;
+              let statusNum: number | null = null;
+              
+              if (typeof status === 'number') {
+                statusNum = status;
+              } else if (typeof status === 'string') {
+                const statusLower = status.toLowerCase();
+                if (statusLower === 'orderdepositconfirmed' || status === '1') statusNum = 1;
+                else if (statusLower === 'checkedin' || status === '2') statusNum = 2;
+                else if (statusLower === 'renting' || status === '3') statusNum = 3;
+                else {
+                  const parsed = parseInt(status);
+                  if (!isNaN(parsed)) statusNum = parsed;
+                }
+              }
+              
+              // Chỉ disable ngày nếu status là OrderDepositConfirmed (1), CheckedIn (2), hoặc Renting (3)
+              return statusNum === 1 || statusNum === 2 || statusNum === 3;
             });
 
             // Parse các khoảng thời gian đã được thuê
@@ -667,6 +682,7 @@ export default function BookingPage() {
       // Lấy phoneNumber từ form (có thể là phoneNumber hoặc PhoneNumber)
       const phoneNumber = values.phoneNumber || values.PhoneNumber || (user as any)?.phoneNumber || (user as any)?.PhoneNumber || "";
       
+<<<<<<< HEAD
       // Đảm bảo userId là number
       const userId = Number(user.id || user.userId);
       if (!userId || isNaN(userId)) {
@@ -683,10 +699,24 @@ export default function BookingPage() {
         return;
       }
       
+=======
+      // Format thời gian theo local time (không convert sang UTC)
+      // Format: YYYY-MM-DDTHH:mm:ss (local time, không có Z)
+      const formatLocalTime = (date: Dayjs) => {
+        const year = date.year();
+        const month = String(date.month() + 1).padStart(2, '0');
+        const day = String(date.date()).padStart(2, '0');
+        const hours = String(date.hour()).padStart(2, '0');
+        const minutes = String(date.minute()).padStart(2, '0');
+        const seconds = String(date.second()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+      };
+
+>>>>>>> origin/tiger_fix_7
       const orderData: CreateRentalOrderData = {
         phoneNumber: phoneNumber,
-        pickupTime: pickupTime.toISOString(),
-        expectedReturnTime: expectedReturnTime.toISOString(),
+        pickupTime: formatLocalTime(pickupTime),
+        expectedReturnTime: formatLocalTime(expectedReturnTime),
         withDriver: withDriverValue,
         userId: userId,
         carId: carIdNum,

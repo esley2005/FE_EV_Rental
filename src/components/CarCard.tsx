@@ -226,7 +226,7 @@ export default function CarCard({ car }: CarCardProps) {
                 ease: "easeInOut"
               }}
             >
-              {normalizedStatus === 1 ? "Sẵn sàng" : "✗ Hết xe"}
+              {/* {normalizedStatus === 1 ? "Sẵn sàng" : "✗ Hết xe"} */}
             </motion.span>
           </motion.div>
 
