@@ -1245,9 +1245,40 @@ export default function MyBookingsPage() {
                                 Mới đặt
                               </Tag>
                             )}
+                            {normalizeStatus(booking.status) === 'completed' && (
+                              <Tag color="orange" icon={<StarOutlined />}>
+                                Cần đánh giá
+                              </Tag>
+                            )}
                           </div>
                         </div>
 
+
+                        {/* Thông báo khi đơn hàng đã hoàn thành - cần đánh giá feedback */}
+                        {normalizeStatus(booking.status) === 'completed' && (
+                          <Alert
+                            message="Đơn hàng đã hoàn thành"
+                            description={
+                              <div>
+                                <p className="mb-2">
+                                  Cảm ơn bạn đã sử dụng dịch vụ! Hãy chia sẻ trải nghiệm của bạn bằng cách đánh giá đơn hàng này.
+                                </p>
+                                <Button
+                                  type="primary"
+                                  icon={<StarOutlined />}
+                                  onClick={() => showBookingDetail(booking)}
+                                  className="bg-yellow-500 hover:bg-yellow-600 border-yellow-500"
+                                >
+                                  Đánh giá ngay
+                                </Button>
+                              </div>
+                            }
+                            type="warning"
+                            showIcon
+                            className="mb-3"
+                            icon={<StarOutlined />}
+                          />
+                        )}
 
                         {/* Thông báo khi đơn hàng đã xác nhận */}
                         {normalizeStatus(booking.status) === 'confirmed' && (
@@ -1754,21 +1785,23 @@ export default function MyBookingsPage() {
                           </div>
                         </div>
                       </div>
-                    ) : (
-                      <div className="text-center py-4 text-gray-500">
-                        Chưa có đánh giá nào
-                      </div>
-                    )}
+                    ) : null}
 
                     {/* Feedback Form - Only show if user hasn't submitted feedback */}
                     {!feedback && (
                       <div className="space-y-4 mt-4 pt-4 border-t">
                     <Alert
-                      message="Hãy chia sẻ trải nghiệm của bạn"
-                      description="Đánh giá của bạn sẽ giúp chúng tôi cải thiện dịch vụ tốt hơn."
-                      type="info"
+                      message="Bạn chưa đánh giá đơn hàng này"
+                      description={
+                        <div>
+                          <p className="mb-2">Vui lòng đánh giá trải nghiệm của bạn để giúp chúng tôi cải thiện dịch vụ tốt hơn.</p>
+                          <p className="text-sm text-gray-600">Hãy điền form bên dưới để gửi đánh giá của bạn.</p>
+                        </div>
+                      }
+                      type="warning"
                       showIcon
                       className="mb-4"
+                      icon={<StarOutlined />}
                     />
                     <Form
                       form={feedbackForm}
