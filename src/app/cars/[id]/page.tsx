@@ -2211,12 +2211,12 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                 </div>
 
                 <div className="mt-6 flex justify-center gap-3">
-                  <a href="tel:1900000" className="bg-blue-50 inline-flex items-center gap-2 border border-gray-300 text-gray-700 py-2 px-5 rounded-lg hover:bg-gray-50 transition-colors text-sm">
+                  <a href="tel:19001218" className="bg-blue-50 inline-flex items-center gap-2 border border-gray-300 text-gray-700 py-2 px-5 rounded-lg hover:bg-gray-50 transition-colors text-sm">
                     <Phone size={16} />
                     Gọi tư vấn
                   </a>
                   <a 
-                    href="https://zalo.me/1900000" 
+                    href="https://zalo.me/19001218" 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="bg-[#0068FF] text-white inline-flex items-center gap-2 border border-[#0068FF] py-2 px-5 rounded-lg hover:bg-[#0052CC] transition-colors text-sm"

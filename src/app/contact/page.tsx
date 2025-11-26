@@ -32,15 +32,15 @@ export default function ContactPage() {
               
               <div className="flex items-center gap-3">
                 <strong className="text-gray-900 min-w-[100px]">Điện thoại:</strong>
-                <a href="tel:0333035321" className="text-blue-600 hover:underline">
-                  0333035321
+                <a href="tel:19001218" className="text-blue-600 hover:underline">
+                  1900 1218
                 </a>
               </div>
               
               <div className="flex items-center gap-3">
                 <strong className="text-gray-900 min-w-[100px]">Email:</strong>
-                <a href="mailto:contact@evrental.vn" className="text-blue-600 hover:underline">
-                  contact@evrental.vn
+                <a href="mailto:evrental@gmail.com" className="text-blue-600 hover:underline">
+                  evrental@gmail.com
                 </a>
               </div>
               
