@@ -258,7 +258,7 @@ export default function OrderDetailsWithPayments() {
     if (statusLower.includes('completed')) {
       return <Tag color="green" icon={<CheckCircleOutlined />}>Hoàn thành</Tag>;
     } else if (statusLower.includes('pending')) {
-      return <Tag color="orange" icon={<ClockCircleOutlined />}>Chờ xử lý</Tag>;
+      return <Tag color="orange" icon={<ClockCircleOutlined />}>Chờ Cọc Giữ Xe</Tag>;
     } else if (statusLower.includes('cancelled')) {
       return <Tag color="red">Đã hủy</Tag>;
     } else if (statusLower.includes('renting')) {
@@ -267,6 +267,8 @@ export default function OrderDetailsWithPayments() {
       return <Tag color="purple">Đã trả xe</Tag>;
     } else if (statusLower.includes('paymentpending')) {
       return <Tag color="orange">Chờ thanh toán</Tag>;
+    } else if (statusLower.includes('depositconfirmed') || statusLower.includes('orderdepositconfirmed')) {
+      return <Tag color="cyan">Đã Cọc Giữ Xe</Tag>;
     }
     return <Tag>{status}</Tag>;
   };
@@ -295,6 +297,8 @@ export default function OrderDetailsWithPayments() {
       return <Tag color="purple">Đã trả xe</Tag>;
     } else if (statusLower.includes('paymentpending')) {
       return <Tag color="orange">Chờ thanh toán</Tag>;
+    } else if (statusLower.includes('depositconfirmed') || statusLower.includes('orderdepositconfirmed')) {
+      return <Tag color="cyan">Đã Cọc Giữ Xe</Tag>;
     }
     return <Tag>{order.status}</Tag>;
   };
@@ -657,7 +661,17 @@ export default function OrderDetailsWithPayments() {
                             </strong>
                           </Descriptions.Item>
                           <Descriptions.Item label="Phương thức">
-                            <Tag color="blue">{payment.paymentMethod || '-'}</Tag>
+                            <Tag color="blue">
+                              {(() => {
+                                const methodMap: Record<string, string> = {
+                                  'Direct': 'Chuyển khoản',
+                                  'VNPAY': 'VNPAY',
+                                  'bank_transfer': 'Chuyển khoản',
+                                  'cash': 'Tiền mặt',
+                                };
+                                return methodMap[payment.paymentMethod || ''] || payment.paymentMethod || '-';
+                              })()}
+                            </Tag>
                           </Descriptions.Item>
                           <Descriptions.Item label="Ngày thanh toán">
                             {payment.paymentDate && payment.paymentDate !== '0001-01-01T00:00:00' 
@@ -838,7 +852,7 @@ export default function OrderDetailsWithPayments() {
                       key: 'paymentMethod',
                       render: (method: string) => {
                         const methodMap: Record<string, string> = {
-                          'Direct': 'Tiền mặt',
+                          'Direct': 'Chuyển khoản',
                           'VNPAY': 'VNPAY',
                           'bank_transfer': 'Chuyển khoản',
                           'cash': 'Tiền mặt',
