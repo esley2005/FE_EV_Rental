@@ -1048,7 +1048,7 @@ export default function CarManagement({ staffMode = false }: CarManagementProps)
             </Form.Item>
 
             <Form.Item
-              label="Tiền đặt cọc đơn hàng (VND)"
+              label="Tiền đặt giữ chỗ (VND)"
               name="depositOrderAmount"
               rules={staffMode ? [] : [{ required: true }]}
               tooltip="Ví dụ: 1000000"
