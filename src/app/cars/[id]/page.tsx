@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { notFound, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Spin, message, notification, Modal, Button, DatePicker } from "antd";
+import { Spin, message, notification, Modal, Button, DatePicker, Popover, Radio } from "antd";
 import dayjs, { Dayjs } from "dayjs";
 import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
 
@@ -48,6 +48,7 @@ import {
   CheckCircle,
   Sparkles,
   Calendar,
+  MessageCircle,
 } from "lucide-react";
 import { SafetyOutlined, PlusOutlined } from '@ant-design/icons';
 
@@ -228,6 +229,8 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   const [selectedLocationFromUrl, setSelectedLocationFromUrl] = useState<{ id: number; name: string; address: string } | null>(null);
   const [dateRangeValue, setDateRangeValue] = useState<[Dayjs, Dayjs] | null>(null);
   const [bookedDates, setBookedDates] = useState<Set<string>>(new Set()); // Lưu các ngày đã được đặt (format: YYYY-MM-DD)
+  const [withDriver, setWithDriver] = useState<boolean>(false); // Lựa chọn có tài xế hay không
+  const [driverOption, setDriverOption] = useState<string>('false'); // Lựa chọn có tài xế hay không (dùng string cho Radio)
 
   // Load location from URL if locationId exists
   useEffect(() => {
@@ -1133,6 +1136,8 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
       params.set('startDate', dateRangeValue[0].format('YYYY-MM-DDTHH:mm'));
       params.set('endDate', dateRangeValue[1].format('YYYY-MM-DDTHH:mm'));
     }
+    // Thêm lựa chọn có tài xế vào URL params
+    params.set('withDriver', withDriver.toString());
     const queryString = params.toString();
     router.push(`/booking/${car.id}${queryString ? `?${queryString}` : ''}`);
   };
@@ -1392,12 +1397,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                   </p>
 
                   {/* Badges */}
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <div className="flex items-center gap-2 bg-blue-500 text-white px-3 py-1.5 rounded-full text-sm">
-                      <Shield className="text-white" />
-                      <span>Miễn thế chấp</span>
-                    </div>
-                  </div>
+           
                 </div>
 
                 {/* Action Icons */}
@@ -1522,7 +1522,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                 </div>
               )}
 
-              {!loading && (
+              {/* {!loading && (
                 <div className="mt-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-3">
                     Xe hiện có tại địa điểm
@@ -1566,7 +1566,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                     </p>
                   )}
                 </div>
-              )}
+              )} */}
             </div>
 
             {/* Đặc điểm (Features) Section */}
@@ -1755,7 +1755,7 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               <div className="h-1.5 w-12 bg-blue-500 rounded-full mb-3"></div>
               <div className="bg-[#D9EFFF] border border-[#4A90E2] rounded-lg p-4">
                 <p className="text-gray-900 text-sm">
-                  Khi thuê xe, bạn phải cọc 20% giá trị đơn thuê xe trước khi nhận xe.
+                  Bạn phải thế chấp số tiền là {formatCurrency(car.depositCarAmount || 0)} cho xe này.
                 </p>
               </div>
 
@@ -1806,6 +1806,28 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                 </div>
               </div>
             </div>
+
+            {/* Phí hoàn trả */}
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-blue-600 mb-2">
+                Phí hoàn trả
+              </h2>
+              <div className="h-1.5 w-12 bg-blue-500 rounded-full mb-3"></div>
+              <div className="bg-green-50 border border-green-200 rounded-lg p-5">
+                <div className="flex items-start gap-3">
+                  <CheckCircle className="text-green-600 text-xl mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-gray-900 font-semibold mb-2">
+                      Chính sách hoàn trả
+                    </p>
+                    <p className="text-gray-700 text-sm">
+                      Hủy đơn trong vòng <strong className="text-green-700">1 giờ</strong> sẽ hoàn <strong className="text-green-700">100%</strong> phí giữ chỗ.
+                    </p>
+                  
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Phần booking panel - Chiếm 1/3 cột */}
@@ -1817,6 +1839,42 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
               <div className="bg-green-500 px-5 py-3 flex items-center gap-2">
                 <SafetyOutlined className="text-white text-xl shimmer-shield" />
                 <h2 className="text-white text-lg font-bold">Bảo hiểm thuê xe</h2>
+                <Popover
+                  content={
+                    <div className="max-w-sm">
+                      <p className="text-sm text-gray-700 mb-3">
+                        <strong>Bảo hiểm thuê xe</strong> là gói bảo vệ toàn diện cho bạn trong suốt quá trình thuê xe.
+                      </p>
+                      <div className="space-y-2">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-800 mb-1">Quyền lợi bảo hiểm:</p>
+                          <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
+                            <li>Đền bù thiệt hại vật chất xe do tai nạn</li>
+                            <li>Hỗ trợ xử lý tai nạn nhẹ, va chạm</li>
+                            <li>Hỗ trợ 24/7 khi gặp sự cố trên đường</li>
+                            <li>Bảo vệ tài sản và tính mạng người thuê</li>
+                            <li>Giảm trách nhiệm tài chính khi có rủi ro</li>
+                          </ul>
+                        </div>
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <p className="text-xs text-gray-500">
+                            <strong>Lưu ý:</strong> Bảo hiểm chỉ áp dụng khi tuân thủ đúng quy định thuê xe và điều kiện sử dụng.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  }
+                  title="Thông tin về Bảo hiểm thuê xe"
+                  trigger="click"
+                >
+                  <button
+                    type="button"
+                    className="text-white hover:text-green-200 transition-colors cursor-pointer ml-1"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Info size={18} />
+                  </button>
+                </Popover>
               </div>
 
               {/* Nội dung */}
@@ -1920,30 +1978,85 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                           </p>
                         </td>
                       </tr>
+                      {/* Phí giữ chỗ */}
+                      <tr className="hover:bg-gray-50 bg-blue-50">
+                        <td className="border border-gray-300 px-4 py-3 text-sm font-medium text-gray-900">
+                          <div className="flex items-center gap-2">
+                            <span>Phí giữ chỗ</span>
+                            <Popover
+                              content={
+                                <div className="max-w-xs">
+                                  <p className="text-sm text-gray-700 mb-2">
+                                    <strong>Phí giữ chỗ</strong> là khoản tiền đặt giữ chỗ ban đầu để xác nhận đơn thuê xe của bạn.
+                                  </p>
+                                  <p className="text-sm text-gray-600">
+                                    Khoản phí này sẽ được khấu trừ vào tổng tiền thuê xe khi bạn thanh toán đầy đủ.
+                                  </p>
+                                </div>
+                              }
+                              title="Thông tin về Phí giữ chỗ"
+                              trigger="click"
+                            >
+                              <button
+                                type="button"
+                                className="text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Info size={16} />
+                              </button>
+                            </Popover>
+                          </div>
+                        </td>
+                        <td colSpan={2} className="border border-gray-300 px-4 py-3 text-center">
+                          <p className="text-lg font-bold text-gray-900">
+                            {formatCurrency(car.depositOrderAmount || 0)}
+                          </p>
+                        </td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
 
+                {/* Chọn loại thuê xe */}
+              
+                  <div className="mb-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="font-semibold text-gray-900">Loại thuê xe:</span>
+                    </div>
+                    <Radio.Group
+                      value={driverOption}
+                      onChange={(e) => {
+                        // Ant Design Radio.Group onChange có thể nhận event hoặc value trực tiếp
+                        const value = typeof e === 'string' ? e : e.target.value;
+                        setDriverOption(value);
+                        setWithDriver(value === 'true');
+                      }}
+                      className="w-full"
+                    >
+                      <div className="flex gap-4">
+                        <Radio value="false" className="flex-1">
+                          <span className="text-gray-700">Tự lái</span>
+                        </Radio>
+                        <Radio value="true" className="flex-1">
+                          <span className="text-gray-700">Có tài xế</span>
+                        </Radio>
+                      </div>
+                    </Radio.Group>
+                  </div>
+              
+
                 {/* Hiển thị tổng giá nếu đã chọn thời gian */}
-                {dateRangeValue && (
+                {dateRangeValue && calculatePrice(withDriver) && (
                   <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
                     <div className="space-y-2">
-                      {calculatePrice(false) && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Tổng (Tự lái):</span>
-                          <span className="text-lg font-bold text-blue-600">
-                            {formatCurrency(Math.round(calculatePrice(false)!))}
-                          </span>
-                        </div>
-                      )}
-                      {calculatePrice(true) && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Tổng (Có tài xế):</span>
-                          <span className="text-lg font-bold text-blue-600">
-                            {formatCurrency(Math.round(calculatePrice(true)!))}
-                          </span>
-                        </div>
-                      )}
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">
+                          Tổng ({withDriver ? 'Có tài xế' : 'Tự lái'}):
+                        </span>
+                        <span className="text-lg font-bold text-blue-600">
+                          {formatCurrency(Math.round(calculatePrice(withDriver)!))}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -2110,10 +2223,19 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                   </div>
                 </div>
 
-                <div className="mt-6 flex justify-center">
-                  <a href="tel:1900000" className="bg-blue-50 inline-flex items-center gap-2 border border-gray-300 text-gray-700 py-2 px-5 rounded-lg hover:bg-gray-50 transition-colors text-sm">
+                <div className="mt-6 flex justify-center gap-3">
+                  <a href="tel:19001218" className="bg-blue-50 inline-flex items-center gap-2 border border-gray-300 text-gray-700 py-2 px-5 rounded-lg hover:bg-gray-50 transition-colors text-sm">
                     <Phone size={16} />
                     Gọi tư vấn
+                  </a>
+                  <a 
+                    href="https://zalo.me/19001218" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="bg-[#0068FF] text-white inline-flex items-center gap-2 border border-[#0068FF] py-2 px-5 rounded-lg hover:bg-[#0052CC] transition-colors text-sm"
+                  >
+                    <MessageCircle size={16} />
+                    Gửi tin nhắn
                   </a>
                 </div>
               </div>
