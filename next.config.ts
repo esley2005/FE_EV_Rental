@@ -1,7 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  devIndicators:false, // tắt nút
   images: {
     remotePatterns: [
       {

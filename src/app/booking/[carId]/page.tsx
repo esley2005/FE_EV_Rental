@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { Form, Input, DatePicker, Button, message, Checkbox, Radio, notification, Alert, Modal } from "antd";
-import { Calendar, MapPin, Phone, User as UserIcon, Search, Car as CarIcon, FileText, Download, Percent, Info, UserCheck, ExternalLink } from "lucide-react";
+import { Calendar, MapPin, Phone, User as UserIcon, Search, Car as CarIcon, FileText, Download, Percent, Info, UserCheck } from "lucide-react";
 import dayjs, { Dayjs } from "dayjs";
 import isSameOrAfter from "dayjs/plugin/isSameOrAfter";
 import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
@@ -238,9 +238,6 @@ export default function BookingPage() {
   // Hỗ trợ cả pickupTime/returnTime và startDate/endDate
   const pickupTimeFromUrl = searchParams?.get('pickupTime') || searchParams?.get('startDate');
   const returnTimeFromUrl = searchParams?.get('returnTime') || searchParams?.get('endDate');
-  // Đọc lựa chọn có tài xế từ URL
-  const withDriverFromUrl = searchParams?.get('withDriver');
-  const [isDriverOptionLocked, setIsDriverOptionLocked] = useState<boolean>(false);
 
   useEffect(() => {
     if (!carId) return;
@@ -440,14 +437,6 @@ export default function BookingPage() {
         } catch (error) {
           console.error("Error loading booked dates:", error);
           // Không hiển thị lỗi cho user vì đây không phải tính năng critical
-        }
-
-        // Nếu có lựa chọn có tài xế từ URL, tự động set vào form và lock option
-        if (withDriverFromUrl !== null) {
-          const withDriverValue = withDriverFromUrl === 'true';
-          setWithDriver(withDriverValue);
-          setIsDriverOptionLocked(true);
-          form.setFieldsValue({ withDriver: withDriverValue });
         }
 
         // Nếu có ngày giờ từ URL, tự động set vào form
@@ -1189,15 +1178,12 @@ export default function BookingPage() {
               </div>
               <Form.Item
                 name="withDriver"
-                initialValue={withDriverFromUrl === 'true' ? true : withDriverFromUrl === 'false' ? false : false}
+                initialValue={false}
                 rules={[{ required: true, message: "Vui lòng chọn loại thuê xe" }]}
               >
                 <Radio.Group 
-                  disabled={isDriverOptionLocked}
                   onChange={(e) => {
-                    if (!isDriverOptionLocked) {
-                      setWithDriver(e.target.value);
-                    }
+                    setWithDriver(e.target.value);
                     // Force re-render để cập nhật giá
                   }}
                   className="w-full"
@@ -1296,24 +1282,6 @@ export default function BookingPage() {
               <span className="text-lg font-bold text-gray-900">Thành tiền</span>
               <span className="text-2xl font-bold text-gray-900">{formatCurrency(total)}</span>
             </div> */}
-
-            {/* Nút xem hợp đồng online */}
-            <a
-              href="https://docs.google.com/document/d/1YgC67aVKLUn54VWse8npdxsfwiipW-tnDsu-IHaIx2Y/edit?usp=sharing"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full mb-4"
-            >
-              <Button
-                type="default"
-                size="large"
-                className="w-full h-12 border-2 border-blue-500 text-blue-600 hover:bg-blue-50 hover:border-blue-600 text-lg font-semibold flex items-center justify-center gap-2"
-                icon={<FileText className="w-5 h-5" />}
-              >
-                Xem hợp đồng online
-                <ExternalLink className="w-4 h-4" />
-              </Button>
-            </a>
 
             <Button
               type="primary"

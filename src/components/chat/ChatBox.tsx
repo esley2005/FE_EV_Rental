@@ -102,10 +102,10 @@ export default function ChatBox() {
   }, [messages, isOpen, isLoading]);
 
   const autoReplies = [
-    { keywords: ["Bạn là ai?", "ai vậy"], reply: "Tôi là trợ lý AI của Cửa hàng EV Rental" },
-    { keywords: ["địa chỉ", "ở đâu"], reply: "Cửa hàng EV Rental: 123 Lê Lợi, Q1, HCM" },
-    { keywords: ["giờ", "mấy giờ", "mở cửa"], reply: " Giờ làm việc: 7:00 - 22:00 mỗi ngày" },
-    { keywords: ["hotline", "liên hệ", "sđt"], reply: "Hotline: 1900 1218 hoặc Thư điện tử: evrental@gmail.com "  },
+    { keywords: ["Bạn là ai?", "ai vậy"], reply: "🏢Tôi là trợ lý AI của Cửa hàng EV Rental" },
+    { keywords: ["địa chỉ", "ở đâu"], reply: "🏢 Cửa hàng EV Rental: 123 Lê Lợi, Q1, HCM" },
+    { keywords: ["giờ", "mấy giờ", "mở cửa"], reply: "🕒 Giờ làm việc: 7:00 - 22:00 mỗi ngày" },
+    { keywords: ["hotline", "liên hệ", "sđt"], reply: "📞 Hotline: 1900 00000 hoặc Thư điện tử: contact@evrental.vn "  },
      { keywords: ["Giá", "bao nhiêu", "Giá thuê xe bao nhiêu"], reply: "Giá dao động từ 800 000VND đến 3 000 000VND. Rất Phù Hợp với ví tiền đấy ạ" }
   ];
 

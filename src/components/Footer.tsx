@@ -47,21 +47,21 @@ export default function Footer() {
                 href="tel:1900000" 
                 className="text-2xl font-bold text-gray-900 hover:text-green-600 transition-colors"
               >
-                1900 1218
+                1900 0000
               </a>
               <p className="text-sm text-gray-500 mt-1">
-                Tổng đài hỗ trợ: 7AM - 11PM
+                Tổng đài hỗ trợ: 7AM - 10PM
               </p>
             </div>
 
             {/* Email */}
             <div>
               <a 
-                href="mailto:evrental@gmail.com" 
+                href="mailto:contact@evrental.vn" 
                 className="text-gray-900 hover:text-green-600 transition-colors flex items-center gap-2"
               >
                 <Mail className="text-green-600" />
-                <span>evrental@gmail.com</span>
+                <span>contact@evrental.vn</span>
               </a>
               <p className="text-sm text-gray-500 mt-1">
                 Gửi mail cho EV Rental
