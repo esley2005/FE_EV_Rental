@@ -328,16 +328,21 @@ export default function CarIssueReports() {
                 { value: "resolved", label: "Đã xử lý" },
               ]}
             />
-            <Input.Search
-              placeholder="Tìm kiếm theo ID xe, tên xe, mô tả..."
-              allowClear
-              enterButton={<SearchOutlined />}
-              size="large"
-              style={{ width: 400 }}
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              onSearch={(value) => setSearchText(value)}
-            />
+            <Space.Compact style={{ width: 400 }}>
+              <Input
+                placeholder="Tìm kiếm theo ID xe, tên xe, mô tả..."
+                allowClear
+                size="large"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                onPressEnter={(e) => setSearchText(e.currentTarget.value)}
+              />
+              <Button 
+                icon={<SearchOutlined />} 
+                size="large"
+                onClick={() => setSearchText(searchText)}
+              />
+            </Space.Compact>
             <Button onClick={loadIssueReports}>Làm mới</Button>
           </Space>
         </div>

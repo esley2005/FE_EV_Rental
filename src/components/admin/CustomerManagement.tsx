@@ -683,16 +683,21 @@ export default function CustomerManagement() {
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: "bold" }}>
             Quản lý khách hàng
           </h2>
-          <Search
-            placeholder="Tìm kiếm theo tên, email, số điện thoại..."
-            allowClear
-            enterButton={<SearchOutlined />}
-            size="large"
-            style={{ width: 400 }}
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            onSearch={(value) => setSearchText(value)}
-          />
+          <Space.Compact style={{ width: 400 }}>
+            <Input
+              placeholder="Tìm kiếm theo tên, email, số điện thoại..."
+              allowClear
+              size="large"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              onPressEnter={(e) => setSearchText(e.currentTarget.value)}
+            />
+            <Button 
+              icon={<SearchOutlined />} 
+              size="large"
+              onClick={() => setSearchText(searchText)}
+            />
+          </Space.Compact>
         </div>
 
         <Spin spinning={loading}>
