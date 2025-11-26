@@ -1299,7 +1299,7 @@ export default function BookingPage() {
 
             {/* Nút xem hợp đồng online */}
             <a
-              href="https://docs.google.com/document/d/1l1Lql4xHQX0jKQqoOP32zNk-Zdk6ja9Z30YS-O4dcfg/edit?tab=t.0"
+              href="https://docs.google.com/document/d/1YgC67aVKLUn54VWse8npdxsfwiipW-tnDsu-IHaIx2Y/edit?usp=sharing"
               target="_blank"
               rel="noopener noreferrer"
               className="w-full mb-4"
