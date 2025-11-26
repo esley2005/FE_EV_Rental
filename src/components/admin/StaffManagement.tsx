@@ -560,13 +560,13 @@ export default function StaffManagement({ mode = "list" }: StaffManagementProps)
               </h2>
               <Space.Compact style={{ width: 400 }}>
                 <Input
-                  placeholder="Tìm kiếm theo tên, email, số điện thoại..."
-                  allowClear
-                  size="large"
-                  value={searchText}
-                  onChange={(e) => setSearchText(e.target.value)}
+                placeholder="Tìm kiếm theo tên, email, số điện thoại..."
+                allowClear
+                size="large"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
                   onPressEnter={(e) => setSearchText(e.currentTarget.value)}
-                />
+              />
                 <Button 
                   icon={<SearchOutlined />} 
                   size="large"
@@ -636,13 +636,13 @@ export default function StaffManagement({ mode = "list" }: StaffManagementProps)
             </h2>
             <Space.Compact style={{ width: 400 }}>
               <Input
-                placeholder="Tìm kiếm theo tên, email, số điện thoại..."
-                allowClear
-                size="large"
-                value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
+              placeholder="Tìm kiếm theo tên, email, số điện thoại..."
+              allowClear
+              size="large"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
                 onPressEnter={(e) => setSearchText(e.currentTarget.value)}
-              />
+            />
               <Button 
                 icon={<SearchOutlined />} 
                 size="large"

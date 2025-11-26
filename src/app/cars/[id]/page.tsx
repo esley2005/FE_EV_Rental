@@ -1074,7 +1074,10 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
   };
 
   // Tính giá thuê dựa trên thời gian và loại (có tài xế hay không)
-  // Logic giống với backend: <= 0.4 ngày (4h) -> giá 4h, > 0.4 và <= 0.8 ngày (8h) -> giá 8h, > 0.8 ngày -> tính theo ngày
+  // Logic: Tính theo giờ (24h format)
+  // - returnDate - pickupTime <= 4 giờ: giá 4 giờ (withDriver hoặc false)
+  // - <= 8 giờ: giá 8 giờ (withDriver hoặc false)
+  // - > 8 giờ: giá per day
   const calculatePrice = (withDriver: boolean): number | null => {
     if (!dateRangeValue || !dateRangeValue[0] || !dateRangeValue[1] || !car) {
       return null;
@@ -1083,31 +1086,30 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     const [pickupTime, returnTime] = dateRangeValue;
     if (!pickupTime || !returnTime) return null;
 
-    // Tính tổng số giờ (chính xác, không làm tròn)
+    // Tính tổng số giờ (chính xác, không làm tròn) - format 24h
     const totalHours = returnTime.diff(pickupTime, 'hour', true);
     if (totalHours <= 0) return null;
 
-    // Chuyển đổi sang số ngày (decimal)
-    const subtotalDays = totalHours / 24;
-
     let subTotal = 0;
 
-    // Logic tính giá theo backend
-    if (subtotalDays <= 0.4) {
-      // Dưới hoặc bằng 4 tiếng (0.4 ngày)
+    // Logic tính giá theo giờ (24h format)
+    if (totalHours <= 4) {
+      // <= 4 giờ: lấy giá 4 giờ
       subTotal = withDriver 
         ? (car.rentPricePer4HourWithDriver || 0)
         : (car.rentPricePer4Hour || 0);
-    } else if (subtotalDays > 0.4 && subtotalDays <= 0.8) {
-      // Trên 4 tiếng và dưới hoặc bằng 8 tiếng (0.8 ngày)
+    } else if (totalHours <= 8) {
+      // > 4 giờ và <= 8 giờ: lấy giá 8 giờ
       subTotal = withDriver
         ? (car.rentPricePer8HourWithDriver || 0)
         : (car.rentPricePer8Hour || 0);
     } else {
-      // Trên 8 tiếng - tính theo ngày
-      subTotal = subtotalDays * (withDriver 
+      // > 8 giờ: tính theo giờ = (giá per day / 24) * số giờ
+      const pricePerDay = withDriver 
         ? (car.rentPricePerDayWithDriver || 0)
-        : (car.rentPricePerDay || 0));
+        : (car.rentPricePerDay || 0);
+      const pricePerHour = pricePerDay / 24;
+      subTotal = pricePerHour * totalHours;
     }
 
     return subTotal;

@@ -536,26 +536,24 @@ export default function BookingPage() {
     if (totalHours <= 0) return 0;
     
     // Lấy giá theo loại (có tài xế hay không) và theo khoảng thời gian
+    // Logic: Format 24h
+    // - returnDate - pickupTime <= 4 giờ: giá 4 giờ (withDriver hoặc false)
+    // - <= 8 giờ: giá 8 giờ (withDriver hoặc false)
+    // - > 8 giờ: giá per day (làm tròn lên)
     let rentalFee = 0;
     
-    if (totalHours <= 4) {
-      // <= 4 tiếng: dùng giá 4 tiếng
-      rentalFee = withDriver ? car.rentPricePer4HourWithDriver : car.rentPricePer4Hour;
-    } else if (totalHours <= 8) {
-      // <= 8 tiếng: dùng giá 8 tiếng
-      rentalFee = withDriver ? car.rentPricePer8HourWithDriver : car.rentPricePer8Hour;
-    } else {
-      // > 8 tiếng: tính theo ngày
-      const pricePerDay = withDriver ? car.rentPricePerDayWithDriver : car.rentPricePerDay;
-      // Tính số ngày đầy đủ và số giờ còn lại
-      const fullDays = totalHours / 24;
-      const remainingHours = totalHours % 24;
-      
-      // Tính tổng: (số ngày * giá/ngày) + (số giờ lẻ / 24 * giá/ngày)
-      const dayFee = fullDays * pricePerDay;
-      const partialDayFee = (remainingHours / 24) * pricePerDay;
-      rentalFee = dayFee + partialDayFee;
-    }
+     if (totalHours <= 4) {
+       // <= 4 giờ: lấy giá 4 giờ
+       rentalFee = withDriver ? car.rentPricePer4HourWithDriver : car.rentPricePer4Hour;
+     } else if (totalHours <= 8) {
+       // > 4 giờ và <= 8 giờ: lấy giá 8 giờ
+       rentalFee = withDriver ? car.rentPricePer8HourWithDriver : car.rentPricePer8Hour;
+     } else {
+       // > 8 giờ: tính theo giờ = (giá per day / 24) * số giờ
+       const pricePerDay = withDriver ? car.rentPricePerDayWithDriver : car.rentPricePerDay;
+       const pricePerHour = pricePerDay / 24;
+       rentalFee = pricePerHour * totalHours;
+     }
     
     // Debug: log để kiểm tra giá
     if (process.env.NODE_ENV === 'development') {
@@ -860,26 +858,24 @@ export default function BookingPage() {
     if (totalHours <= 0) return 0;
     
     // Lấy giá theo loại (có tài xế hay không) và theo khoảng thời gian
+    // Logic: Format 24h
+    // - returnDate - pickupTime <= 4 giờ: giá 4 giờ (withDriver hoặc false)
+    // - <= 8 giờ: giá 8 giờ (withDriver hoặc false)
+    // - > 8 giờ: giá per day (làm tròn lên)
     let rentalFee = 0;
     
-    if (totalHours <= 4) {
-      // <= 4 tiếng: dùng giá 4 tiếng
-      rentalFee = withDriverValue ? car.rentPricePer4HourWithDriver : car.rentPricePer4Hour;
-    } else if (totalHours <= 8) {
-      // <= 8 tiếng: dùng giá 8 tiếng
-      rentalFee = withDriverValue ? car.rentPricePer8HourWithDriver : car.rentPricePer8Hour;
-    } else {
-      // > 8 tiếng: tính theo ngày
-      const pricePerDay = withDriverValue ? car.rentPricePerDayWithDriver : car.rentPricePerDay;
-      // Tính số ngày đầy đủ và số giờ còn lại
-      const fullDays = Math.floor(totalHours / 24);
-      const remainingHours = totalHours % 24;
-      
-      // Tính tổng: (số ngày * giá/ngày) + (số giờ lẻ / 24 * giá/ngày)
-      const dayFee = fullDays * pricePerDay;
-      const partialDayFee = (remainingHours / 24) * pricePerDay;
-      rentalFee = dayFee + partialDayFee;
-    }
+     if (totalHours <= 4) {
+       // <= 4 giờ: lấy giá 4 giờ
+       rentalFee = withDriverValue ? car.rentPricePer4HourWithDriver : car.rentPricePer4Hour;
+     } else if (totalHours <= 8) {
+       // > 4 giờ và <= 8 giờ: lấy giá 8 giờ
+       rentalFee = withDriverValue ? car.rentPricePer8HourWithDriver : car.rentPricePer8Hour;
+     } else {
+       // > 8 giờ: tính theo giờ = (giá per day / 24) * số giờ
+       const pricePerDay = withDriverValue ? car.rentPricePerDayWithDriver : car.rentPricePerDay;
+       const pricePerHour = pricePerDay / 24;
+       rentalFee = pricePerHour * totalHours;
+     }
     
     // Debug: log để kiểm tra giá
     if (process.env.NODE_ENV === 'development') {
