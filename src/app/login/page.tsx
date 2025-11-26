@@ -39,7 +39,7 @@ export default function LoginPage() {
       if (response.error) {
         api.error({
           message: 'Đăng nhập thất bại',
-          description: response.error,
+          description: 'Vui lòng kiểm tra lại email và mật khẩu!',
           placement: 'topRight',
           icon: <XCircle color="#ff4d4f" />,
         });

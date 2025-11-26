@@ -83,22 +83,31 @@ export default function CarMaintenanceManagement({
   const [selectCarForm] = Form.useForm();
 
   useEffect(() => {
+    console.log('[CarMaintenanceManagement] Component mounted, selectedSubMenu:', selectedSubMenu);
     loadCars();
     loadIssueReports();
-  }, []);
+  }, [selectedSubMenu]);
 
   const loadCars = async () => {
     setLoading(true);
     try {
+      console.log('[CarMaintenanceManagement] Loading cars...');
       const response = await carsApi.getAll();
+      console.log('[CarMaintenanceManagement] Cars API response:', response);
       if (response.success && response.data) {
         const carsList = Array.isArray(response.data)
           ? response.data
-          : (response.data as any)?.$values || [];
-        setCars(carsList.filter((car: Car) => !car.isDeleted));
+          : (response.data as { $values?: Car[] })?.$values || [];
+        const filteredCars = carsList.filter((car: Car) => !car.isDeleted);
+        console.log('[CarMaintenanceManagement] Loaded cars:', filteredCars.length);
+        setCars(filteredCars);
+      } else {
+        console.warn('[CarMaintenanceManagement] Failed to load cars:', response.error);
+        message.error(response.error || "Không thể tải danh sách xe");
       }
     } catch (error) {
       console.error("Load cars error:", error);
+      message.error("Lỗi khi tải danh sách xe");
     } finally {
       setLoading(false);
     }
@@ -117,12 +126,29 @@ export default function CarMaintenanceManagement({
   };
 
   const saveIssueReport = (report: CarIssueReport) => {
-    const newReports = [...issueReports, { ...report, id: Date.now(), reportedAt: new Date().toISOString(), status: "pending" }];
+    const newReport: CarIssueReport = {
+      ...report,
+      id: Date.now(),
+      reportedAt: new Date().toISOString(),
+      status: "pending" as const,
+    };
+    const newReports = [...issueReports, newReport];
     setIssueReports(newReports);
     localStorage.setItem("carIssueReports", JSON.stringify(newReports));
+    
+    // Dispatch custom event để Admin component có thể tự động cập nhật
+    window.dispatchEvent(new Event("carIssueReportsUpdated"));
+    console.log('[CarMaintenanceManagement] Dispatched carIssueReportsUpdated event');
   };
 
-  const handleUpdateTechnicalStatus = async (values: any) => {
+  const handleUpdateTechnicalStatus = async (values: {
+    batteryLevel: number;
+    batteryHealth: "excellent" | "good" | "fair" | "poor";
+    technicalCondition: "excellent" | "good" | "fair" | "poor" | "needs_repair";
+    lastMaintenanceDate?: string;
+    nextMaintenanceDate?: string;
+    notes?: string;
+  }) => {
     if (!selectedCar) return;
 
     setUploading(true);
@@ -188,7 +214,11 @@ export default function CarMaintenanceManagement({
     }
   };
 
-  const handleSubmitIssue = async (values: any) => {
+  const handleSubmitIssue = async (values: {
+    issueType: "mechanical" | "electrical" | "body" | "interior" | "other";
+    severity: "low" | "medium" | "high" | "critical";
+    description: string;
+  }) => {
     if (!selectedCar) return;
 
     setUploading(true);
@@ -293,7 +323,7 @@ export default function CarMaintenanceManagement({
       title: "Hình ảnh",
       key: "image",
       width: 120,
-      render: (_: any, record: Car) => (
+      render: (_: unknown, record: Car) => (
         <Image
           src={record.imageUrl}
           alt={record.name}
@@ -308,7 +338,7 @@ export default function CarMaintenanceManagement({
     {
       title: "Tên xe",
       key: "name",
-      render: (_: any, record: Car) => (
+      render: (_: unknown, record: Car) => (
         <Space>
           <CarOutlined style={{ color: "#1890ff" }} />
           <div>
@@ -321,7 +351,7 @@ export default function CarMaintenanceManagement({
     {
       title: "Trạng thái pin",
       key: "battery",
-      render: (_: any, record: Car) => {
+      render: (_: unknown, record: Car) => {
         const status = technicalStatuses[record.id];
         if (!status?.batteryLevel) {
           return <Tag color="default">Chưa cập nhật</Tag>;
@@ -357,7 +387,7 @@ export default function CarMaintenanceManagement({
     {
       title: "Tình trạng kỹ thuật",
       key: "technical",
-      render: (_: any, record: Car) => {
+      render: (_: unknown, record: Car) => {
         const status = technicalStatuses[record.id];
         if (!status?.technicalCondition) {
           return <Tag color="default">Chưa cập nhật</Tag>;
@@ -387,7 +417,7 @@ export default function CarMaintenanceManagement({
     {
       title: "Bảo trì",
       key: "maintenance",
-      render: (_: any, record: Car) => {
+      render: (_: unknown, record: Car) => {
         const status = technicalStatuses[record.id];
         if (!status?.lastMaintenanceDate) {
           return <span className="text-gray-400">-</span>;
@@ -408,7 +438,7 @@ export default function CarMaintenanceManagement({
       title: "Hành động",
       key: "action",
       width: 150,
-      render: (_: any, record: Car) => (
+      render: (_: unknown, record: Car) => (
         <Button
           type="primary"
           icon={<EditOutlined />}
@@ -425,7 +455,7 @@ export default function CarMaintenanceManagement({
     {
       title: "Xe",
       key: "car",
-      render: (_: any, record: CarIssueReport) => {
+      render: (_: unknown, record: CarIssueReport) => {
         const car = cars.find((c) => c.id === record.carId);
         return (
           <Space>
@@ -514,6 +544,11 @@ export default function CarMaintenanceManagement({
     },
   ];
 
+  // Debug log
+  console.log('[CarMaintenanceManagement] Rendering with selectedSubMenu:', selectedSubMenu);
+  console.log('[CarMaintenanceManagement] Cars count:', cars.length);
+  console.log('[CarMaintenanceManagement] Issue reports count:', issueReports.length);
+
   return (
     <div>
       <Card>
@@ -527,7 +562,7 @@ export default function CarMaintenanceManagement({
             }}
           >
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: "bold" }}>
-              {selectedSubMenu === "1"
+              {selectedSubMenu === "2"
                 ? "Cập nhật trạng thái pin & kỹ thuật"
                 : "Báo cáo sự cố / hỏng hóc"}
             </h2>
@@ -538,13 +573,13 @@ export default function CarMaintenanceManagement({
               size="large"
               style={{ width: 400 }}
               value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              onSearch={(value) => setSearchText(value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchText(e.target.value)}
+              onSearch={(value: string) => setSearchText(value)}
             />
           </div>
         </div>
 
-        {selectedSubMenu === "1" ? (
+        {selectedSubMenu === "2" ? (
           <Spin spinning={loading}>
             {filteredCars.length === 0 ? (
               <Empty description="Không có xe nào" />
@@ -766,6 +801,7 @@ export default function CarMaintenanceManagement({
                   fileList={issueImages}
                   onChange={({ fileList }) => setIssueImages(fileList)}
                   beforeUpload={() => false}
+                  capture={undefined}
                 >
                   {issueImages.length < 5 && (
                     <div>

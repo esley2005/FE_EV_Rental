@@ -13,6 +13,7 @@ import {
   UserOutlined,
   IdcardOutlined,
   EditOutlined,
+  ExclamationCircleOutlined,
 } from "@ant-design/icons";
 import { Hand } from "lucide-react";
 import {
@@ -40,6 +41,7 @@ import CarStatusManagement from "@/components/staff/CarStatusManagement";
 import RentalOrderManagement from "@/components/staff/RentalOrderManagement";
 import CustomerList from "@/components/staff/CustomerList";
 import DocumentManagement from "@/components/staff/DocumentManagement";
+import CarMaintenanceManagement from "@/components/staff/CarMaintenanceManagement";
 import { authUtils } from "@/utils/auth";
 import { carsApi, bookingsApi as bookingsApiWrapped, rentalOrderApi, authApi, type ApiResponse } from "@/services/api";
 import { useRouter } from "next/navigation"; // ✅ Đúng cho App Router
@@ -55,6 +57,7 @@ const mainMenu = [
   { key: "customers", label: "Xác thực khách hàng", icon: <TeamOutlined /> },
   { key: "payments", label: "Thanh toán tại điểm", icon: <DollarOutlined /> },
   { key: "vehicles", label: "Xe tại điểm", icon: <EnvironmentOutlined /> },
+  { key: "issues", label: "Báo cáo sự cố / hỏng hóc", icon: <ExclamationCircleOutlined /> },
 ];
 
 /* =========================================================
@@ -86,7 +89,10 @@ const subMenus: Record<string, { key: string; label: string; icon: React.ReactNo
   vehicles: [
     { key: "1", label: "Quản lý xe", icon: <TeamOutlined /> },
     { key: "2", label: "Trạng thái pin & kỹ thuật", icon: <TeamOutlined /> },
-    { key: "3", label: "Báo cáo sự cố / hỏng hóc", icon: <FileOutlined /> },
+  ],
+
+  issues: [
+    { key: "1", label: "Danh sách báo cáo", icon: <ExclamationCircleOutlined /> },
   ],
 };
 
@@ -322,18 +328,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         >
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <Input.Search placeholder="Tìm kiếm nhanh" allowClear style={{ width: 260 }} />
-            <Badge count={3} size="small">
-              <span
-                style={{
-                  display: "inline-block",
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
-                  background: "#f0f0f0",
-                  cursor: "pointer",
-                }}
-              />
-            </Badge>
+            
           </div>
 
           {/* ✅ Dropdown người dùng */}
@@ -382,6 +377,24 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               activeKey={selectedSubMenu}
               onChange={(key) => setSelectedSubMenu(key)}
               items={subMenus.orders.map((item) => ({
+                key: item.key,
+                label: (
+                  <Space>
+                    {item.icon}
+                    {item.label}
+                  </Space>
+                ),
+              }))}
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
+          {/* Tabs cho submenu khi chọn "Xe tại điểm" */}
+          {selectedModule === "vehicles" && (
+            <Tabs
+              activeKey={selectedSubMenu}
+              onChange={(key) => setSelectedSubMenu(key)}
+              items={subMenus.vehicles.map((item) => ({
                 key: item.key,
                 label: (
                   <Space>
@@ -484,10 +497,10 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               selectedSubMenu === "1" ? (
                 <CarManagement staffMode={true} />
               ) : selectedSubMenu === "2" ? (
-                <p>Trang theo dõi trạng thái pin & kỹ thuật</p>
-              ) : (
-                <p>Trang báo cáo sự cố / hỏng hóc</p>
-              )
+                <CarMaintenanceManagement selectedSubMenu={selectedSubMenu} />
+              ) : null
+            ) : selectedModule === "issues" ? (
+              <CarMaintenanceManagement selectedSubMenu="3" />
             ) : (
               children
             )}

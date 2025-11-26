@@ -21,7 +21,7 @@ import {
   ChevronDown,
   MapPin,
 } from "lucide-react";
-import { Layout, Menu, Dropdown, Space, Avatar, Breadcrumb, message, Result, Button } from "antd";
+import { Layout, Menu, Dropdown, Space, Avatar, Breadcrumb, message, Result, Button, Badge } from "antd";
 import { authUtils } from "@/utils/auth";
 
 // Các component nội dung mẫu
@@ -38,7 +38,7 @@ import CarIssueReports from "@/components/admin/CarIssueReports";
 import RentalOrdersByLocation from "@/components/admin/RentalOrdersByLocation";
 import OrderDetailsWithPayments from "@/components/admin/OrderDetailsWithPayments";
 import CarUtilizationRate from "@/components/admin/CarUtilizationRate";
-
+import { getPendingReportsCount } from "@/components/admin/CarIssueReports";
 
 const { Header, Sider, Content, Footer } = Layout;
 
@@ -52,35 +52,7 @@ const mainMenu = [
   { key: "reports", label: "Báo cáo & Phân tích", icon: <BarChart3 /> },
 ];
 
-// Submenu trái (sidebar)
-const subMenus: Record<string, { key: string; label: string; icon: React.ReactNode }[]> = {
-  cars: [
-    { key: "1", label: "Danh sách xe", icon: <Car /> },
-    { key: "2", label: "Lịch sử giao nhận xe", icon: <History /> },
-    { key: "3", label: "Báo cáo sự cố từ staff", icon: <FileText /> },
-    // { key: "4", label: "Điều phối xe", icon: <Shuffle /> },
-  ],
-
-
-
-  customers: [
-    { key: "1", label: "Hồ sơ khách hàng", icon: <User /> },
-    { key: "2", label: "Lịch sử thuê xe", icon: <History /> },
-    // { key: "3", label: "Danh sách khách hàng có rủi ro", icon: <Users /> },
-  ],
-
-  staff: [
-    { key: "1", label: "Danh sách nhân viên tại các điểm", icon: <Users /> },
-    { key: "2", label: "Điều phối nhân viên", icon: <Shuffle /> },
-  ],
-
-  reports: [
-    { key: "1", label: "Doanh thu", icon: <LineChart /> },
-    { key: "2", label: "Tỷ lệ sử dụng xe", icon: <Clock /> },
-    { key: "3", label: "Phân tích AI", icon: <BarChart3 /> },
-  ],
-
-};
+// Submenu sẽ được tạo động trong component để có thể sử dụng Badge với state
 
 // Menu người dùng (dropdown admin)
 const userMenu = {
@@ -99,6 +71,7 @@ export default function AdminLayout() {
   const router = useRouter();
   const [userName, setUserName] = useState<string>("Admin");
   const [userInitial, setUserInitial] = useState<string>("A");
+  const [pendingReportsCount, setPendingReportsCount] = useState<number>(0);
 
   // Chỉ cho phép user có role admin truy cập
   useEffect(() => {
@@ -125,6 +98,67 @@ export default function AdminLayout() {
     const initial = (name || "A").trim().charAt(0).toUpperCase();
     setUserInitial(initial || "A");
   }, []);
+
+  // Đếm số báo cáo pending
+  const updatePendingReportsCount = () => {
+    const count = getPendingReportsCount();
+    setPendingReportsCount(count);
+  };
+
+  useEffect(() => {
+    // Cập nhật số lượng ban đầu
+    updatePendingReportsCount();
+
+    // Lắng nghe storage changes (khi có báo cáo mới từ staff)
+    const handleStorageChange = () => {
+      updatePendingReportsCount();
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    // Polling để kiểm tra thay đổi (mỗi 3 giây)
+    const interval = setInterval(updatePendingReportsCount, 3000);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Submenu trái (sidebar) - tạo động với Badge
+  const getSubMenus = (): Record<string, { key: string; label: React.ReactNode; icon: React.ReactNode }[]> => {
+    return {
+      cars: [
+        { key: "1", label: "Danh sách xe", icon: <Car /> },
+        { key: "2", label: "Lịch sử giao nhận xe", icon: <History /> },
+        { 
+          key: "3", 
+          label: (
+            pendingReportsCount > 0 ? (
+              <Badge count={pendingReportsCount} size="small">
+                <span>Báo cáo sự cố từ staff</span>
+              </Badge>
+            ) : (
+              <span>Báo cáo sự cố từ staff</span>
+            )
+          ), 
+          icon: <FileText /> 
+        },
+      ],
+      customers: [
+        { key: "1", label: "Hồ sơ khách hàng", icon: <User /> },
+        { key: "2", label: "Lịch sử thuê xe", icon: <History /> },
+      ],
+      staff: [
+        { key: "1", label: "Danh sách nhân viên tại các điểm", icon: <Users /> },
+        { key: "2", label: "Điều phối nhân viên", icon: <Shuffle /> },
+      ],
+      reports: [
+        { key: "1", label: "Doanh thu", icon: <LineChart /> },
+        { key: "2", label: "Tỷ lệ sử dụng xe", icon: <Clock /> },
+        { key: "3", label: "Phân tích AI", icon: <BarChart3 /> },
+      ],
+    };
+  };
 
   // Module content riêng, tránh đệ quy
   const getModuleContent = () => {
@@ -225,9 +259,15 @@ export default function AdminLayout() {
         <Menu
           mode="inline"
           theme="light"
-          items={subMenus[selectedModule] || []}
+          items={getSubMenus()[selectedModule] || []}
           selectedKeys={[selectedSubMenu]}
-          onClick={(e: { key: string }) => setSelectedSubMenu(e.key)}
+          onClick={(e: { key: string }) => {
+            setSelectedSubMenu(e.key);
+            // Cập nhật lại số lượng khi click vào menu
+            if (e.key === "3" && selectedModule === "cars") {
+              setTimeout(updatePendingReportsCount, 100);
+            }
+          }}
           style={{ borderRight: 0 }}
         />
       </Sider>
@@ -250,7 +290,7 @@ export default function AdminLayout() {
             onClick={(e: { key: string }) => {
               setSelectedModule(e.key);
               // Chỉ set submenu nếu module có submenu
-              const moduleSubMenus = subMenus[e.key];
+              const moduleSubMenus = getSubMenus()[e.key];
               if (moduleSubMenus && moduleSubMenus.length > 0) {
                 setSelectedSubMenu(moduleSubMenus[0].key);
               } else {
@@ -287,8 +327,10 @@ export default function AdminLayout() {
             style={{ marginBottom: 16 }}
             items={[
               { title: mainMenu.find((m) => m.key === selectedModule)?.label || 'Admin' },
-              ...(subMenus[selectedModule] && subMenus[selectedModule].length > 0
-                ? [{ title: subMenus[selectedModule].find((s) => s.key === selectedSubMenu)?.label || '' }]
+              ...(getSubMenus()[selectedModule] && getSubMenus()[selectedModule].length > 0
+                ? [{ title: typeof getSubMenus()[selectedModule].find((s) => s.key === selectedSubMenu)?.label === 'string' 
+                    ? getSubMenus()[selectedModule].find((s) => s.key === selectedSubMenu)?.label 
+                    : 'Báo cáo sự cố từ staff' }]
                 : []),
             ]}
           />
