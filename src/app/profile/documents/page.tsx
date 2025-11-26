@@ -314,6 +314,12 @@ export default function DocumentsPage() {
   };
 
   const handleSubmitLicense = async (values: any) => {
+    console.log('handleSubmitLicense called with values:', values);
+    console.log('licenseImageFront:', licenseImageFront);
+    console.log('licenseImageBack:', licenseImageBack);
+    console.log('selectedOrderId:', selectedOrderId);
+    console.log('user?.id:', user?.id);
+    
     if (!licenseImageFront || !licenseImageBack) {
       message.error("Vui lòng tải lên cả 2 mặt của giấy phép lái xe.");
       return;
@@ -324,26 +330,53 @@ export default function DocumentsPage() {
       return;
     }
 
-    if (!user?.id) {
-      message.error("Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.");
+    // Lấy userId từ nhiều nguồn có thể
+    let userId: number | null = null;
+    
+    // Thử từ user object
+    if (user) {
+      userId = (user as any).id || (user as any).userId || (user as any).Id || (user as any).UserId;
+    }
+    
+    // Nếu không có, thử lấy từ localStorage
+    if (!userId || userId === 0) {
+      try {
+        const userStr = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
+        if (userStr) {
+          const userData = JSON.parse(userStr);
+          userId = userData.id || userData.userId || userData.Id || userData.UserId;
+        }
+      } catch (e) {
+        console.error('[handleSubmitLicense] Error parsing user from localStorage:', e);
+      }
+    }
+    
+    console.log('[handleSubmitLicense] Final userId:', userId);
+    
+    if (!userId || userId === 0) {
+      message.error("Không tìm thấy User ID. Vui lòng đăng nhập lại.");
+      console.error('[handleSubmitLicense] Invalid userId:', userId);
       return;
     }
 
     setLicenseUploading(true);
     try {
-      // Sử dụng selectedOrderId đã chọn
+      console.log('Starting API call...');
+
+      // Request body theo đúng curl command: chỉ có name, licenseNumber, imageUrl, imageUrl2, userId
       const licenseData: DriverLicenseData = {
         name: values.licenseName,
         licenseNumber: values.licenseNumber || '',
         imageUrl: licenseImageFront, // Mặt trước
         imageUrl2: licenseImageBack, // Mặt sau
-        userId: user.id, // Required by backend
-        rentalOrderId: selectedOrderId, // Sử dụng order đã chọn
+        userId: userId, // Required by backend - phải có giá trị hợp lệ
+        // Không gửi rentalOrderId theo curl command
       };
 
-      const response = hasLicense && licenseId !== null
-        ? await driverLicenseApi.update({ ...licenseData, id: licenseId })
-        : await driverLicenseApi.upload(licenseData);
+      // Luôn gọi API Create, backend sẽ tự xử lý create hoặc update nếu đã tồn tại
+      console.log('Calling API with licenseData:', licenseData);
+      const response = await driverLicenseApi.upload(licenseData);
+      console.log('API response:', response);
 
       if (response.success) {
         setLicenseVerified(false); // Will be verified by admin
@@ -363,9 +396,10 @@ export default function DocumentsPage() {
         });
       }
     } catch (e) {
+      console.error('Error in handleSubmitLicense:', e);
       api.error({ 
         message: "Tải GPLX thất bại",
-        description: "Có lỗi xảy ra khi tải lên giấy phép lái xe.",
+        description: e instanceof Error ? e.message : "Có lỗi xảy ra khi tải lên giấy phép lái xe.",
         placement: "topRight",
         icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
       });
@@ -659,6 +693,10 @@ export default function DocumentsPage() {
                     loading={licenseUploading} 
                     className="bg-green-600"
                     disabled={!selectedOrderId}
+                    onClick={() => {
+                      console.log('Submit button clicked');
+                      console.log('Form values:', licenseForm.getFieldsValue());
+                    }}
                   >
                     {hasLicense ? "Cập nhật" : "Gửi xác thực"}
                   </Button>

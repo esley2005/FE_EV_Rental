@@ -95,23 +95,31 @@ export default function ProfilePage() {
           setUser(userData);
           // Lấy số điện thoại từ nhiều nguồn có thể
           const phoneValue = (userData as any).PhoneNumber || (userData as any).phoneNumber || userData.phone || "";
-          profileForm.setFieldsValue({
-            fullName: userData.fullName,
-            email: userData.email,
-            phone: phoneValue,
-          });
+          // Delay setFieldsValue để tránh warning khi form chưa mount
+          setTimeout(() => {
+            profileForm.setFieldsValue({
+              fullName: userData.fullName,
+              email: userData.email,
+              phone: phoneValue,
+            });
+          }, 0);
         }
 
+        console.log('[Load Profile] Starting to load profile...');
         const response = await authApi.getProfile();
+        console.log('[Load Profile] getProfile response:', response);
         if (response.success && 'data' in response && response.data) {
           setUser(response.data);
           // Lấy số điện thoại từ nhiều nguồn có thể
           const phoneValue = (response.data as any).PhoneNumber || (response.data as any).phoneNumber || response.data.phone || "";
-          profileForm.setFieldsValue({
-            fullName: response.data.fullName,
-            email: response.data.email,
-            phone: phoneValue,
-          });
+          // Delay setFieldsValue để tránh warning khi form chưa mount
+          setTimeout(() => {
+            profileForm.setFieldsValue({
+              fullName: response.data.fullName,
+              email: response.data.email,
+              phone: phoneValue,
+            });
+          }, 0);
           localStorage.setItem("user", JSON.stringify(response.data));
 
           // tải xác thực căn cước công dân
@@ -120,12 +128,18 @@ export default function ProfilePage() {
           }
 
           // Load GPLX từ DB theo userId
-          const userId = response.data.id;
+          const userId = response.data.id || (response.data as any).userId || (response.data as any).Id || (response.data as any).UserId;
+          console.log('[Load Profile] UserId to fetch license:', userId);
           if (userId) {
             try {
+              console.log('[Load Profile] Calling driverLicenseApi.getByUserId with userId:', userId);
               const licenseResponse = await driverLicenseApi.getByUserId(userId);
+              console.log('[Load Profile] License API response:', licenseResponse);
               if (licenseResponse.success && licenseResponse.data) {
                 const licenseData = licenseResponse.data as any;
+                console.log('[Load Profile] License data:', licenseData);
+                console.log('[Load Profile] License status:', licenseData.status, 'Type:', typeof licenseData.status);
+                
                 setHasLicense(true);
                 if (licenseData.id) setLicenseId(licenseData.id);
                 licenseForm.setFieldsValue({
@@ -138,33 +152,47 @@ export default function ProfilePage() {
                 // Lấy status từ DB GPLX
                 // Status: 0 = Pending (đã up), 1 = Approved (đã xác thực), 2 = Rejected (bị từ chối)
                 let statusValue: number | null = null;
-                if (licenseData.status !== undefined) {
+                if (licenseData.status !== undefined && licenseData.status !== null) {
                   const status = licenseData.status;
+                  console.log('[Load Profile] Processing status:', status, 'Type:', typeof status);
                   // Convert string to number nếu cần
                   if (typeof status === 'string') {
-                    if (status === "Pending" || status === "0") statusValue = 0;
-                    else if (status === "Approved" || status === "1") statusValue = 1;
-                    else if (status === "Rejected" || status === "2") statusValue = 2;
+                    const statusLower = status.trim().toLowerCase();
+                    console.log('[Load Profile] Status lowercased:', statusLower);
+                    if (statusLower === "pending" || status === "0") {
+                      statusValue = 0;
+                    } else if (statusLower === "approved" || status === "1") {
+                      statusValue = 1;
+                    } else if (statusLower === "rejected" || status === "2") {
+                      statusValue = 2;
+                    }
                   } else if (typeof status === 'number') {
                     statusValue = status;
                   }
+                  console.log('[Load Profile] Final statusValue:', statusValue);
+                } else {
+                  console.log('[Load Profile] Status is undefined or null');
                 }
                 
                 setLicenseStatus(statusValue);
+                console.log('[Load Profile] Set licenseStatus to:', statusValue);
                 // Cập nhật licenseVerified cho backward compatibility
                 setLicenseVerified(statusValue === 1);
               } else {
                 // Không có GPLX trong DB
+                console.log('[Load Profile] License response not successful or no data:', licenseResponse);
                 setLicenseStatus(null);
                 setHasLicense(false);
                 setLicenseVerified(null);
               }
             } catch (e) {
-              console.log("No existing GPLX found in DB:", e);
+              console.error("No existing GPLX found in DB:", e);
               setLicenseStatus(null);
               setHasLicense(false);
               setLicenseVerified(null);
             }
+          } else {
+            console.log('[Load Profile] No userId found, cannot load license');
           }
         }
       } catch (error) {
@@ -173,30 +201,95 @@ export default function ProfilePage() {
     };
 
     loadUserProfile();
-  }, [router, api, profileForm]);
+  }, [router, api, profileForm, licenseForm]);
 
   // Helper function to reload license status từ DB
   const reloadLicenseStatus = async () => {
     try {
-      if (!user?.id) return;
+      // Lấy userId từ nhiều nguồn
+      const userId = user?.id || (user as any)?.userId || (user as any)?.Id || (user as any)?.UserId;
+      if (!userId) {
+        // Thử lấy từ localStorage
+        try {
+          const userStr = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
+          if (userStr) {
+            const userData = JSON.parse(userStr);
+            const localUserId = userData.id || userData.userId || userData.Id || userData.UserId;
+            if (localUserId) {
+              // Reload GPLX từ DB theo userId
+              const licenseResponse = await driverLicenseApi.getByUserId(localUserId);
+              console.log('[Reload License] API response:', licenseResponse);
+              if (licenseResponse.success && licenseResponse.data) {
+                const licenseData = licenseResponse.data as any;
+                console.log('[Reload License] License data:', licenseData);
+                console.log('[Reload License] License status:', licenseData.status, 'Type:', typeof licenseData.status);
+                
+                if (licenseData.id) setLicenseId(licenseData.id);
+                
+                // Lấy status từ DB GPLX
+                let statusValue: number | null = null;
+                if (licenseData.status !== undefined && licenseData.status !== null) {
+                  const status = licenseData.status;
+                  console.log('[Reload License] Processing status:', status, 'Type:', typeof status);
+                  if (typeof status === 'string') {
+                    const statusLower = status.trim().toLowerCase();
+                    if (statusLower === "pending" || status === "0") {
+                      statusValue = 0;
+                    } else if (statusLower === "approved" || status === "1") {
+                      statusValue = 1;
+                    } else if (statusLower === "rejected" || status === "2") {
+                      statusValue = 2;
+                    }
+                  } else if (typeof status === 'number') {
+                    statusValue = status;
+                  }
+                  console.log('[Reload License] Final statusValue:', statusValue);
+                } else {
+                  console.log('[Reload License] Status is undefined or null');
+                }
+                
+                setLicenseStatus(statusValue);
+                console.log('[Reload License] Set licenseStatus to:', statusValue);
+                setLicenseVerified(statusValue === 1);
+                setHasLicense(true);
+              } else {
+                setLicenseStatus(null);
+                setHasLicense(false);
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Error getting userId from localStorage:", e);
+        }
+        return;
+      }
       
       // Reload GPLX từ DB theo userId
-      const licenseResponse = await driverLicenseApi.getByUserId(user.id);
+      const licenseResponse = await driverLicenseApi.getByUserId(userId);
       if (licenseResponse.success && licenseResponse.data) {
         const licenseData = licenseResponse.data as any;
         if (licenseData.id) setLicenseId(licenseData.id);
         
         // Lấy status từ DB GPLX
         let statusValue: number | null = null;
-        if (licenseData.status !== undefined) {
+        if (licenseData.status !== undefined && licenseData.status !== null) {
           const status = licenseData.status;
+          console.log('[Reload License] Processing status:', status, 'Type:', typeof status);
           if (typeof status === 'string') {
-            if (status === "Pending" || status === "0") statusValue = 0;
-            else if (status === "Approved" || status === "1") statusValue = 1;
-            else if (status === "Rejected" || status === "2") statusValue = 2;
+            const statusLower = status.trim().toLowerCase();
+            if (statusLower === "pending" || status === "0") {
+              statusValue = 0;
+            } else if (statusLower === "approved" || status === "1") {
+              statusValue = 1;
+            } else if (statusLower === "rejected" || status === "2") {
+              statusValue = 2;
+            }
           } else if (typeof status === 'number') {
             statusValue = status;
           }
+          console.log('[Reload License] Final statusValue:', statusValue);
+        } else {
+          console.log('[Reload License] Status is undefined or null');
         }
         
         setLicenseStatus(statusValue);
@@ -681,30 +774,64 @@ export default function ProfilePage() {
   };
 
   const handleSubmitLicense = async (values: any) => {
+    console.log('[handleSubmitLicense] Called with values:', values);
+    console.log('[handleSubmitLicense] licenseImageFront:', licenseImageFront);
+    console.log('[handleSubmitLicense] licenseImageBack:', licenseImageBack);
+    console.log('[handleSubmitLicense] user object:', user);
+    console.log('[handleSubmitLicense] user?.id:', user?.id);
+    
     if (!licenseImageFront || !licenseImageBack) {
       message.error("Vui lòng tải lên cả 2 mặt của giấy phép lái xe.");
       return;
     }
 
-    if (!user?.id) {
-      message.error("Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.");
+    // Lấy userId từ nhiều nguồn có thể
+    let userId: number | null = null;
+    
+    // Thử từ user object
+    if (user) {
+      userId = (user as any).id || (user as any).userId || (user as any).Id || (user as any).UserId;
+    }
+    
+    // Nếu không có, thử lấy từ localStorage
+    if (!userId || userId === 0) {
+      try {
+        const userStr = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
+        if (userStr) {
+          const userData = JSON.parse(userStr);
+          userId = userData.id || userData.userId || userData.Id || userData.UserId;
+        }
+      } catch (e) {
+        console.error('[handleSubmitLicense] Error parsing user from localStorage:', e);
+      }
+    }
+    
+    console.log('[handleSubmitLicense] Final userId:', userId);
+    
+    if (!userId || userId === 0) {
+      message.error("Không tìm thấy User ID. Vui lòng đăng nhập lại.");
+      console.error('[handleSubmitLicense] Invalid userId:', userId);
       return;
     }
 
     setLicenseUploading(true);
     try {
+      // Request body theo đúng curl command: chỉ có name, licenseNumber, imageUrl, imageUrl2, userId
       const licenseData: DriverLicenseData = {
         name: values.licenseName,
         licenseNumber: values.licenseNumber || '',
         imageUrl: licenseImageFront, // Mặt trước
         imageUrl2: licenseImageBack, // Mặt sau
-        userId: user.id, // Required by backend
-        rentalOrderId: 0, // Upload chung, không cần đơn hàng cụ thể
+        userId: userId, // Required by backend - phải có giá trị hợp lệ
+        // Không gửi rentalOrderId theo curl command
       };
+      
+      console.log('[handleSubmitLicense] Final licenseData to send:', licenseData);
 
-      const response = hasLicense && licenseId !== null
-        ? await driverLicenseApi.update({ ...licenseData, id: licenseId })
-        : await driverLicenseApi.upload(licenseData);
+      console.log('[handleSubmitLicense] Calling API with licenseData:', licenseData);
+      // Luôn gọi API Create, backend sẽ tự xử lý create hoặc update nếu đã tồn tại
+      const response = await driverLicenseApi.upload(licenseData);
+      console.log('[handleSubmitLicense] API response:', response);
 
       if (response.success) {
         setLicenseVerified(false); // Will be verified by admin
@@ -732,10 +859,11 @@ export default function ProfilePage() {
         }, 0);
       }
     } catch (e) {
+      console.error('[handleSubmitLicense] Error:', e);
       setTimeout(() => {
         api.error({ 
           message: "Tải GPLX thất bại",
-          description: "Có lỗi xảy ra khi tải lên giấy phép lái xe.",
+          description: e instanceof Error ? e.message : "Có lỗi xảy ra khi tải lên giấy phép lái xe.",
           placement: "topRight",
           icon: <CloseCircleOutlined style={{ color: "#ff4d4f" }} />,
         });
@@ -789,18 +917,13 @@ export default function ProfilePage() {
                     </div>
 
 <div className="ml-auto flex flex-col items-end gap-2">
-                      <div className="flex gap-2">
-                        {/* small status tag - license verification state từ DB */}
-                        {licenseStatus === 1 && <Tag color="success">GPLX: Đã xác thực</Tag>}
-                        {licenseStatus === 0 && <Tag color="warning">GPLX: Đã up</Tag>}
-                        {licenseStatus === 2 && <Tag color="error">GPLX: Bị từ chối</Tag>}
-                        {licenseStatus === null && <Tag color="default">GPLX: Chưa gửi</Tag>}
-                        
-                        {/* Citizen ID status */}
-                        {citizenIdVerified === true && <Tag color="success">CCCD: Đã xác thực</Tag>}
-                        {citizenIdVerified === false && <Tag color="error">CCCD: Chưa xác thực</Tag>}
-                        {citizenIdVerified === null && <Tag color="default">CCCD: Chưa gửi</Tag>}
-                      </div>
+                       <div className="flex gap-2">
+                         {/* small status tag - license verification state từ DB */}
+                         {licenseStatus === 1 && <Tag color="success">GPLX: Đã xác thực</Tag>}
+                         {licenseStatus === 0 && <Tag color="warning">GPLX: Đã up</Tag>}
+                         {licenseStatus === 2 && <Tag color="error">GPLX: Bị từ chối</Tag>}
+                         {licenseStatus === null && <Tag color="default">GPLX: Chưa gửi</Tag>}
+                       </div>
                       
                       {/* <Button
                         type="primary"
@@ -1156,7 +1279,15 @@ export default function ProfilePage() {
                           </p>
                         </div>
 
-                        <Form form={licenseForm} layout="vertical" onFinish={handleSubmitLicense}>
+                        <Form 
+                          form={licenseForm} 
+                          layout="vertical" 
+                          onFinish={handleSubmitLicense}
+                          onFinishFailed={(errorInfo) => {
+                            console.log('[Form] Validation failed:', errorInfo);
+                            message.error('Vui lòng điền đầy đủ thông tin bắt buộc');
+                          }}
+                        >
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                             {/* Upload mặt trước */}
                             <Form.Item label="Mặt trước GPLX" required>
@@ -1247,6 +1378,11 @@ export default function ProfilePage() {
                               icon={<SaveOutlined />} 
                               loading={licenseUploading}
                               className="bg-blue-600"
+                              onClick={() => {
+                                console.log('[Button] Submit button clicked');
+                                console.log('[Button] Form values:', licenseForm.getFieldsValue());
+                                console.log('[Button] Form errors:', licenseForm.getFieldsError());
+                              }}
                             >
                               {hasLicense ? "Cập nhật GPLX" : "Gửi GPLX"}
                             </Button>

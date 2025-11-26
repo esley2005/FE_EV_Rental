@@ -787,30 +787,32 @@ export const authApi = {
       }
     }
     
-    // Fallback: thử các endpoint khác
+    // Fallback: thử các endpoint khác (đã loại bỏ các endpoint không hoạt động)
+    // Chỉ thử các endpoint có khả năng hoạt động
     const candidates = [
-      '/User/GetProfile',
-      '/user/profile',
-      '/auth/profile',
+      '/User/GetById', // Thử lại với endpoint chính
     ];
     
     for (const ep of candidates) {
       try {
-        const res = await apiCall<User>(ep, { method: 'GET' });
-        if (res.success && res.data) {
-          const phoneValue = res.data.phone || (res.data as any).phoneNumber || (res.data as any).PhoneNumber || "";
-          const emailValue = res.data.email || (res.data as any).Email || "";
-          const normalizedUser = {
-            ...res.data,
-            email: emailValue,
-            phone: phoneValue,
-            phoneNumber: phoneValue,
-            PhoneNumber: phoneValue,
-          } as any;
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('user', JSON.stringify(normalizedUser));
+        // Nếu có userId, thử lại với endpoint GetById
+        if (userId) {
+          const res = await apiCall<User>(`${ep}?id=${userId}`, { method: 'GET' });
+          if (res.success && res.data) {
+            const phoneValue = res.data.phone || (res.data as any).phoneNumber || (res.data as any).PhoneNumber || "";
+            const emailValue = res.data.email || (res.data as any).Email || "";
+            const normalizedUser = {
+              ...res.data,
+              email: emailValue,
+              phone: phoneValue,
+              phoneNumber: phoneValue,
+              PhoneNumber: phoneValue,
+            } as any;
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('user', JSON.stringify(normalizedUser));
+            }
+            return { success: true, data: normalizedUser };
           }
-          return { success: true, data: normalizedUser };
         }
       } catch (error) {
         continue;
@@ -1140,13 +1142,19 @@ export const driverLicenseApi = {
       } as any);
     }
     
-    const createData = {
-      Name: data.name,
-      LicenseNumber: data.licenseNumber || '',
-      ImageUrl: data.imageUrl || '',
-      ImageUrl2: data.imageUrl2 || '',
-      UserId: data.userId, // Required by backend
-      RentalOrderId: data.rentalOrderId || 0, // Use 0 if no order yet
+    // Sử dụng camelCase để khớp với API endpoint (theo curl command)
+    const createData: {
+      name: string;
+      licenseNumber: string;
+      imageUrl: string;
+      imageUrl2: string;
+      userId: number;
+    } = {
+      name: data.name,
+      licenseNumber: data.licenseNumber || '',
+      imageUrl: data.imageUrl || '',
+      imageUrl2: data.imageUrl2 || '',
+      userId: data.userId, // Required by backend - phải có giá trị hợp lệ
     };
     
     return apiCall<{ message: string }>('/DriverLicense/Create', {
@@ -1180,13 +1188,13 @@ export const driverLicenseApi = {
 
   // Get current user's driver license
   getCurrent: () =>
-    apiCall<DriverLicenseData>('/DriverLicense/GetById', {
+    apiCall<DriverLicenseData>('/DriverLicense/GetByUserId?id=${id}', {
       method: 'GET',
     }),
 
   // Get driver license by userId
   getByUserId: (userId: number) =>
-    apiCall<DriverLicenseData>(`/DriverLicense/GetByUserId?userId=${userId}`, {
+    apiCall<DriverLicenseData>(`/DriverLicense/GetByUserId/${userId}`, {
       method: 'GET',
     }),
 

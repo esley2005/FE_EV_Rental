@@ -83,10 +83,44 @@ export const authApi = {
     }),
 
   // Lấy thông tin user hiện tại
-  getProfile: () =>
-    httpClient<User>('/user/profile', {
-      method: 'GET',
-    }),
+  getProfile: async () => {
+    // Lấy userId từ localStorage
+    const userStr = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
+    let userId: number | null = null;
+    if (userStr) {
+      try {
+        const userData = JSON.parse(userStr);
+        userId = userData.id || userData.userId;
+      } catch (e) {
+        // Ignore
+      }
+    }
+    
+    // Sử dụng endpoint GetById nếu có userId
+    if (userId) {
+      return httpClient<User>(`/User/GetById?id=${userId}`, {
+        method: 'GET',
+      });
+    }
+    
+    // Fallback về localStorage nếu không có userId
+    if (userStr) {
+      try {
+        const userData = JSON.parse(userStr);
+        return Promise.resolve({
+          success: true,
+          data: userData as User,
+        });
+      } catch (e) {
+        // Ignore
+      }
+    }
+    
+    return Promise.resolve({
+      success: false,
+      error: 'User not found',
+    });
+  },
 
   // Cập nhật thông tin user
   updateProfile: async (data: UpdateProfileData) => {
