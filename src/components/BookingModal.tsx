@@ -338,7 +338,7 @@ function DocumentUploadModal({ visible, rentalOrderId, onComplete, onCancel }: D
           </Button>
         </div>
 
-        {activeTab === 'license' && (
+        <div style={{ display: activeTab === 'license' ? 'block' : 'none' }}>
           <Form form={licenseForm} layout="vertical" onFinish={handleSubmitLicense}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
               <div>
@@ -390,9 +390,9 @@ function DocumentUploadModal({ visible, rentalOrderId, onComplete, onCancel }: D
               {licenseDone ? "Đã gửi" : "Gửi GPLX"}
             </Button>
           </Form>
-        )}
+        </div>
 
-        {activeTab === 'citizenId' && (
+        <div style={{ display: activeTab === 'citizenId' ? 'block' : 'none' }}>
           <Form form={citizenIdForm} layout="vertical" onFinish={handleSubmitCitizenId}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
               <div>
@@ -457,7 +457,7 @@ function DocumentUploadModal({ visible, rentalOrderId, onComplete, onCancel }: D
               {citizenIdDone ? "Đã gửi" : "Gửi CCCD"}
             </Button>
           </Form>
-        )}
+        </div>
 
         {canComplete && (
           <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded">
@@ -480,6 +480,13 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
     top: 24,
     duration: 4,
   });
+  
+  // Reset form when modal opens
+  useEffect(() => {
+    if (isOpen && form) {
+      form.resetFields();
+    }
+  }, [isOpen, form]);
   const [loading, setLoading] = useState(false);
   const [rentalLocations, setRentalLocations] = useState<RentalLocationData[]>([]);
   const [user, setUser] = useState<User | null>(null);
