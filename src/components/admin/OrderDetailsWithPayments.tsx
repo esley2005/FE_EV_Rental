@@ -15,6 +15,8 @@ import {
   Modal,
   Image,
   Select,
+  Alert,
+  Divider,
 } from "antd";
 import {
   DollarOutlined,
@@ -24,8 +26,12 @@ import {
   UserOutlined,
   CalendarOutlined,
   EyeOutlined,
+  FileTextOutlined,
+  PictureOutlined,
+  DashboardOutlined,
+  ThunderboltOutlined,
 } from "@ant-design/icons";
-import { rentalOrderApi, carsApi, rentalLocationApi, authApi } from "@/services/api";
+import { rentalOrderApi, carsApi, rentalLocationApi, authApi, carDeliveryHistoryApi, carReturnHistoryApi } from "@/services/api";
 import type { RentalOrderData, User, RentalLocationData } from "@/services/api";
 import type { Car } from "@/types/car";
 import dayjs from "dayjs";
@@ -70,6 +76,15 @@ export default function OrderDetailsWithPayments() {
   const [detailUser, setDetailUser] = useState<any>(null);
   const [detailLocation, setDetailLocation] = useState<any>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
+  
+  // History modal state
+  const [historyModalVisible, setHistoryModalVisible] = useState(false);
+  const [selectedOrderForHistory, setSelectedOrderForHistory] = useState<OrderWithDetails | null>(null);
+  const [orderHistory, setOrderHistory] = useState<{
+    deliveryHistory?: any;
+    returnHistory?: any;
+    payments?: any[];
+  } | null>(null);
 
   useEffect(() => {
     loadCars();
@@ -266,6 +281,24 @@ export default function OrderDetailsWithPayments() {
     return <Tag>{status}</Tag>;
   };
 
+  const getOrderStatusTag = (order: OrderWithDetails) => {
+    const statusLower = (order.status || '').toLowerCase();
+    if (statusLower.includes('completed')) {
+      return <Tag color="green" icon={<CheckCircleOutlined />}>Hoàn thành</Tag>;
+    } else if (statusLower.includes('pending')) {
+      return <Tag color="orange" icon={<ClockCircleOutlined />}>Chờ xử lý</Tag>;
+    } else if (statusLower.includes('cancelled')) {
+      return <Tag color="red">Đã hủy</Tag>;
+    } else if (statusLower.includes('renting')) {
+      return <Tag color="blue" icon={<CarOutlined />}>Đang thuê</Tag>;
+    } else if (statusLower.includes('returned')) {
+      return <Tag color="purple">Đã trả xe</Tag>;
+    } else if (statusLower.includes('paymentpending')) {
+      return <Tag color="orange">Chờ thanh toán</Tag>;
+    }
+    return <Tag>{order.status}</Tag>;
+  };
+
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
       const matchText = search
@@ -353,15 +386,51 @@ export default function OrderDetailsWithPayments() {
     {
       title: "Thao tác",
       key: "action",
-      width: 100,
+      width: 200,
       render: (_: any, record: OrderWithDetails) => (
-        <Button
-          type="primary"
-          icon={<EyeOutlined />}
-          onClick={() => handleViewDetails(record.id)}
-        >
-          Chi tiết
-        </Button>
+        <Space>
+          <Button
+            type="primary"
+            icon={<EyeOutlined />}
+            onClick={() => handleViewDetails(record.id)}
+          >
+            Chi tiết
+          </Button>
+          {record.status?.toLowerCase().includes('completed') && (
+            <Button
+              type="default"
+              icon={<FileTextOutlined />}
+              onClick={async () => {
+                setSelectedOrderForHistory(record);
+                setHistoryModalVisible(true);
+                // Load lịch sử payments, delivery và return history
+                try {
+                  setLoading(true);
+                  const [paymentsResponse, deliveryResponse, returnResponse] = await Promise.all([
+                    rentalOrderApi.getByOrderWithPayments(record.id),
+                    carDeliveryHistoryApi.getByOrderId(record.id),
+                    carReturnHistoryApi.getByOrderId(record.id)
+                  ]);
+                  
+                  setOrderHistory({
+                    deliveryHistory: deliveryResponse.success ? deliveryResponse.data : null,
+                    returnHistory: returnResponse.success ? returnResponse.data : null,
+                    payments: paymentsResponse.success && paymentsResponse.data?.payments?.$values 
+                      ? paymentsResponse.data.payments.$values 
+                      : []
+                  });
+                } catch (error) {
+                  console.error('Error loading order history:', error);
+                  message.error('Không thể tải lịch sử đơn hàng');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+            >
+              Xem lịch sử
+            </Button>
+          )}
+        </Space>
       ),
     },
   ];
@@ -456,9 +525,7 @@ export default function OrderDetailsWithPayments() {
                   <Descriptions.Item label="Trạng thái">
                     {getStatusTag(orderData.status)}
                   </Descriptions.Item>
-                  <Descriptions.Item label="Số điện thoại">
-                    {orderData.phoneNumber || '-'}
-                  </Descriptions.Item>
+                  
                   <Descriptions.Item label="Có tài xế">
                     {orderData.withDriver ? <Tag color="blue">Có</Tag> : <Tag>Không</Tag>}
                   </Descriptions.Item>
@@ -610,6 +677,463 @@ export default function OrderDetailsWithPayments() {
           )}
         </Spin>
       </Modal>
+
+      {/* History Modal - Xem lịch sử đơn hàng */}
+      {selectedOrderForHistory && (
+        <Modal
+          title={
+            <Space>
+              <FileTextOutlined /> Lịch sử đơn hàng #{selectedOrderForHistory.id}
+            </Space>
+          }
+          open={historyModalVisible}
+          onCancel={() => {
+            setHistoryModalVisible(false);
+            setOrderHistory(null);
+            setSelectedOrderForHistory(null);
+          }}
+          footer={[
+            <Button key="close" onClick={() => {
+              setHistoryModalVisible(false);
+              setOrderHistory(null);
+              setSelectedOrderForHistory(null);
+            }}>
+              Đóng
+            </Button>
+          ]}
+          width={1000}
+        >
+          <div className="space-y-4">
+            {/* Thông tin đơn hàng */}
+            <Card title="Thông tin đơn hàng" size="small">
+              <Descriptions column={2} size="small">
+                <Descriptions.Item label="Mã đơn hàng">#{selectedOrderForHistory.id}</Descriptions.Item>
+                <Descriptions.Item label="Trạng thái">{getOrderStatusTag(selectedOrderForHistory)}</Descriptions.Item>
+                <Descriptions.Item label="Ngày đặt">{formatVietnamTime(selectedOrderForHistory.orderDate || selectedOrderForHistory.createdAt)}</Descriptions.Item>
+                <Descriptions.Item label="Ngày nhận xe">{formatVietnamTime(selectedOrderForHistory.pickupTime)}</Descriptions.Item>
+                <Descriptions.Item label="Ngày trả xe (dự kiến)">{formatVietnamTime(selectedOrderForHistory.expectedReturnTime)}</Descriptions.Item>
+                {selectedOrderForHistory.actualReturnTime && (
+                  <Descriptions.Item label="Ngày trả xe (thực tế)">{formatVietnamTime(selectedOrderForHistory.actualReturnTime)}</Descriptions.Item>
+                )}
+                {selectedOrderForHistory.car && (
+                  <>
+                    <Descriptions.Item label="Xe">{selectedOrderForHistory.car.name} - {selectedOrderForHistory.car.model}</Descriptions.Item>
+                    <Descriptions.Item label="Giá/ngày">{selectedOrderForHistory.car.rentPricePerDay?.toLocaleString('vi-VN')} VNĐ</Descriptions.Item>
+                  </>
+                )}
+                {selectedOrderForHistory.user && (
+                  <>
+                    <Descriptions.Item label="Khách hàng">{selectedOrderForHistory.user.fullName || selectedOrderForHistory.user.email}</Descriptions.Item>
+                    <Descriptions.Item label="Email">{selectedOrderForHistory.user.email}</Descriptions.Item>
+                  </>
+                )}
+                {selectedOrderForHistory.rentalLocation && (
+                  <Descriptions.Item label="Địa điểm nhận xe">
+                    <div>
+                      <div style={{ fontWeight: 500, marginBottom: 4 }}>
+                        {selectedOrderForHistory.rentalLocation.name}
+                      </div>
+                      {selectedOrderForHistory.rentalLocation.address && (
+                        <div style={{ fontSize: '13px', color: '#666' }}>
+                          {selectedOrderForHistory.rentalLocation.address}
+                        </div>
+                      )}
+                    </div>
+                  </Descriptions.Item>
+                )}
+                {selectedOrderForHistory.deposit && (
+                  <Descriptions.Item label="Tiền cọc">
+                    {selectedOrderForHistory.deposit.toLocaleString('vi-VN')} VNĐ
+                  </Descriptions.Item>
+                )}
+              </Descriptions>
+            </Card>
+
+            {/* Chi phí - Tách riêng để rõ ràng */}
+            <Card title="Chi phí" size="small" style={{ marginTop: 16 }}>
+              <Descriptions column={2} size="small">
+                {selectedOrderForHistory.extraFee && (
+                  <Descriptions.Item label="Phí phát sinh">
+                    <span style={{ color: '#fa8c16', fontWeight: 600 }}>
+                      {selectedOrderForHistory.extraFee.toLocaleString('vi-VN')} VNĐ
+                    </span>
+                  </Descriptions.Item>
+                )}
+                {selectedOrderForHistory.damageFee && (
+                  <Descriptions.Item label="Phí hư hỏng">
+                    <span style={{ color: '#ff4d4f', fontWeight: 600 }}>
+                      {selectedOrderForHistory.damageFee.toLocaleString('vi-VN')} VNĐ
+                    </span>
+                  </Descriptions.Item>
+                )}
+                {selectedOrderForHistory.damageNotes && (
+                  <Descriptions.Item label="Ghi chú hư hỏng">
+                    <div style={{ 
+                      color: '#fa8c16',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word'
+                    }}>
+                      {selectedOrderForHistory.damageNotes}
+                    </div>
+                  </Descriptions.Item>
+                )}
+                {selectedOrderForHistory.subTotal && (
+                  <Descriptions.Item label="Tổng phụ phí">
+                    <span style={{ fontWeight: 600 }}>
+                      {selectedOrderForHistory.subTotal.toLocaleString('vi-VN')} VNĐ
+                    </span>
+                  </Descriptions.Item>
+                )}
+                {selectedOrderForHistory.total && (
+                  <Descriptions.Item label="Tổng tiền" span={2}>
+                    <span style={{ 
+                      fontSize: '18px',
+                      fontWeight: 700,
+                      color: '#52c41a'
+                    }}>
+                      {selectedOrderForHistory.total.toLocaleString('vi-VN')} VNĐ
+                    </span>
+                  </Descriptions.Item>
+                )}
+              </Descriptions>
+            </Card>
+
+            {/* Lịch sử thanh toán */}
+            {orderHistory?.payments && orderHistory.payments.length > 0 && (
+              <Card title="Lịch sử thanh toán" size="small">
+                <Table
+                  dataSource={orderHistory.payments}
+                  rowKey="paymentId"
+                  pagination={false}
+                  size="small"
+                  columns={[
+                    {
+                      title: 'Loại thanh toán',
+                      dataIndex: 'paymentType',
+                      key: 'paymentType',
+                      render: (text: string) => {
+                        const typeMap: Record<string, string> = {
+                          'OrderDeposit': 'Tiền giữ chỗ',
+                          'CarDeposit': 'Cọc xe',
+                          'RentalFee': 'Tiền thuê',
+                          'RefundDepositCar': 'Hoàn cọc xe',
+                          'RefundDepositOrder': 'Hoàn cọc đơn',
+                        };
+                        return typeMap[text] || text;
+                      }
+                    },
+                    {
+                      title: 'Số tiền',
+                      dataIndex: 'amount',
+                      key: 'amount',
+                      render: (amount: number) => (
+                        <span className="font-semibold">
+                          {amount?.toLocaleString('vi-VN')} VNĐ
+                        </span>
+                      )
+                    },
+                    {
+                      title: 'Phương thức',
+                      dataIndex: 'paymentMethod',
+                      key: 'paymentMethod',
+                      render: (method: string) => {
+                        const methodMap: Record<string, string> = {
+                          'Direct': 'Tiền mặt',
+                          'VNPAY': 'VNPAY',
+                          'bank_transfer': 'Chuyển khoản',
+                          'cash': 'Tiền mặt',
+                        };
+                        return methodMap[method] || method;
+                      }
+                    },
+                    {
+                      title: 'Ngày thanh toán',
+                      dataIndex: 'paymentDate',
+                      key: 'paymentDate',
+                      render: (date: string) => formatVietnamTime(date)
+                    },
+                    {
+                      title: 'Trạng thái',
+                      dataIndex: 'status',
+                      key: 'status',
+                      render: (status: string) => {
+                        const statusMap: Record<string, { text: string; color: string }> = {
+                          'Pending': { text: 'Chờ xử lý', color: 'orange' },
+                          'Completed': { text: 'Hoàn thành', color: 'green' },
+                          'Failed': { text: 'Thất bại', color: 'red' },
+                          'Refunded': { text: 'Đã hoàn', color: 'blue' },
+                        };
+                        const config = statusMap[status] || { text: status, color: 'default' };
+                        return <Tag color={config.color}>{config.text}</Tag>;
+                      }
+                    },
+                    {
+                      title: 'Hình ảnh',
+                      key: 'image',
+                      width: 120,
+                      render: (_: unknown, record: { billingImageUrl?: string; imageUrl?: string; receiptImageUrl?: string; image?: string }) => {
+                        // Kiểm tra các trường có thể chứa hình ảnh
+                        const imageUrl = record.billingImageUrl || record.imageUrl || record.receiptImageUrl || record.image;
+                        
+                        if (imageUrl) {
+                          return (
+                            <Image
+                              src={imageUrl}
+                              alt="Chứng từ thanh toán"
+                              width={80}
+                              height={60}
+                              style={{ 
+                                objectFit: 'cover', 
+                                borderRadius: 4,
+                                cursor: 'pointer'
+                              }}
+                              fallback="/logo_ev.png"
+                              preview={{
+                                mask: 'Xem ảnh'
+                              }}
+                            />
+                          );
+                        }
+                        
+                        return <span style={{ color: '#999' }}>-</span>;
+                      }
+                    },
+                  ]}
+                />
+              </Card>
+            )}
+
+            {/* Hình ảnh từ delivery và return history */}
+            <Card title={<span><PictureOutlined style={{ marginRight: 8 }} />Thông tin giao nhận xe</span>} size="small">
+              <div className="space-y-6">
+                {/* Hình ảnh giao xe */}
+                <div>
+                  <h4 className="font-semibold mb-3 text-base" style={{ color: '#1890ff' }}>
+                    <CarOutlined style={{ marginRight: 8 }} />Thông tin khi giao xe
+                  </h4>
+                  {orderHistory?.deliveryHistory ? (() => {
+                    const delivery = orderHistory.deliveryHistory;
+                    // Xử lý cả camelCase và PascalCase
+                    const odometerStart = delivery.odometerStart ?? delivery.OdometerStart;
+                    const batteryLevelStart = delivery.batteryLevelStart ?? delivery.BatteryLevelStart;
+                    const vehicleConditionStart = delivery.vehicleConditionStart || delivery.VehicleConditionStart || 'Chưa có';
+                    const images = [
+                      delivery.imageUrl || delivery.ImageUrl,
+                      delivery.imageUrl2 || delivery.ImageUrl2,
+                      delivery.imageUrl3 || delivery.ImageUrl3,
+                      delivery.imageUrl4 || delivery.ImageUrl4,
+                      delivery.imageUrl5 || delivery.ImageUrl5,
+                      delivery.imageUrl6 || delivery.ImageUrl6,
+                    ].filter(Boolean);
+                    
+                    return (
+                      <div>
+                        <Card size="small" style={{ marginBottom: 16, background: '#f5f5f5' }}>
+                          <Descriptions 
+                            column={1} 
+                            size="small"
+                            labelStyle={{ fontWeight: 600, width: '120px' }}
+                            contentStyle={{ fontWeight: 500 }}
+                          >
+                            <Descriptions.Item 
+                              label={
+                                <span>
+                                  <DashboardOutlined style={{ marginRight: 4, color: '#1890ff' }} />
+                                  Số km
+                                </span>
+                              }
+                            >
+                              {odometerStart !== null && odometerStart !== undefined 
+                                ? <span style={{ color: '#52c41a', fontWeight: 600 }}>{odometerStart} km</span>
+                                : <span style={{ color: '#999' }}>Chưa có</span>
+                              }
+                            </Descriptions.Item>
+                            <Descriptions.Item 
+                              label={
+                                <span>
+                                  <ThunderboltOutlined style={{ marginRight: 4, color: '#faad14' }} />
+                                  % Pin
+                                </span>
+                              }
+                            >
+                              {batteryLevelStart !== null && batteryLevelStart !== undefined 
+                                ? <span style={{ color: '#52c41a', fontWeight: 600 }}>{batteryLevelStart}%</span>
+                                : <span style={{ color: '#999' }}>Chưa có</span>
+                              }
+                            </Descriptions.Item>
+                            <Descriptions.Item 
+                              label={
+                                <span>
+                                  <CheckCircleOutlined style={{ marginRight: 4, color: '#52c41a' }} />
+                                  Tình trạng
+                                </span>
+                              }
+                            >
+                              <Tag color={vehicleConditionStart === 'ok' || vehicleConditionStart === 'OK' ? 'green' : 'orange'}>
+                                {vehicleConditionStart}
+                              </Tag>
+                            </Descriptions.Item>
+                          </Descriptions>
+                        </Card>
+                        {images.length > 0 ? (
+                          <div>
+                            <div style={{ marginBottom: 8, fontSize: 13, color: '#666' }}>
+                              <PictureOutlined style={{ marginRight: 4 }} />
+                              {images.length} hình ảnh
+                            </div>
+                            <Space wrap size="small">
+                              {images.map((img, index) => (
+                                <Image
+                                  key={index}
+                                  src={img}
+                                  alt={`Giao xe ${index + 1}`}
+                                  width={180}
+                                  height={120}
+                                  style={{ objectFit: 'cover', borderRadius: 8, border: '1px solid #d9d9d9' }}
+                                  preview={{
+                                    mask: 'Xem ảnh',
+                                    maskClassName: 'custom-preview-mask'
+                                  }}
+                                />
+                              ))}
+                            </Space>
+                          </div>
+                        ) : (
+                          <Alert
+                            message="Không có hình ảnh"
+                            type="info"
+                            showIcon
+                            style={{ marginTop: 8 }}
+                          />
+                        )}
+                      </div>
+                    );
+                  })() : (
+                    <Alert
+                      message="Chưa có lịch sử giao xe"
+                      type="warning"
+                      showIcon
+                    />
+                  )}
+                </div>
+                
+                <Divider />
+                
+                {/* Hình ảnh trả xe */}
+                <div>
+                  <h4 className="font-semibold mb-3 text-base" style={{ color: '#ff4d4f' }}>
+                    <CarOutlined style={{ marginRight: 8 }} />Thông tin khi trả xe
+                  </h4>
+                  {orderHistory?.returnHistory ? (() => {
+                    const returnHistory = orderHistory.returnHistory;
+                    // Xử lý cả camelCase và PascalCase
+                    const odometerEnd = returnHistory.odometerEnd ?? returnHistory.OdometerEnd;
+                    const batteryLevelEnd = returnHistory.batteryLevelEnd ?? returnHistory.BatteryLevelEnd;
+                    const vehicleConditionEnd = returnHistory.vehicleConditionEnd || returnHistory.VehicleConditionEnd || 'Chưa có';
+                    const images = [
+                      returnHistory.imageUrl || returnHistory.ImageUrl,
+                      returnHistory.imageUrl2 || returnHistory.ImageUrl2,
+                      returnHistory.imageUrl3 || returnHistory.ImageUrl3,
+                      returnHistory.imageUrl4 || returnHistory.ImageUrl4,
+                      returnHistory.imageUrl5 || returnHistory.ImageUrl5,
+                      returnHistory.imageUrl6 || returnHistory.ImageUrl6,
+                    ].filter(Boolean);
+                    
+                    return (
+                      <div>
+                        <Card size="small" style={{ marginBottom: 16, background: '#f5f5f5' }}>
+                          <Descriptions 
+                            column={1} 
+                            size="small"
+                            labelStyle={{ fontWeight: 600, width: '120px' }}
+                            contentStyle={{ fontWeight: 500 }}
+                          >
+                            <Descriptions.Item 
+                              label={
+                                <span>
+                                  <DashboardOutlined style={{ marginRight: 4, color: '#1890ff' }} />
+                                  Số km
+                                </span>
+                              }
+                            >
+                              {odometerEnd !== null && odometerEnd !== undefined 
+                                ? <span style={{ color: '#52c41a', fontWeight: 600 }}>{odometerEnd} km</span>
+                                : <span style={{ color: '#999' }}>Chưa có</span>
+                              }
+                            </Descriptions.Item>
+                            <Descriptions.Item 
+                              label={
+                                <span>
+                                  <ThunderboltOutlined style={{ marginRight: 4, color: '#faad14' }} />
+                                  % Pin
+                                </span>
+                              }
+                            >
+                              {batteryLevelEnd !== null && batteryLevelEnd !== undefined 
+                                ? <span style={{ color: '#52c41a', fontWeight: 600 }}>{batteryLevelEnd}%</span>
+                                : <span style={{ color: '#999' }}>Chưa có</span>
+                              }
+                            </Descriptions.Item>
+                            <Descriptions.Item 
+                              label={
+                                <span>
+                                  <CheckCircleOutlined style={{ marginRight: 4, color: '#52c41a' }} />
+                                  Tình trạng
+                                </span>
+                              }
+                            >
+                              <Tag color={vehicleConditionEnd === 'ok' || vehicleConditionEnd === 'OK' ? 'green' : 'orange'}>
+                                {vehicleConditionEnd}
+                              </Tag>
+                            </Descriptions.Item>
+                          </Descriptions>
+                        </Card>
+                        {images.length > 0 ? (
+                          <div>
+                            <div style={{ marginBottom: 8, fontSize: 13, color: '#666' }}>
+                              <PictureOutlined style={{ marginRight: 4 }} />
+                              {images.length} hình ảnh
+                            </div>
+                            <Space wrap size="small">
+                              {images.map((img, index) => (
+                                <Image
+                                  key={index}
+                                  src={img}
+                                  alt={`Trả xe ${index + 1}`}
+                                  width={180}
+                                  height={120}
+                                  style={{ objectFit: 'cover', borderRadius: 8, border: '1px solid #d9d9d9' }}
+                                  preview={{
+                                    mask: 'Xem ảnh',
+                                    maskClassName: 'custom-preview-mask'
+                                  }}
+                                />
+                              ))}
+                            </Space>
+                          </div>
+                        ) : (
+                          <Alert
+                            message="Không có hình ảnh"
+                            type="info"
+                            showIcon
+                            style={{ marginTop: 8 }}
+                          />
+                        )}
+                      </div>
+                    );
+                  })() : (
+                    <Alert
+                      message="Chưa có lịch sử trả xe"
+                      type="warning"
+                      showIcon
+                    />
+                  )}
+                </div>
+              </div>
+            </Card>
+          </div>
+        </Modal>
+      )}
     </>
   );
 }

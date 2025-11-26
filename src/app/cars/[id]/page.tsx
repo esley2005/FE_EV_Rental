@@ -288,18 +288,31 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
     setCarLocationsLoading(true);
 
     try {
-      let relations = extractCarRentalLocationList(carData);
-
-      if (!relations.length) {
-        console.log('[Car Detail] loadCarLocations: No carRentalLocations in car data, fetching via carRentalLocationApi...');
+      // Sử dụng rentalLocationId từ Car object thay vì carRentalLocationApi
+      let relations: any[] = [];
+      
+      // Nếu car có rentalLocationId, fetch location info
+      if (carData.rentalLocationId) {
         try {
-          const relationResponse = await carRentalLocationApi.getByCarId(Number(carData.id));
-          if (relationResponse.success && relationResponse.data) {
-            relations = extractCarRentalLocationList({ carRentalLocations: relationResponse.data });
+          const locationResponse = await rentalLocationApi.getById(carData.rentalLocationId);
+          if (locationResponse.success && locationResponse.data) {
+            const location = locationResponse.data;
+            // Tạo relation object tương thích với code cũ
+            relations = [{
+              rentalLocationId: location.id,
+              RentalLocationId: location.id,
+              rentalLocation: location,
+              RentalLocation: location
+            }];
           }
         } catch (error) {
-          console.warn('[Car Detail] loadCarLocations: Failed to load carRentalLocations via API', error);
+          console.warn('[Car Detail] loadCarLocations: Failed to load location via rentalLocationId', error);
         }
+      }
+      
+      // Fallback: thử extract từ carRentalLocations nếu có (backward compatibility)
+      if (!relations.length) {
+        relations = extractCarRentalLocationList(carData);
       }
 
       if (!relations.length) {

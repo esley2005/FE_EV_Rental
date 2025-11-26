@@ -18,7 +18,10 @@ import {
   Form,
   Upload,
   Alert,
-  Radio
+  Radio,
+  Divider,
+  Row,
+  Col
 } from "antd";
 import type { UploadFile } from "antd/es/upload/interface";
 import { 
@@ -35,9 +38,12 @@ import {
   EditOutlined,
   EnvironmentOutlined,
   FileTextOutlined,
-  ExclamationCircleOutlined
+  ExclamationCircleOutlined,
+  DashboardOutlined,
+  ThunderboltOutlined,
+  PictureOutlined
 } from "@ant-design/icons";
-import { rentalOrderApi, carsApi, authApi, driverLicenseApi, citizenIdApi, paymentApi, carDeliveryHistoryApi, carReturnHistoryApi, rentalLocationApi, carRentalLocationApi } from "@/services/api";
+import { rentalOrderApi, carsApi, authApi, driverLicenseApi, citizenIdApi, paymentApi, carDeliveryHistoryApi, carReturnHistoryApi, rentalLocationApi } from "@/services/api";
 import type { RentalOrderData, User, DriverLicenseData, CitizenIdData, RentalLocationData } from "@/services/api";
 import type { Car } from "@/types/car";
 import dayjs from "dayjs";
@@ -205,22 +211,23 @@ export default function RentalOrderManagement() {
       
       setRentalLocations(locationsData);
 
-      // Load car rental locations cho tất cả xe
+      // Load car rental locations cho tất cả xe - sử dụng rentalLocationId từ Car
       const carsWithLocations = await Promise.all(
         cars.map(async (car) => {
-          try {
-            const locationResponse = await carRentalLocationApi.getByCarId(car.id);
-            if (locationResponse.success && locationResponse.data) {
-              const locationsData = Array.isArray(locationResponse.data)
-                ? locationResponse.data
-                : (locationResponse.data as any)?.$values || [];
-              return {
-                ...car,
-                carRentalLocations: locationsData
-              };
+          // Car đã có rentalLocationId, không cần gọi carRentalLocationApi nữa
+          if (car.rentalLocationId) {
+            try {
+              const locationResponse = await rentalLocationApi.getById(car.rentalLocationId);
+              if (locationResponse.success && locationResponse.data) {
+                const location = locationResponse.data;
+                return {
+                  ...car,
+                  currentLocation: location
+                };
+              }
+            } catch (error) {
+              // Location không tồn tại hoặc lỗi
             }
-          } catch (error) {
-            // 404 là bình thường nếu xe chưa có location
           }
           return car;
         })
@@ -373,7 +380,7 @@ export default function RentalOrderManagement() {
   // Xử lý giao xe (Bắt đầu thuê)
   const handleDelivery = async (values: any) => {
     if (!selectedOrderForAction || !selectedOrderForAction.car || !selectedOrderForAction.user) {
-      message.error('Thiếu thông tin đơn hàng, xe hoặc người dùng');
+      message.error('Thiếu thông tin đơn hàng, xe hoặc khách hàng');
       return;
     }
 
@@ -947,7 +954,6 @@ export default function RentalOrderManagement() {
       title: "Mã đơn",
       key: "id",
       width: 100,
-      fixed: 'left' as const,
       render: (_: any, record: OrderWithDetails) => (
         <span className="font-semibold text-blue-600">#{record.id}</span>
       ),
@@ -956,7 +962,6 @@ export default function RentalOrderManagement() {
       title: "Trạng thái",
       key: "status",
       width: 200,
-      fixed: 'left' as const,
       render: (_: any, record: OrderWithDetails) => {
         const statusTag = getOrderStatusTag(record);
         
@@ -1020,7 +1025,7 @@ export default function RentalOrderManagement() {
       },
     },
     {
-      title: "Người dùng",
+      title: "Khách hàng",
       key: "user",
       width: 180,
       render: (_: any, record: OrderWithDetails) => {
@@ -1052,33 +1057,8 @@ export default function RentalOrderManagement() {
         );
       },
     },
-    {
-      title: "Tiền Giữ Chỗ",
-      key: "bookingFee",
-      width: 130,
-      render: (_: any, record: OrderWithDetails) => {
-        // Tiền giữ chỗ có thể là deposit ban đầu hoặc booking fee
-        const bookingFee = record.deposit || 0;
-        return (
-          <span className="font-semibold text-blue-600">
-            {bookingFee.toLocaleString("vi-VN")} ₫
-          </span>
-        );
-      },
-    },
-    {
-      title: "Tiền Cọc",
-      key: "deposit",
-      width: 130,
-      render: (_: any, record: OrderWithDetails) => {
-        const deposit = record.deposit || 0;
-        return (
-          <span className="font-semibold text-orange-600">
-            {deposit.toLocaleString("vi-VN")} ₫
-          </span>
-        );
-      },
-    },
+   
+   
     {
       title: "Tiền Thuê",
       key: "total",
@@ -1095,82 +1075,170 @@ export default function RentalOrderManagement() {
     {
       title: "Hành động",
       key: "actions",
-      width: 250,
+      width: 280,
       fixed: 'right' as const,
       render: (_: any, record: OrderWithDetails) => {
         const statusNum = getStatusNumber(record.status);
         
         return (
-          <Space size="small">
-            <Button
-              type="link"
-              size="small"
-              icon={<EyeOutlined />}
-              onClick={() => {
-                setSelectedOrder(record);
-                setDetailModalVisible(true);
-              }}
-            >
-              Chi tiết
-            </Button>
-            {(record.driverLicense || record.citizenIdDoc) && (
+          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+            <Space size="small" wrap>
               <Button
                 type="link"
                 size="small"
-                icon={<IdcardOutlined />}
-                onClick={() => showDocumentVerificationModal(record)}
-              >
-                Giấy tờ
-              </Button>
-            )}
-            {/* Nút Cập nhật tình trạng xe - chỉ hiển thị khi status là OrderDepositConfirmed (1) */}
-            {statusNum === RentalOrderStatus.OrderDepositConfirmed && (
-              <Button
-                type="primary"
-                size="small"
-                icon={<CarOutlined />}
+                icon={<EyeOutlined />}
                 onClick={() => {
-                  setSelectedOrderForAction(record);
-                  setDeliveryModalVisible(true);
+                  setSelectedOrder(record);
+                  setDetailModalVisible(true);
                 }}
               >
-                Cập nhật tình trạng xe
+                Chi tiết
               </Button>
-            )}
-            {/* Nút Xác nhận thế chấp - chỉ hiển thị khi status là CheckedIn (2) */}
-            {statusNum === RentalOrderStatus.CheckedIn && (
-              <Button
-                type="primary"
-                size="small"
-                icon={<DollarOutlined />}
-                onClick={() => handleConfirmDepositCollateral(record)}
-              >
-                Xác nhận thế chấp
-              </Button>
-            )}
-            {/* Nút Trả xe - chỉ hiển thị khi status là Renting (3) -> chuyển sang Returned (4) */}
-            {statusNum === RentalOrderStatus.Renting && (
-              <Button
-                type="primary"
-                size="small"
-                icon={<CarOutlined />}
-                onClick={() => handleStatusChange(record.id, RentalOrderStatus.Returned)}
-              >
-                Trả xe
-              </Button>
-            )}
-            {/* Nút Hoàn thành - chỉ hiển thị khi status là PaymentPending (5) */}
-            {statusNum === RentalOrderStatus.PaymentPending && (
-              <Button
-                type="primary"
-                size="small"
-                icon={<CheckCircleOutlined />}
-                onClick={() => handleStatusChange(record.id, RentalOrderStatus.Completed)}
-              >
-                Hoàn thành
-              </Button>
-            )}
-            {/* Nút Hủy đơn - hiển thị khi có thể hủy */}
+              {(record.driverLicense || record.citizenIdDoc) && (
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<IdcardOutlined />}
+                  onClick={() => showDocumentVerificationModal(record)}
+                >
+                  Giấy tờ
+                </Button>
+              )}
+              {/* Nút Cập nhật tình trạng xe - chỉ hiển thị khi status là OrderDepositConfirmed (1) */}
+              {statusNum === RentalOrderStatus.OrderDepositConfirmed && (
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<CarOutlined />}
+                  onClick={() => {
+                    setSelectedOrderForAction(record);
+                    setDeliveryModalVisible(true);
+                  }}
+                >
+                  Cập nhật tình trạng xe
+                </Button>
+              )}
+              {/* Nút Xác nhận thế chấp - chỉ hiển thị khi status là CheckedIn (2) */}
+              {statusNum === RentalOrderStatus.CheckedIn && (
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<DollarOutlined />}
+                  onClick={() => handleConfirmDepositCollateral(record)}
+                >
+                  Xác nhận thế chấp
+                </Button>
+              )}
+              {/* Nút Trả xe - chỉ hiển thị khi status là Renting (3) -> chuyển sang Returned (4) */}
+              {statusNum === RentalOrderStatus.Renting && (
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<CarOutlined />}
+                  onClick={() => handleStatusChange(record.id, RentalOrderStatus.Returned)}
+                >
+                  Trả xe
+                </Button>
+              )}
+              {/* Nút Xác nhận TT - chỉ hiển thị khi status là PaymentPending (5) */}
+              {statusNum === RentalOrderStatus.PaymentPending && (
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => handleConfirmPayment(record)}
+                >
+                  Xác nhận TT
+                </Button>
+              )}
+              {/* Nút Hoàn thành - chỉ hiển thị khi status là PaymentPending (5) */}
+              {statusNum === RentalOrderStatus.PaymentPending && (
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => handleStatusChange(record.id, RentalOrderStatus.Completed)}
+                >
+                  Hoàn thành
+                </Button>
+              )}
+              {statusNum === RentalOrderStatus.Returned && (
+                <>
+                <Button
+                  type="link"
+                  size="small"
+                  onClick={() => {
+                    setSelectedOrder(record);
+                    setUpdateTotalModalVisible(true);
+                  }}
+                >
+                  Cập nhật tổng
+                </Button>
+                  <Button
+                    type="primary"
+                    size="small"
+                    icon={<CheckCircleOutlined />}
+                    onClick={() => handleConfirmTotal(record.id)}
+                  >
+                    Xác nhận Chi phí
+                  </Button>
+                </>
+              )}
+              {/* Nút Trả tiền thế chấp - chỉ hiển thị khi status là RefundDepositCar (6) */}
+              {statusNum === RentalOrderStatus.RefundDepositCar && (
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<DollarOutlined />}
+                  onClick={() => {
+                    setSelectedOrderForAction(record);
+                    setPaymentMethodForRefund('cash');
+                    setRefundDepositImageFileList([]);
+                    refundDepositForm.resetFields();
+                    setRefundDepositModalVisible(true);
+                  }}
+                >
+                  Trả tiền thế chấp
+                </Button>
+              )}
+              {/* Nút Xem lịch sử - chỉ hiển thị khi status là Completed (9) */}
+              {statusNum === RentalOrderStatus.Completed && (
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<FileTextOutlined />}
+                  onClick={async () => {
+                    setSelectedOrder(record);
+                    setHistoryModalVisible(true);
+                    // Load lịch sử payments, delivery và return history
+                    try {
+                      setLoading(true);
+                      const [paymentsResponse, deliveryResponse, returnResponse] = await Promise.all([
+                        rentalOrderApi.getByOrderWithPayments(record.id),
+                        carDeliveryHistoryApi.getByOrderId(record.id),
+                        carReturnHistoryApi.getByOrderId(record.id)
+                      ]);
+                      
+                      setOrderHistory({
+                        deliveryHistory: deliveryResponse.success ? deliveryResponse.data : null,
+                        returnHistory: returnResponse.success ? returnResponse.data : null,
+                        payments: paymentsResponse.success && paymentsResponse.data?.payments?.$values 
+                          ? paymentsResponse.data.payments.$values 
+                          : []
+                      });
+                    } catch (error) {
+                      console.error('Error loading order history:', error);
+                      message.error('Không thể tải lịch sử đơn hàng');
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                >
+                  Xem lịch sử
+                </Button>
+              )}
+            </Space>
+            {/* Nút Hủy đơn - hiển thị khi có thể hủy, xuống dòng riêng */}
             {(statusNum === RentalOrderStatus.Pending ||
               statusNum === RentalOrderStatus.OrderDepositConfirmed ||
               statusNum === RentalOrderStatus.CheckedIn ||
@@ -1191,91 +1259,6 @@ export default function RentalOrderManagement() {
                 </Button>
               </Popconfirm>
             )}
-            {statusNum === RentalOrderStatus.Returned && (
-              <>
-              <Button
-                type="link"
-                size="small"
-                onClick={() => {
-                  setSelectedOrder(record);
-                  setUpdateTotalModalVisible(true);
-                }}
-              >
-                Cập nhật tổng
-              </Button>
-                <Button
-                  type="primary"
-                  size="small"
-                  icon={<CheckCircleOutlined />}
-                  onClick={() => handleConfirmTotal(record.id)}
-                >
-                  Xác nhận Chi phí
-                </Button>
-              </>
-            )}
-            {statusNum === RentalOrderStatus.PaymentPending && (
-              <Button
-                type="primary"
-                size="small"
-                icon={<CheckCircleOutlined />}
-                onClick={() => handleConfirmPayment(record)}
-              >
-                Xác nhận TT
-              </Button>
-            )}
-            {/* Nút Trả tiền thế chấp - chỉ hiển thị khi status là RefundDepositCar (6) */}
-            {statusNum === RentalOrderStatus.RefundDepositCar && (
-              <Button
-                type="primary"
-                size="small"
-                icon={<DollarOutlined />}
-                onClick={() => {
-                  setSelectedOrderForAction(record);
-                  setPaymentMethodForRefund('cash');
-                  setRefundDepositImageFileList([]);
-                  refundDepositForm.resetFields();
-                  setRefundDepositModalVisible(true);
-                }}
-              >
-                Trả tiền thế chấp
-              </Button>
-            )}
-            {/* Nút Xem lịch sử - chỉ hiển thị khi status là Completed (9) */}
-            {statusNum === RentalOrderStatus.Completed && (
-              <Button
-                type="primary"
-                size="small"
-                icon={<FileTextOutlined />}
-                onClick={async () => {
-                  setSelectedOrder(record);
-                  setHistoryModalVisible(true);
-                  // Load lịch sử payments, delivery và return history
-                  try {
-                    setLoading(true);
-                    const [paymentsResponse, deliveryResponse, returnResponse] = await Promise.all([
-                      rentalOrderApi.getByOrderWithPayments(record.id),
-                      carDeliveryHistoryApi.getByOrderId(record.id),
-                      carReturnHistoryApi.getByOrderId(record.id)
-                    ]);
-                    
-                    setOrderHistory({
-                      deliveryHistory: deliveryResponse.success ? deliveryResponse.data : null,
-                      returnHistory: returnResponse.success ? returnResponse.data : null,
-                      payments: paymentsResponse.success && paymentsResponse.data?.payments?.$values 
-                        ? paymentsResponse.data.payments.$values 
-                        : []
-                    });
-                  } catch (error) {
-                    console.error('Error loading order history:', error);
-                    message.error('Không thể tải lịch sử đơn hàng');
-                  } finally {
-                    setLoading(false);
-                  }
-                }}
-              >
-                Xem lịch sử
-              </Button>
-            )}
           </Space>
         );
       },
@@ -1286,7 +1269,7 @@ export default function RentalOrderManagement() {
     <div>
       <Space style={{ marginBottom: 12 }}>
         <Input
-          placeholder="Tìm theo mã đơn, tên xe, người dùng, địa điểm..."
+          placeholder="Tìm theo mã đơn, tên xe, khách hàng, địa điểm..."
           allowClear
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -1312,14 +1295,64 @@ export default function RentalOrderManagement() {
         />
       </Space>
 
-      <Table<OrderWithDetails>
-        loading={loading}
-        dataSource={filtered}
-        columns={columns}
-        rowKey="id"
-        pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `Tổng ${total} đơn hàng` }}
-        scroll={{ x: 1800 }}
-      />
+      <div style={{ position: 'relative', width: '100%', overflow: 'hidden' }}>
+        <style jsx global>{`
+          /* Custom scrollbar cho bảng */
+          .ant-table-wrapper .ant-table-body::-webkit-scrollbar {
+            height: 12px;
+          }
+          .ant-table-wrapper .ant-table-body::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 6px;
+          }
+          .ant-table-wrapper .ant-table-body::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 6px;
+          }
+          .ant-table-wrapper .ant-table-body::-webkit-scrollbar-thumb:hover {
+            background: #555;
+          }
+          /* Cố định thanh cuộn ngang - luôn hiển thị ở dưới cùng */
+          .ant-table-wrapper .ant-table-container {
+            position: relative;
+          }
+          .ant-table-wrapper .ant-table-body {
+            position: relative;
+          }
+          /* Đảm bảo thanh cuộn ngang luôn hiển thị */
+          .ant-table-wrapper .ant-table-body-outer {
+            position: sticky;
+            bottom: 0;
+            z-index: 10;
+            background: #fff;
+          }
+          .ant-table-wrapper .ant-table-body-outer .ant-table-body-inner {
+            overflow-x: auto !important;
+            overflow-y: visible !important;
+          }
+          /* Cố định header khi scroll */
+          .ant-table-wrapper .ant-table-thead > tr > th {
+            position: sticky;
+            top: 0;
+            z-index: 11;
+            background: #fafafa;
+          }
+          /* Đảm bảo table wrapper không bị tràn */
+          .ant-table-wrapper {
+            width: 100%;
+            overflow-x: auto;
+          }
+        `}</style>
+        <Table<OrderWithDetails>
+          loading={loading}
+          dataSource={filtered}
+          columns={columns}
+          rowKey="id"
+          pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `Tổng ${total} đơn hàng` }}
+          scroll={{ x: 'max-content' }}
+          style={{ width: '100%' }}
+        />
+      </div>
 
       {/* Detail Modal */}
       {selectedOrder && (
@@ -1387,14 +1420,14 @@ export default function RentalOrderManagement() {
               ) : selectedOrder.userId ? (
                 <div className="text-yellow-600">
                   <Alert
-                    message="Đang tải thông tin người dùng..."
+                    message="Đang tải thông tin khách hàng..."
                     description={`User ID: ${selectedOrder.userId}`}
                     type="warning"
                     showIcon
                   />
                 </div>
               ) : (
-                <div className="text-gray-500">Không có thông tin người dùng</div>
+                <div className="text-gray-500">Không có thông tin khách hàng</div>
               )}
             </Card>
 
@@ -1430,7 +1463,7 @@ export default function RentalOrderManagement() {
             <Card title="Chi tiết đơn hàng" size="small">
               <Descriptions column={2} size="small">
                 <Descriptions.Item label="Mã đơn hàng">#{selectedOrder.id}</Descriptions.Item>
-                <Descriptions.Item label="Số điện thoại">{selectedOrder.phoneNumber || '-'}</Descriptions.Item>
+            
                 <Descriptions.Item label="Ngày đặt">{formatVietnamTime(selectedOrder.orderDate || selectedOrder.createdAt)}</Descriptions.Item>
                 <Descriptions.Item label="Có tài xế">
                   {selectedOrder.withDriver ? <Tag color="blue">Có</Tag> : <Tag color="default">Không</Tag>}
@@ -1447,7 +1480,7 @@ export default function RentalOrderManagement() {
                   )}
                 </Descriptions.Item>
                 {selectedOrder.subTotal && (
-                  <Descriptions.Item label="Tổng phụ">
+                  <Descriptions.Item label="Tổng phụ phí">
                     <span className="font-semibold">
                       {selectedOrder.subTotal.toLocaleString('vi-VN')} VNĐ
                     </span>
@@ -2788,13 +2821,17 @@ export default function RentalOrderManagement() {
                   </>
                 )}
                 {selectedOrder.location && (
-                  <Descriptions.Item label="Địa điểm nhận xe" span={2}>
-                    {selectedOrder.location.name} - {selectedOrder.location.address}
-                  </Descriptions.Item>
-                )}
-                {selectedOrder.subTotal && (
-                  <Descriptions.Item label="Tổng phụ">
-                    {selectedOrder.subTotal.toLocaleString('vi-VN')} VNĐ
+                  <Descriptions.Item label="Địa điểm nhận xe">
+                    <div>
+                      <div style={{ fontWeight: 500, marginBottom: 4 }}>
+                        {selectedOrder.location.name}
+                      </div>
+                      {selectedOrder.location.address && (
+                        <div style={{ fontSize: '13px', color: '#666' }}>
+                          {selectedOrder.location.address}
+                        </div>
+                      )}
+                    </div>
                   </Descriptions.Item>
                 )}
                 {selectedOrder.deposit && (
@@ -2802,19 +2839,51 @@ export default function RentalOrderManagement() {
                     {selectedOrder.deposit.toLocaleString('vi-VN')} VNĐ
                   </Descriptions.Item>
                 )}
+              </Descriptions>
+            </Card>
+
+            {/* Chi phí - Tách riêng để rõ ràng */}
+            <Card title="Chi phí" size="small" style={{ marginTop: 16 }}>
+              <Descriptions column={2} size="small">
                 {selectedOrder.extraFee && (
                   <Descriptions.Item label="Phí phát sinh">
-                    {selectedOrder.extraFee.toLocaleString('vi-VN')} VNĐ
+                    <span style={{ color: '#fa8c16', fontWeight: 600 }}>
+                      {selectedOrder.extraFee.toLocaleString('vi-VN')} VNĐ
+                    </span>
                   </Descriptions.Item>
                 )}
                 {selectedOrder.damageFee && (
                   <Descriptions.Item label="Phí hư hỏng">
-                    {selectedOrder.damageFee.toLocaleString('vi-VN')} VNĐ
+                    <span style={{ color: '#ff4d4f', fontWeight: 600 }}>
+                      {selectedOrder.damageFee.toLocaleString('vi-VN')} VNĐ
+                    </span>
+                  </Descriptions.Item>
+                )}
+                {selectedOrder.damageNotes && (
+                  <Descriptions.Item label="Ghi chú hư hỏng">
+                    <div style={{ 
+                      color: '#fa8c16',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word'
+                    }}>
+                      {selectedOrder.damageNotes}
+                    </div>
+                  </Descriptions.Item>
+                )}
+                {selectedOrder.subTotal && (
+                  <Descriptions.Item label="Tổng phụ phí">
+                    <span style={{ fontWeight: 600 }}>
+                      {selectedOrder.subTotal.toLocaleString('vi-VN')} VNĐ
+                    </span>
                   </Descriptions.Item>
                 )}
                 {selectedOrder.total && (
-                  <Descriptions.Item label="Tổng tiền">
-                    <span className="font-semibold text-green-600">
+                  <Descriptions.Item label="Tổng tiền" span={2}>
+                    <span style={{ 
+                      fontSize: '18px',
+                      fontWeight: 700,
+                      color: '#52c41a'
+                    }}>
                       {selectedOrder.total.toLocaleString('vi-VN')} VNĐ
                     </span>
                   </Descriptions.Item>
@@ -2837,9 +2906,12 @@ export default function RentalOrderManagement() {
                       key: 'paymentType',
                       render: (text: string) => {
                         const typeMap: Record<string, string> = {
-                          'OrderDeposit': 'Tiền giữ chỗ',
+                          'OrderDeposit': 'Cọc giữ Xe',
                           'CarDeposit': 'Cọc xe',
+                          'Deposit': 'Thế Chấp',
                           'RentalFee': 'Tiền thuê',
+                          'OrderPayment': 'Tổng tiền thuê',
+                          'OrderPayMent': 'Tổng tiền thuê',
                           'RefundDepositCar': 'Hoàn cọc xe',
                           'RefundDepositOrder': 'Hoàn cọc đơn',
                         };
@@ -2860,6 +2932,15 @@ export default function RentalOrderManagement() {
                       title: 'Phương thức',
                       dataIndex: 'paymentMethod',
                       key: 'paymentMethod',
+                      render: (method: string) => {
+                        const methodMap: Record<string, string> = {
+                          'Direct': 'Chuyển Khoản',
+                          'VNPAY': 'VNPAY',
+                          'bank_transfer': 'Chuyển khoản',
+                          'cash': 'Tiền mặt',
+                        };
+                        return methodMap[method] || method;
+                      }
                     },
                     {
                       title: 'Ngày thanh toán',
@@ -2876,9 +2957,39 @@ export default function RentalOrderManagement() {
                           'Pending': { text: 'Chờ xử lý', color: 'orange' },
                           'Completed': { text: 'Hoàn thành', color: 'green' },
                           'Failed': { text: 'Thất bại', color: 'red' },
+                          'Refunded': { text: 'Đã hoàn', color: 'blue' },
                         };
                         const config = statusMap[status] || { text: status, color: 'default' };
                         return <Tag color={config.color}>{config.text}</Tag>;
+                      }
+                    },
+                    {
+                      title: 'Hình ảnh',
+                      key: 'image',
+                      width: 120,
+                      render: (_: unknown, record: { billingImageUrl?: string }) => {
+                        // Chỉ hiển thị ảnh khi có billingImageUrl
+                        if (record.billingImageUrl) {
+                          return (
+                            <Image
+                              src={record.billingImageUrl}
+                              alt="Chứng từ thanh toán"
+                              width={80}
+                              height={60}
+                              style={{ 
+                                objectFit: 'cover', 
+                                borderRadius: 4,
+                                cursor: 'pointer'
+                              }}
+                              fallback="/logo_ev.png"
+                              preview={{
+                                mask: 'Xem ảnh'
+                              }}
+                            />
+                          );
+                        }
+                        
+                        return <span style={{ color: '#999' }}>-</span>;
                       }
                     },
                   ]}
@@ -2887,17 +2998,19 @@ export default function RentalOrderManagement() {
             )}
 
             {/* Hình ảnh từ delivery và return history */}
-            <Card title="Hình ảnh" size="small">
-              <div className="space-y-4">
+            <Card title={<span><PictureOutlined style={{ marginRight: 8 }} />Thông tin giao nhận xe</span>} size="small">
+              <div className="space-y-6">
                 {/* Hình ảnh giao xe */}
                 <div>
-                  <h4 className="font-semibold mb-2">Hình ảnh khi giao xe</h4>
+                  <h4 className="font-semibold mb-3 text-base" style={{ color: '#1890ff' }}>
+                    <CarOutlined style={{ marginRight: 8 }} />Thông tin khi giao xe
+                  </h4>
                   {orderHistory?.deliveryHistory ? (() => {
                     const delivery = orderHistory.deliveryHistory;
                     // Xử lý cả camelCase và PascalCase
-                    const odometerStart = delivery.odometerStart || delivery.OdometerStart || '-';
-                    const batteryLevelStart = delivery.batteryLevelStart || delivery.BatteryLevelStart || '-';
-                    const vehicleConditionStart = delivery.vehicleConditionStart || delivery.VehicleConditionStart || '-';
+                    const odometerStart = delivery.odometerStart ?? delivery.OdometerStart;
+                    const batteryLevelStart = delivery.batteryLevelStart ?? delivery.BatteryLevelStart;
+                    const vehicleConditionStart = delivery.vehicleConditionStart || delivery.VehicleConditionStart || 'Chưa có';
                     const images = [
                       delivery.imageUrl || delivery.ImageUrl,
                       delivery.imageUrl2 || delivery.ImageUrl2,
@@ -2909,43 +3022,108 @@ export default function RentalOrderManagement() {
                     
                     return (
                       <div>
-                        <div className="mb-2 text-sm text-gray-600">
-                          <div>Số km: {odometerStart} km</div>
-                          <div>% Pin: {batteryLevelStart}%</div>
-                          <div>Tình trạng: {vehicleConditionStart}</div>
-                        </div>
+                        <Card size="small" style={{ marginBottom: 16, background: '#f5f5f5' }}>
+                          <Descriptions 
+                            column={1} 
+                            size="small"
+                            labelStyle={{ fontWeight: 600, width: '120px' }}
+                            contentStyle={{ fontWeight: 500 }}
+                          >
+                            <Descriptions.Item 
+                              label={
+                                <span>
+                                  <DashboardOutlined style={{ marginRight: 4, color: '#1890ff' }} />
+                                  Số km
+                                </span>
+                              }
+                            >
+                              {odometerStart !== null && odometerStart !== undefined 
+                                ? <span style={{ color: '#52c41a', fontWeight: 600 }}>{odometerStart} km</span>
+                                : <span style={{ color: '#999' }}>Chưa có</span>
+                              }
+                            </Descriptions.Item>
+                            <Descriptions.Item 
+                              label={
+                                <span>
+                                  <ThunderboltOutlined style={{ marginRight: 4, color: '#faad14' }} />
+                                  % Pin
+                                </span>
+                              }
+                            >
+                              {batteryLevelStart !== null && batteryLevelStart !== undefined 
+                                ? <span style={{ color: '#52c41a', fontWeight: 600 }}>{batteryLevelStart}%</span>
+                                : <span style={{ color: '#999' }}>Chưa có</span>
+                              }
+                            </Descriptions.Item>
+                            <Descriptions.Item 
+                              label={
+                                <span>
+                                  <CheckCircleOutlined style={{ marginRight: 4, color: '#52c41a' }} />
+                                  Tình trạng
+                                </span>
+                              }
+                            >
+                              <Tag color={vehicleConditionStart === 'ok' || vehicleConditionStart === 'OK' ? 'green' : 'orange'}>
+                                {vehicleConditionStart}
+                              </Tag>
+                            </Descriptions.Item>
+                          </Descriptions>
+                        </Card>
                         {images.length > 0 ? (
-                          <Space wrap>
-                            {images.map((img, index) => (
-                              <Image
-                                key={index}
-                                src={img}
-                                alt={`Giao xe ${index + 1}`}
-                                width={150}
-                                height={100}
-                                style={{ objectFit: 'cover', borderRadius: 8 }}
-                              />
-                            ))}
-                          </Space>
+                          <div>
+                            <div style={{ marginBottom: 8, fontSize: 13, color: '#666' }}>
+                              <PictureOutlined style={{ marginRight: 4 }} />
+                              {images.length} hình ảnh
+                            </div>
+                            <Space wrap size="small">
+                              {images.map((img, index) => (
+                                <Image
+                                  key={index}
+                                  src={img}
+                                  alt={`Giao xe ${index + 1}`}
+                                  width={180}
+                                  height={120}
+                                  style={{ objectFit: 'cover', borderRadius: 8, border: '1px solid #d9d9d9' }}
+                                  preview={{
+                                    mask: 'Xem ảnh',
+                                    maskClassName: 'custom-preview-mask'
+                                  }}
+                                />
+                              ))}
+                            </Space>
+                          </div>
                         ) : (
-                          <div className="text-gray-500 text-sm">Không có hình ảnh</div>
+                          <Alert
+                            message="Không có hình ảnh"
+                            type="info"
+                            showIcon
+                            style={{ marginTop: 8 }}
+                          />
                         )}
                       </div>
                     );
                   })() : (
-                    <div className="text-gray-500 text-sm">Chưa có lịch sử giao xe</div>
+                    <Alert
+                      message="Chưa có lịch sử giao xe"
+                      type="warning"
+                      showIcon
+                    />
                   )}
                 </div>
                 
+                <Divider />
+                
                 {/* Hình ảnh trả xe */}
                 <div>
-                  <h4 className="font-semibold mb-2">Hình ảnh khi trả xe</h4>
+                  <h4 className="font-semibold mb-3 text-base" style={{ color: '#ff4d4f' }}>
+                    <CarOutlined style={{ marginRight: 8 }} />Thông tin khi trả xe
+                  </h4>
                   {orderHistory?.returnHistory ? (() => {
                     const returnHistory = orderHistory.returnHistory;
                     // Xử lý cả camelCase và PascalCase
-                    const odometerEnd = returnHistory.odometerEnd || returnHistory.OdometerEnd || '-';
-                    const batteryLevelEnd = returnHistory.batteryLevelEnd || returnHistory.BatteryLevelEnd || '-';
-                    const vehicleConditionEnd = returnHistory.vehicleConditionEnd || returnHistory.VehicleConditionEnd || '-';
+                    const odometerEnd = returnHistory.odometerEnd ?? returnHistory.OdometerEnd;
+                    const batteryLevelEnd = returnHistory.batteryLevelEnd ?? returnHistory.BatteryLevelEnd;
+                    const vehicleConditionEnd = returnHistory.vehicleConditionEnd || returnHistory.VehicleConditionEnd || 'Chưa có';
                     const images = [
                       returnHistory.imageUrl || returnHistory.ImageUrl,
                       returnHistory.imageUrl2 || returnHistory.ImageUrl2,
@@ -2957,31 +3135,92 @@ export default function RentalOrderManagement() {
                     
                     return (
                       <div>
-                        <div className="mb-2 text-sm text-gray-600">
-                          <div>Số km: {odometerEnd} km</div>
-                          <div>% Pin: {batteryLevelEnd}%</div>
-                          <div>Tình trạng: {vehicleConditionEnd}</div>
-                        </div>
+                        <Card size="small" style={{ marginBottom: 16, background: '#f5f5f5' }}>
+                          <Descriptions 
+                            column={1} 
+                            size="small"
+                            labelStyle={{ fontWeight: 600, width: '120px' }}
+                            contentStyle={{ fontWeight: 500 }}
+                          >
+                            <Descriptions.Item 
+                              label={
+                                <span>
+                                  <DashboardOutlined style={{ marginRight: 4, color: '#1890ff' }} />
+                                  Số km
+                                </span>
+                              }
+                            >
+                              {odometerEnd !== null && odometerEnd !== undefined 
+                                ? <span style={{ color: '#52c41a', fontWeight: 600 }}>{odometerEnd} km</span>
+                                : <span style={{ color: '#999' }}>Chưa có</span>
+                              }
+                            </Descriptions.Item>
+                            <Descriptions.Item 
+                              label={
+                                <span>
+                                  <ThunderboltOutlined style={{ marginRight: 4, color: '#faad14' }} />
+                                  % Pin
+                                </span>
+                              }
+                            >
+                              {batteryLevelEnd !== null && batteryLevelEnd !== undefined 
+                                ? <span style={{ color: '#52c41a', fontWeight: 600 }}>{batteryLevelEnd}%</span>
+                                : <span style={{ color: '#999' }}>Chưa có</span>
+                              }
+                            </Descriptions.Item>
+                            <Descriptions.Item 
+                              label={
+                                <span>
+                                  <CheckCircleOutlined style={{ marginRight: 4, color: '#52c41a' }} />
+                                  Tình trạng
+                                </span>
+                              }
+                            >
+                              <Tag color={vehicleConditionEnd === 'ok' || vehicleConditionEnd === 'OK' ? 'green' : 'orange'}>
+                                {vehicleConditionEnd}
+                              </Tag>
+                            </Descriptions.Item>
+                          </Descriptions>
+                        </Card>
                         {images.length > 0 ? (
-                          <Space wrap>
-                            {images.map((img, index) => (
-                              <Image
-                                key={index}
-                                src={img}
-                                alt={`Trả xe ${index + 1}`}
-                                width={150}
-                                height={100}
-                                style={{ objectFit: 'cover', borderRadius: 8 }}
-                              />
-                            ))}
-                          </Space>
+                          <div>
+                            <div style={{ marginBottom: 8, fontSize: 13, color: '#666' }}>
+                              <PictureOutlined style={{ marginRight: 4 }} />
+                              {images.length} hình ảnh
+                            </div>
+                            <Space wrap size="small">
+                              {images.map((img, index) => (
+                                <Image
+                                  key={index}
+                                  src={img}
+                                  alt={`Trả xe ${index + 1}`}
+                                  width={180}
+                                  height={120}
+                                  style={{ objectFit: 'cover', borderRadius: 8, border: '1px solid #d9d9d9' }}
+                                  preview={{
+                                    mask: 'Xem ảnh',
+                                    maskClassName: 'custom-preview-mask'
+                                  }}
+                                />
+                              ))}
+                            </Space>
+                          </div>
                         ) : (
-                          <div className="text-gray-500 text-sm">Không có hình ảnh</div>
+                          <Alert
+                            message="Không có hình ảnh"
+                            type="info"
+                            showIcon
+                            style={{ marginTop: 8 }}
+                          />
                         )}
                       </div>
                     );
                   })() : (
-                    <div className="text-gray-500 text-sm">Chưa có lịch sử trả xe</div>
+                    <Alert
+                      message="Chưa có lịch sử trả xe"
+                      type="warning"
+                      showIcon
+                    />
                   )}
                 </div>
               </div>

@@ -376,9 +376,27 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         collapsed={collapsed}
         onCollapse={(value) => setCollapsed(value)}
         width={230}
-        style={{ background: "#fff", borderRight: "1px solid #e8e8e8" }}
+        style={{ 
+          background: "#fff", 
+          borderRight: "1px solid #e8e8e8",
+          position: "sticky",
+          top: 0,
+          height: "100vh",
+          overflow: "auto"
+        }}
       >
-        <div className="p-4 text-center font-bold text-gray-800 text-lg">{collapsed ? "EV" : "EV STAFF"}</div>
+        <div 
+          className="p-4 text-center font-bold text-gray-800 text-lg"
+          style={{
+            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            color: "#fff",
+            margin: collapsed ? "8px" : "0",
+            borderRadius: collapsed ? "8px" : "0",
+            padding: collapsed ? "12px 8px" : "16px"
+          }}
+        >
+          {collapsed ? "EV" : "EV STAFF"}
+        </div>
 
         <Menu
           mode="inline"
@@ -388,6 +406,10 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           onClick={(e) => {
             setSelectedModule(e.key);
             setSelectedSubMenu(subMenus[e.key]?.[0]?.key || "1");
+          }}
+          style={{
+            borderRight: "none",
+            paddingTop: "8px"
           }}
         />
       </Sider>

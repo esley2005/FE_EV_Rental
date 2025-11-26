@@ -1707,7 +1707,7 @@ export const rentalOrderApi = {
 export const carDeliveryHistoryApi = {
   // Lấy lịch sử giao xe theo orderId
   getByOrderId: (orderId: number) => {
-    return apiCall<any>(`/CarDeliveryHistory/GetByOrderId?orderId=${orderId}`, {
+    return apiCall<any>(`/CarDeliveryHistory/ByOrderId/${orderId}`, {
       method: 'GET',
     });
   },
@@ -1975,7 +1975,7 @@ export const paymentApi = {
 export const carReturnHistoryApi = {
   // Lấy lịch sử trả xe theo orderId
   getByOrderId: (orderId: number) => {
-    return apiCall<any>(`/CarReturnHistory/GetByOrderId?orderId=${orderId}`, {
+    return apiCall<any>(`/CarReturnHistory/ByOrderId/${orderId}`, {
       method: 'GET',
     });
   },

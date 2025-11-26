@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useMemo } from "react";
 import { Card, Table, Select, Button, Tag, Space, message, Spin } from "antd";
-import { carsApi, rentalLocationApi, carRentalLocationApi } from "@/services/api";
+import { carsApi, rentalLocationApi } from "@/services/api";
 import type { Car } from "@/types/car";
 
 interface LocationOption { value: number; label: string }
@@ -42,21 +42,24 @@ export default function VehicleDispatch() {
       }
 
       // Fetch locations per car if missing
+      // Car đã có rentalLocationId, không cần gọi carRentalLocationApi nữa
       const carsWithLocations = await Promise.all(
         rawCars.map(async (car) => {
-          try {
-            const hasLocs = car.carRentalLocations && (Array.isArray(car.carRentalLocations) || (car as any).carRentalLocations?.$values);
-            if (!hasLocs) {
-              const relRes = await carRentalLocationApi.getByCarId(car.id);
-              if (relRes.success && relRes.data) {
-                const rels = normalizeDotNetList<any>(relRes.data);
-                return { ...car, carRentalLocations: rels };
+          // Sử dụng rentalLocationId từ Car object
+          if (car.rentalLocationId) {
+            try {
+              const locationResponse = await rentalLocationApi.getById(car.rentalLocationId);
+              if (locationResponse.success && locationResponse.data) {
+                return { 
+                  ...car, 
+                  currentLocation: locationResponse.data 
+                };
               }
+            } catch (err) {
+              // Location không tồn tại hoặc lỗi
             }
-            return car;
-          } catch (err) {
-            return car; // silent fail per car
           }
+          return car;
         })
       );
 

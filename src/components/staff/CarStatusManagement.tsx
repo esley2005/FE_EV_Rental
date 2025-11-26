@@ -20,9 +20,9 @@ import {
   UserOutlined,
   CloseCircleOutlined,
 } from "@ant-design/icons";
-import { carsApi, rentalOrderApi, authApi, rentalLocationApi, carRentalLocationApi, paymentApi } from "@/services/api";
+import { carsApi, rentalOrderApi, authApi, rentalLocationApi, paymentApi } from "@/services/api";
 import type { Car } from "@/types/car";
-import type { RentalOrderData, RentalLocationData, CarRentalLocationData, PaymentData } from "@/services/api";
+import type { RentalOrderData, RentalLocationData, PaymentData } from "@/services/api";
 import dayjs from "dayjs";
 import { MapPin } from "lucide-react";
 
@@ -92,23 +92,24 @@ export default function CarStatusManagement() {
       setPayments(paymentsList);
 
       // Load car rental locations cho tất cả xe
+      // Car đã có rentalLocationId, không cần gọi carRentalLocationApi nữa
       const carsWithLocations = await Promise.all(
         carsList
           .filter((car: Car) => !car.isDeleted)
           .map(async (car: Car) => {
-            try {
-              const locationResponse = await carRentalLocationApi.getByCarId(car.id);
-              if (locationResponse.success && locationResponse.data) {
-                const locationsData = Array.isArray(locationResponse.data)
-                  ? locationResponse.data
-                  : (locationResponse.data as any)?.$values || [];
-                return {
-                  ...car,
-                  carRentalLocations: locationsData
-                };
+            // Sử dụng rentalLocationId từ Car object
+            if (car.rentalLocationId) {
+              try {
+                const locationResponse = await rentalLocationApi.getById(car.rentalLocationId);
+                if (locationResponse.success && locationResponse.data) {
+                  return {
+                    ...car,
+                    currentLocation: locationResponse.data
+                  };
+                }
+              } catch (error) {
+                // Location không tồn tại hoặc lỗi
               }
-            } catch (error) {
-              // 404 là bình thường nếu xe chưa có location
             }
             return car;
           })

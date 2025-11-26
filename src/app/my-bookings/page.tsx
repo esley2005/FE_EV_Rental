@@ -1400,23 +1400,7 @@ export default function MyBookingsPage() {
           feedbackForm.resetFields();
         }}
         footer={[
-          selectedBooking && canPayDeposit(selectedBooking) && (
-            <Button
-              key="pay-deposit"
-              type="primary"
-              icon={<DollarOutlined />}
-              onClick={() => {
-                if (selectedBooking) {
-                  handlePayDeposit(selectedBooking);
-                }
-              }}
-              loading={loading}
-              className="bg-red-600 hover:bg-red-700 text-base font-bold"
-              size="large"
-            >
-              💳 Thanh toán cọc ngay
-            </Button>
-          ),
+         
           selectedBooking && canCancelWithRefund(selectedBooking) && (
             <Popconfirm
               key="cancel-refund"
