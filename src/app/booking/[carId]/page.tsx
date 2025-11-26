@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { Form, Input, DatePicker, Button, message, Checkbox, Radio, notification, Alert, Modal } from "antd";
-import { Calendar, MapPin, Phone, User as UserIcon, Search, Car as CarIcon, FileText, Download, Percent, Info, UserCheck } from "lucide-react";
+import { Calendar, MapPin, Phone, User as UserIcon, Search, Car as CarIcon, FileText, Download, Percent, Info, UserCheck, ExternalLink } from "lucide-react";
 import dayjs, { Dayjs } from "dayjs";
 import isSameOrAfter from "dayjs/plugin/isSameOrAfter";
 import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
@@ -1296,6 +1296,24 @@ export default function BookingPage() {
               <span className="text-lg font-bold text-gray-900">Thành tiền</span>
               <span className="text-2xl font-bold text-gray-900">{formatCurrency(total)}</span>
             </div> */}
+
+            {/* Nút xem hợp đồng online */}
+            <a
+              href="https://docs.google.com/document/d/1l1Lql4xHQX0jKQqoOP32zNk-Zdk6ja9Z30YS-O4dcfg/edit?tab=t.0"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full mb-4"
+            >
+              <Button
+                type="default"
+                size="large"
+                className="w-full h-12 border-2 border-blue-500 text-blue-600 hover:bg-blue-50 hover:border-blue-600 text-lg font-semibold flex items-center justify-center gap-2"
+                icon={<FileText className="w-5 h-5" />}
+              >
+                Xem hợp đồng online
+                <ExternalLink className="w-4 h-4" />
+              </Button>
+            </a>
 
             <Button
               type="primary"
