@@ -1487,6 +1487,10 @@ export interface RentalOrderData {
   actualReturnTime?: string;
   subTotal?: number;
   deposit?: number;
+  depositOrder?: number; // Tiền giữ chỗ (DepositOrder từ backend)
+  depositCar?: number; // Tiền cọc xe (DepositCar từ backend)
+  DepositOrder?: number; // PascalCase từ backend
+  DepositCar?: number; // PascalCase từ backend
   total?: number;
   discount?: number;
   extraFee?: number;

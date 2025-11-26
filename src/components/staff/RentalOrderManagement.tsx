@@ -1174,27 +1174,28 @@ export default function RentalOrderManagement() {
     },
     {
       title: "Tiền Giữ Chỗ",
-      key: "bookingFee",
+      key: "depositOrder",
       width: 130,
       render: (_: any, record: OrderWithDetails) => {
-        // Tiền giữ chỗ có thể là deposit ban đầu hoặc booking fee
-        const bookingFee = record.deposit || 0;
+        // Tiền giữ chỗ là DepositOrder (tiền cọc đơn hàng)
+        const depositOrder = record.depositOrder || record.DepositOrder || 0;
         return (
           <span className="font-semibold text-blue-600">
-            {bookingFee.toLocaleString("vi-VN")} ₫
+            {depositOrder.toLocaleString("vi-VN")} ₫
           </span>
         );
       },
     },
     {
       title: "Tiền Cọc",
-      key: "deposit",
+      key: "depositCar",
       width: 130,
       render: (_: any, record: OrderWithDetails) => {
-        const deposit = record.deposit || 0;
+        // Tiền cọc là DepositCar (tiền cọc xe)
+        const depositCar = record.depositCar || record.DepositCar || 0;
         return (
           <span className="font-semibold text-orange-600">
-            {deposit.toLocaleString("vi-VN")} ₫
+            {depositCar.toLocaleString("vi-VN")} ₫
           </span>
         );
       },
