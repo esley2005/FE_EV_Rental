@@ -20,7 +20,6 @@ import {
   FileText,
   ChevronDown,
   MapPin,
-  AlertTriangle,
 } from "lucide-react";
 import { Layout, Menu, Dropdown, Space, Avatar, Breadcrumb, message, Result, Button, Badge } from "antd";
 import { authUtils } from "@/utils/auth";
@@ -39,7 +38,6 @@ import CarIssueReports from "@/components/admin/CarIssueReports";
 import RentalOrdersByLocation from "@/components/admin/RentalOrdersByLocation";
 import OrderDetailsWithPayments from "@/components/admin/OrderDetailsWithPayments";
 import CarUtilizationRate from "@/components/admin/CarUtilizationRate";
-import RiskyCustomer from "@/components/admin/RiskyCustomer";
 import { getPendingReportsCount } from "@/components/admin/CarIssueReports";
 
 const { Header, Sider, Content, Footer } = Layout;
@@ -122,20 +120,21 @@ export default function AdminLayout() {
   const getMainMenu = () => [
     { key: "cars", label: "Đội xe & Điểm thuê", icon: <Car /> },
     { key: "customers", label: "Khách hàng", icon: <User /> },
+    { key: "staff", label: "Nhân viên", icon: <Users /> },
+    { key: "order-details", label: "Chi tiết đơn hàng", icon: <FileText /> },
     { 
-      key: "staff", 
+      key: "issues", 
       label: (
         pendingReportsCount > 0 ? (
           <Badge count={pendingReportsCount} size="small">
-            <span style={{ color: "#ff4d4f" }}>Nhân viên</span>
+            <span>Báo cáo sự cố từ Staff</span>
           </Badge>
         ) : (
-          <span>Nhân viên</span>
+          <span>Báo cáo sự cố từ Staff</span>
         )
       ), 
-      icon: <Users /> 
+      icon: <FileText /> 
     },
-    { key: "order-details", label: "Chi tiết đơn hàng", icon: <FileText /> },
     { key: "reports", label: "Báo cáo & Phân tích", icon: <BarChart3 /> },
   ];
 
@@ -150,24 +149,10 @@ export default function AdminLayout() {
       customers: [
         { key: "1", label: "Hồ sơ khách hàng", icon: <User /> },
         { key: "2", label: "Lịch sử thuê xe", icon: <History /> },
-        { key: "3", label: "Danh sách khách hàng rủi ro", icon: <AlertTriangle /> },
       ],
       staff: [
         { key: "1", label: "Danh sách nhân viên tại các điểm", icon: <Users /> },
         { key: "2", label: "Điều phối nhân viên", icon: <Shuffle /> },
-        { 
-          key: "3", 
-          label: (
-            pendingReportsCount > 0 ? (
-              <Badge count={pendingReportsCount} size="small">
-                <span>Báo cáo sự cố từ Staff</span>
-              </Badge>
-            ) : (
-              <span>Báo cáo sự cố từ Staff</span>
-            )
-          ), 
-          icon: <FileText /> 
-        },
       ],
       reports: [
         { key: "1", label: "Doanh thu", icon: <LineChart /> },
@@ -191,14 +176,17 @@ export default function AdminLayout() {
           default:
             return <p>Chưa có nội dung.</p>;
         }
+      case "issues":
+        return <CarIssueReports />;
+
       case "customers":
         switch (selectedSubMenu) {
           case "1":
             return <CustomerManagement />;
           case "2":
             return <RentalHistory />;
-          case "3":
-            return <RiskyCustomer />;
+          // case "3":
+          //   return <p>Chưa có</p>;
           default:
             return <p>Chưa có nội dung.</p>;
         }
@@ -208,8 +196,6 @@ export default function AdminLayout() {
             return <StaffManagement mode="list" />;
           case "2":
             return <StaffManagement mode="transfer" />;
-          case "3":
-            return <CarIssueReports />;
           default:
             return <p>Chưa có nội dung.</p>;
         }
@@ -279,8 +265,8 @@ export default function AdminLayout() {
           selectedKeys={[selectedSubMenu]}
           onClick={(e: { key: string }) => {
             setSelectedSubMenu(e.key);
-            // Cập nhật lại số lượng khi click vào menu báo cáo sự cố
-            if (selectedModule === "staff" && e.key === "3") {
+            // Cập nhật lại số lượng khi click vào menu issues
+            if (selectedModule === "issues") {
               setTimeout(updatePendingReportsCount, 100);
             }
           }}
