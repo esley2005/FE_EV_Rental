@@ -1465,6 +1465,7 @@ export interface RentalOrderData {
   citizenId?: number;
   driverLicenseId?: number;
   paymentId?: number;
+  reportNote?: string; // Lý do hủy đơn hàng
 }
 
 export const rentalOrderApi = {
@@ -1900,6 +1901,18 @@ export const paymentApi = {
   // Xác nhận hoàn tiền thế chấp xe (Admin/Staff only)
   confirmRefundDepositCarPayment: (rentalOrderId: number, billingImageUrl: string, note: string) => {
     return apiCall<{ success: boolean; message?: string }>(`/Payment/ConfirmRefundDepositCarPayment`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        rentalOrderId,
+        billingImageUrl,
+        note,
+      }),
+    });
+  },
+
+  // Xác nhận hoàn tiền giữ chỗ đơn hàng (Admin/Staff only)
+  confirmRefundOrderDepositPayment: (rentalOrderId: number, billingImageUrl: string, note: string) => {
+    return apiCall<{ success: boolean; message?: string }>(`/Payment/ConfirmRefundOrderDepositPayment`, {
       method: 'PUT',
       body: JSON.stringify({
         rentalOrderId,

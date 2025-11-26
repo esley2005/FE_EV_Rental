@@ -142,6 +142,9 @@ export default function RentalOrderManagement() {
   const [refundDepositImageFileList, setRefundDepositImageFileList] = useState<UploadFile[]>([]);
   const [paymentMethodForRefund, setPaymentMethodForRefund] = useState<'cash' | 'bank_transfer'>('cash');
   const [refundDepositForm] = Form.useForm();
+  const [refundOrderDepositModalVisible, setRefundOrderDepositModalVisible] = useState(false);
+  const [refundOrderDepositImageFileList, setRefundOrderDepositImageFileList] = useState<UploadFile[]>([]);
+  const [refundOrderDepositForm] = Form.useForm();
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
   const [orderHistory, setOrderHistory] = useState<{
     deliveryHistory?: any;
@@ -970,16 +973,16 @@ export default function RentalOrderManagement() {
         // Chưa xác nhận nếu không có GPLX hoặc status không phải 1 (đã xác thực)
         const isGPLXNotApproved = !record.driverLicense || statusNum !== 1;
         
-        if (isGPLXNotApproved) {
-          return (
-            <Space direction="vertical" size={4}>
-              {statusTag}
-              <Tag color="warning" icon={<ExclamationCircleOutlined />}>
-                Chưa xác nhận GPLX
-              </Tag>
-            </Space>
-          );
-        }
+        // if (isGPLXNotApproved) {
+        //   return (
+        //     <Space direction="vertical" size={4}>
+        //       {statusTag}
+        //       <Tag color="warning" icon={<ExclamationCircleOutlined />}>
+        //         Chưa xác nhận GPLX
+        //       </Tag>
+        //     </Space>
+        //   );
+        // }
         
         return statusTag;
       },
@@ -1240,6 +1243,22 @@ export default function RentalOrderManagement() {
                 Trả tiền thế chấp
               </Button>
             )}
+       
+            {statusNum === RentalOrderStatus.RefundDepositOrder && (
+              <Button
+                type="primary"
+                size="small"
+                icon={<DollarOutlined />}
+                onClick={() => {
+                  setSelectedOrderForAction(record);
+                  setRefundOrderDepositImageFileList([]);
+                  refundOrderDepositForm.resetFields();
+                  setRefundOrderDepositModalVisible(true);
+                }}
+              >
+                Hoàn tiền
+              </Button>
+            )}
             {/* Nút Xem lịch sử - chỉ hiển thị khi status là Completed (9) */}
             {statusNum === RentalOrderStatus.Completed && (
               <Button
@@ -1345,6 +1364,29 @@ export default function RentalOrderManagement() {
                 {getOrderStatusTag(selectedOrder)}
               </div>
             </Card>
+
+            {/* Report Note - Lý do hủy đơn hàng */}
+            {(() => {
+              const statusNum = getStatusNumber(selectedOrder.status);
+              const isCancelled = statusNum === RentalOrderStatus.Cancelled;
+              const reportNote = selectedOrder.reportNote || (selectedOrder as any).ReportNote;
+              
+              return isCancelled && reportNote ? (
+                <Card size="small" className="bg-red-50 border-red-200">
+                  <Alert
+                    message="Lý do hủy đơn hàng"
+                    description={
+                      <div className="text-gray-700">
+                        {reportNote}
+                      </div>
+                    }
+                    type="error"
+                    showIcon
+                    icon={<CloseCircleOutlined />}
+                  />
+                </Card>
+              ) : null;
+            })()}
 
             <Card title={<><CarOutlined /> Thông tin xe</>} size="small">
               {selectedOrder.car ? (
@@ -2738,6 +2780,183 @@ export default function RentalOrderManagement() {
         </Form>
       </Modal>
 
+      {/* Refund Order Deposit Modal - Hoàn tiền giữ chỗ đơn hàng */}
+      <Modal
+        title="Hoàn tiền giữ chỗ đơn hàng"
+        open={refundOrderDepositModalVisible}
+        onCancel={() => {
+          setRefundOrderDepositModalVisible(false);
+          setRefundOrderDepositImageFileList([]);
+          refundOrderDepositForm.resetFields();
+          setSelectedOrderForAction(null);
+        }}
+        footer={null}
+        width={700}
+      >
+        <Form
+          form={refundOrderDepositForm}
+          layout="vertical"
+          onFinish={async () => {
+            if (!selectedOrderForAction) return;
+            
+            try {
+              setLoading(true);
+              
+              let billingImageUrl: string = '';
+              
+              // Upload ảnh nếu có
+              if (refundOrderDepositImageFileList.length > 0) {
+                const file = refundOrderDepositImageFileList[0];
+                if (file.originFileObj) {
+                  // Upload ảnh lên Cloudinary
+                  try {
+                    message.loading({ content: 'Đang upload hình ảnh lên Cloudinary...', key: 'upload-refund-order' });
+                    
+                    const formData = new FormData();
+                    formData.append('file', file.originFileObj);
+                    formData.append('upload_preset', process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'ev_rental_cars');
+                    
+                    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'your-cloud-name';
+                    if (!cloudName || cloudName === 'your-cloud-name') {
+                      message.error({ content: 'Chưa cấu hình Cloudinary. Vui lòng kiểm tra biến môi trường NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME', key: 'upload-refund-order' });
+                      return;
+                    }
+                    
+                    const uploadResponse = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+                      method: 'POST',
+                      body: formData,
+                    });
+                    
+                    if (!uploadResponse.ok) {
+                      const errorText = await uploadResponse.text();
+                      console.error('Cloudinary upload error:', errorText);
+                      message.error({ content: `Lỗi upload: ${uploadResponse.status} ${uploadResponse.statusText}`, key: 'upload-refund-order' });
+                      return;
+                    }
+                    
+                    const uploadData = await uploadResponse.json();
+                    if (uploadData.secure_url) {
+                      billingImageUrl = uploadData.secure_url;
+                      message.success({ content: 'Upload hình ảnh thành công!', key: 'upload-refund-order' });
+                    } else if (uploadData.error) {
+                      message.error({ content: `Lỗi Cloudinary: ${uploadData.error.message || uploadData.error}`, key: 'upload-refund-order' });
+                      return;
+                    } else {
+                      message.error({ content: 'Không thể lấy URL hình ảnh từ Cloudinary', key: 'upload-refund-order' });
+                      return;
+                    }
+                  } catch (uploadError: any) {
+                    console.error('Error uploading refund order deposit image to Cloudinary:', uploadError);
+                    message.error({ 
+                      content: `Không thể upload hình ảnh: ${uploadError.message || 'Lỗi không xác định'}`, 
+                      key: 'upload-refund-order' 
+                    });
+                    return;
+                  }
+                }
+              }
+
+          
+              const note = refundOrderDepositForm.getFieldValue('note') || '';
+
+              
+              try {
+                const response = await paymentApi.confirmRefundOrderDepositPayment(
+                  selectedOrderForAction.id,
+                  billingImageUrl,
+                  note
+                );
+
+                if (response.success) {
+                  message.success('Xác nhận hoàn tiền giữ chỗ thành công!');
+                  setRefundOrderDepositModalVisible(false);
+                  setRefundOrderDepositImageFileList([]);
+                  refundOrderDepositForm.resetFields();
+                  setSelectedOrderForAction(null);
+                  
+         
+                  if (selectedOrder) {
+                    const [paymentsResponse] = await Promise.all([
+                      rentalOrderApi.getByOrderWithPayments(selectedOrder.id),
+                    ]);
+                    if (paymentsResponse.success && paymentsResponse.data) {
+                      setOrderHistory({
+                        ...orderHistory!,
+                        payments: paymentsResponse.data.payments?.$values 
+                          ? paymentsResponse.data.payments.$values 
+                          : [],
+                      });
+                    }
+                  }
+                  
+                  await loadOrders();
+                } else {
+                  message.error(response.error || 'Xác nhận hoàn tiền giữ chỗ thất bại');
+                }
+              } catch (apiError) {
+                console.error('Confirm refund order deposit payment error:', apiError);
+                message.error('Có lỗi xảy ra khi xác nhận hoàn tiền giữ chỗ');
+              }
+            } catch (error) {
+              console.error('Refund order deposit error:', error);
+              message.error('Có lỗi xảy ra khi hoàn tiền giữ chỗ');
+            } finally {
+              setLoading(false);
+            }
+          }}
+        >
+          <Form.Item label="Mã đơn hàng">
+            <Input value={selectedOrderForAction?.id} disabled />
+          </Form.Item>
+          <Form.Item label="Khách hàng">
+            <Input value={selectedOrderForAction?.user?.fullName || selectedOrderForAction?.user?.email || '-'} disabled />
+          </Form.Item>
+          <Form.Item
+            label="Hình ảnh hóa đơn"
+            help="Upload hình ảnh hóa đơn hoàn tiền (nếu có)"
+          >
+            <Upload
+              beforeUpload={() => false}
+              maxCount={1}
+              listType="picture-card"
+              fileList={refundOrderDepositImageFileList}
+              onChange={({ fileList }) => setRefundOrderDepositImageFileList(fileList)}
+              onRemove={() => setRefundOrderDepositImageFileList([])}
+            >
+              {refundOrderDepositImageFileList.length < 1 && (
+                <div>
+                  <div>+ Upload</div>
+                </div>
+              )}
+            </Upload>
+          </Form.Item>
+          <Form.Item
+            label="Ghi chú"
+            name="note"
+          >
+            <Input.TextArea
+              rows={4}
+              placeholder="Nhập ghi chú về việc hoàn tiền giữ chỗ (nếu có)"
+            />
+          </Form.Item>
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit" loading={loading}>
+                Xác nhận
+              </Button>
+              <Button onClick={() => {
+                setRefundOrderDepositModalVisible(false);
+                setRefundOrderDepositImageFileList([]);
+                refundOrderDepositForm.resetFields();
+                setSelectedOrderForAction(null);
+              }}>
+                Hủy
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
       {/* History Modal - Xem lịch sử đơn hàng */}
       {selectedOrder && (
         <Modal
@@ -2876,9 +3095,42 @@ export default function RentalOrderManagement() {
                           'Pending': { text: 'Chờ xử lý', color: 'orange' },
                           'Completed': { text: 'Hoàn thành', color: 'green' },
                           'Failed': { text: 'Thất bại', color: 'red' },
+                          'RefundPending': { text: 'Chờ hoàn tiền', color: 'orange' },
+                          'Refunded': { text: 'Đã hoàn', color: 'blue' },
                         };
                         const config = statusMap[status] || { text: status, color: 'default' };
                         return <Tag color={config.color}>{config.text}</Tag>;
+                      }
+                    },
+                    {
+                      title: 'Hành động',
+                      key: 'action',
+                      width: 150,
+                      render: (_: any, payment: any) => {
+                        // Chỉ hiển thị nút hoàn tiền khi status = RefundPending và paymentType = RefundDepositOrder
+                        const paymentStatus = payment.status || payment.Status || '';
+                        const paymentType = payment.paymentType || payment.PaymentType || '';
+                        const isRefundPending = paymentStatus === 'RefundPending' || paymentStatus === 'refundpending';
+                        const isRefundOrderDeposit = paymentType === 'RefundDepositOrder' || paymentType === 'refunddepositorder';
+                        
+                        if (isRefundPending && isRefundOrderDeposit) {
+                          return (
+                            <Button
+                              type="primary"
+                              size="small"
+                              icon={<DollarOutlined />}
+                              onClick={() => {
+                                setSelectedOrderForAction(selectedOrder!);
+                                setRefundOrderDepositImageFileList([]);
+                                refundOrderDepositForm.resetFields();
+                                setRefundOrderDepositModalVisible(true);
+                              }}
+                            >
+                              Hoàn tiền
+                            </Button>
+                          );
+                        }
+                        return null;
                       }
                     },
                   ]}

@@ -1651,6 +1651,23 @@ export default function MyBookingsPage() {
               </Descriptions>
             </Card>
 
+            {/* Report Note - Lý do hủy đơn hàng */}
+            {normalizeStatus(selectedBooking.status) === 'cancelled' && (selectedBooking.reportNote || (selectedBooking as any).ReportNote) && (
+              <Card size="small" className="bg-red-50 border-red-200">
+                <Alert
+                  message="Lý do hủy đơn hàng"
+                  description={
+                    <div className="text-gray-700">
+                      {selectedBooking.reportNote || (selectedBooking as any).ReportNote || '-'}
+                    </div>
+                  }
+                  type="error"
+                  showIcon
+                  icon={<CloseCircleOutlined />}
+                />
+              </Card>
+            )}
+
             {/* Order History Timeline */}
             <Card title="Lịch sử đơn hàng" size="small">
               <Timeline
