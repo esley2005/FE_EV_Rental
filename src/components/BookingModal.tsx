@@ -810,7 +810,7 @@ export default function BookingModal({ car, carAddress: initialCarAddress, carCo
         user: { id: user.id, userId: (user as any).userId, email: user.email }
       });
 
-      const response = await rentalOrderApi.create(orderData);
+      const response = await rentalOrderApi.createWithMomo(orderData);
       
       console.log('[BookingModal] API response:', response);
 

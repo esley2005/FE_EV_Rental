@@ -746,7 +746,7 @@ export default function BookingPage() {
         user: { id: user.id, userId: (user as any).userId, email: user.email }
       });
 
-      const response = await rentalOrderApi.create(orderData);
+      const response = await rentalOrderApi.createWithMomo(orderData);
 
       if (response.success && response.data) {
         const responseData = response.data as any;
@@ -779,7 +779,7 @@ export default function BookingPage() {
                   Đơn hàng của bạn đã được tạo thành công!
                 </p>
                 <p className="mt-2 text-sm font-semibold text-blue-600">
-                  Đang chuyển đến trang thanh toán VNPay...
+                  Đang chuyển đến trang thanh toán Momo...
                 </p>
               </div>
             ),
