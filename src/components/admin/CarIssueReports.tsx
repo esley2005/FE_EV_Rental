@@ -74,35 +74,6 @@ export default function CarIssueReports() {
   useEffect(() => {
     loadIssueReports();
     loadCars();
-
-    // Lắng nghe sự kiện storage để tự động cập nhật khi có báo cáo mới
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "carIssueReports") {
-        console.log('[CarIssueReports] Storage changed, reloading reports...');
-        loadIssueReports();
-      }
-    };
-
-    // Lắng nghe storage events từ các tab/window khác
-    window.addEventListener("storage", handleStorageChange);
-
-    // Lắng nghe custom event từ cùng window (khi Staff tạo báo cáo mới)
-    const handleCustomStorageChange = () => {
-      console.log('[CarIssueReports] Custom storage event, reloading reports...');
-      loadIssueReports();
-    };
-    window.addEventListener("carIssueReportsUpdated", handleCustomStorageChange);
-
-    // Auto-refresh mỗi 5 giây để đảm bảo luôn có dữ liệu mới nhất
-    const interval = setInterval(() => {
-      loadIssueReports();
-    }, 5000);
-
-    return () => {
-      window.removeEventListener("storage", handleStorageChange);
-      window.removeEventListener("carIssueReportsUpdated", handleCustomStorageChange);
-      clearInterval(interval);
-    };
   }, []);
 
   const loadCars = async () => {
@@ -132,13 +103,9 @@ export default function CarIssueReports() {
           }
         });
         setIssueReports(reports);
-      } else {
-        console.log('[CarIssueReports] No reports found in localStorage');
-        setIssueReports([]);
       }
     } catch (error) {
       console.error("Load issue reports error:", error);
-      setIssueReports([]);
     }
   };
 
@@ -371,11 +338,7 @@ export default function CarIssueReports() {
               onChange={(e) => setSearchText(e.target.value)}
               onSearch={(value) => setSearchText(value)}
             />
-            <Button onClick={() => {
-              console.log('[CarIssueReports] Manual refresh triggered');
-              loadIssueReports();
-              message.success("Đã làm mới danh sách báo cáo");
-            }}>Làm mới</Button>
+            <Button onClick={loadIssueReports}>Làm mới</Button>
           </Space>
         </div>
 

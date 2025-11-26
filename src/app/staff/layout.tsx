@@ -12,8 +12,8 @@ import {
   DesktopOutlined,
   UserOutlined,
   IdcardOutlined,
-  EditOutlined,
-  ExclamationCircleOutlined,
+  BellOutlined,
+  CloseOutlined,
 } from "@ant-design/icons";
 import { Hand } from "lucide-react";
 import {
@@ -30,8 +30,9 @@ import {
   Col,
   Statistic,
   Input,
-  Badge,
   Tabs,
+  Alert,
+  Button,
 } from "antd";
 import CarStatusList from "@/components/CarStatusList";
 import DeliveryForm from "@/components/DeliveryForm";
@@ -41,7 +42,6 @@ import CarStatusManagement from "@/components/staff/CarStatusManagement";
 import RentalOrderManagement from "@/components/staff/RentalOrderManagement";
 import CustomerList from "@/components/staff/CustomerList";
 import DocumentManagement from "@/components/staff/DocumentManagement";
-import CarMaintenanceManagement from "@/components/staff/CarMaintenanceManagement";
 import { authUtils } from "@/utils/auth";
 import { carsApi, bookingsApi as bookingsApiWrapped, rentalOrderApi, authApi, type ApiResponse } from "@/services/api";
 import { useRouter } from "next/navigation"; // ✅ Đúng cho App Router
@@ -57,7 +57,6 @@ const mainMenu = [
   { key: "customers", label: "Xác thực khách hàng", icon: <TeamOutlined /> },
   { key: "payments", label: "Thanh toán tại điểm", icon: <DollarOutlined /> },
   { key: "vehicles", label: "Xe tại điểm", icon: <EnvironmentOutlined /> },
-  { key: "issues", label: "Báo cáo sự cố / hỏng hóc", icon: <ExclamationCircleOutlined /> },
 ];
 
 /* =========================================================
@@ -89,10 +88,7 @@ const subMenus: Record<string, { key: string; label: string; icon: React.ReactNo
   vehicles: [
     { key: "1", label: "Quản lý xe", icon: <TeamOutlined /> },
     { key: "2", label: "Trạng thái pin & kỹ thuật", icon: <TeamOutlined /> },
-  ],
-
-  issues: [
-    { key: "1", label: "Danh sách báo cáo", icon: <ExclamationCircleOutlined /> },
+    { key: "3", label: "Báo cáo sự cố / hỏng hóc", icon: <FileOutlined /> },
   ],
 };
 
@@ -126,6 +122,13 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     unavailableCars: 0,
   });
 
+  const [transferNotification, setTransferNotification] = useState<{
+    id: number;
+    message: string;
+    newLocationName: string;
+    transferredAt: string;
+  } | null>(null);
+
   const router = useRouter();
 
   // ✅ Kiểm tra quyền staff
@@ -143,6 +146,76 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     setAllowed(true);
     setDenied(false);
   }, [router]);
+
+  // 📢 Load thông báo điều phối cho staff
+  useEffect(() => {
+    if (!allowed) return;
+
+    const loadTransferNotification = () => {
+      try {
+        const user = authUtils.getCurrentUser();
+        if (!user || !user.id) return;
+
+        const notifications = localStorage.getItem(`staffNotifications_${user.id}`);
+        if (notifications) {
+          const notificationList = JSON.parse(notifications);
+          // Tìm thông báo chưa đọc gần nhất
+          const unreadNotification = notificationList.find((n: any) => !n.read && n.type === "transfer");
+          if (unreadNotification) {
+            setTransferNotification({
+              id: unreadNotification.id,
+              message: unreadNotification.message,
+              newLocationName: unreadNotification.newLocationName,
+              transferredAt: unreadNotification.transferredAt,
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error loading transfer notification:", error);
+      }
+    };
+
+    loadTransferNotification();
+
+    // Lắng nghe event khi có thông báo mới
+    const handleNotificationUpdate = (e: CustomEvent) => {
+      const user = authUtils.getCurrentUser();
+      if (user && user.id === e.detail?.userId) {
+        loadTransferNotification();
+      }
+    };
+
+    window.addEventListener('staffNotificationUpdated', handleNotificationUpdate as EventListener);
+    
+    // Auto-refresh mỗi 5 giây
+    const interval = setInterval(loadTransferNotification, 5000);
+
+    return () => {
+      window.removeEventListener('staffNotificationUpdated', handleNotificationUpdate as EventListener);
+      clearInterval(interval);
+    };
+  }, [allowed]);
+
+  // Đánh dấu thông báo đã đọc
+  const markNotificationAsRead = () => {
+    try {
+      const user = authUtils.getCurrentUser();
+      if (!user || !user.id || !transferNotification) return;
+
+      const notifications = localStorage.getItem(`staffNotifications_${user.id}`);
+      if (notifications) {
+        const notificationList = JSON.parse(notifications);
+        const updatedList = notificationList.map((n: any) => 
+          n.id === transferNotification.id ? { ...n, read: true } : n
+        );
+        localStorage.setItem(`staffNotifications_${user.id}`, JSON.stringify(updatedList));
+      }
+
+      setTransferNotification(null);
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+    }
+  };
 
   // 📊 Load dashboard metrics from real APIs
   useEffect(() => {
@@ -361,6 +434,41 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
           {/* 📍 BREADCRUMB + CONTENT */}
         <Content style={{ margin: "16px" }}>
+          {/* Thông báo điều phối */}
+          {transferNotification && (
+            <Alert
+              message={
+                <Space>
+                  <BellOutlined />
+                  <span>
+                    <strong>Thông báo điều phối:</strong> {transferNotification.message}
+                  </span>
+                </Space>
+              }
+              description={
+                <div style={{ marginTop: 8 }}>
+                  <Space>
+                    <EnvironmentOutlined />
+                    <span>Điểm thuê mới: {transferNotification.newLocationName}</span>
+                  </Space>
+                  <div style={{ marginTop: 4, fontSize: "12px", color: "#666" }}>
+                    Thời gian: {new Date(transferNotification.transferredAt).toLocaleString("vi-VN")}
+                  </div>
+                </div>
+              }
+              type="info"
+              showIcon
+              closable
+              onClose={markNotificationAsRead}
+              style={{ marginBottom: 16 }}
+              action={
+                <Button size="small" type="text" onClick={markNotificationAsRead}>
+                  <CloseOutlined /> Đã hiểu
+                </Button>
+              }
+            />
+          )}
+
           <Breadcrumb
             style={{ marginBottom: 16 }}
             items={[
@@ -377,24 +485,6 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               activeKey={selectedSubMenu}
               onChange={(key) => setSelectedSubMenu(key)}
               items={subMenus.orders.map((item) => ({
-                key: item.key,
-                label: (
-                  <Space>
-                    {item.icon}
-                    {item.label}
-                  </Space>
-                ),
-              }))}
-              style={{ marginBottom: 16 }}
-            />
-          )}
-
-          {/* Tabs cho submenu khi chọn "Xe tại điểm" */}
-          {selectedModule === "vehicles" && (
-            <Tabs
-              activeKey={selectedSubMenu}
-              onChange={(key) => setSelectedSubMenu(key)}
-              items={subMenus.vehicles.map((item) => ({
                 key: item.key,
                 label: (
                   <Space>
@@ -497,10 +587,10 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               selectedSubMenu === "1" ? (
                 <CarManagement staffMode={true} />
               ) : selectedSubMenu === "2" ? (
-                <CarMaintenanceManagement selectedSubMenu={selectedSubMenu} />
-              ) : null
-            ) : selectedModule === "issues" ? (
-              <CarMaintenanceManagement selectedSubMenu="3" />
+                <p>Trang theo dõi trạng thái pin & kỹ thuật</p>
+              ) : (
+                <p>Trang báo cáo sự cố / hỏng hóc</p>
+              )
             ) : (
               children
             )}

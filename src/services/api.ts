@@ -532,6 +532,16 @@ export const carsApi = {
       method: 'GET',
       skipAuth: true, // Public endpoint
     }),
+
+  // Cập nhật địa điểm thuê của xe (Điều phối xe)
+  updateRentalLocation: (carId: number, newLocationId: number) =>
+    apiCall<{ message?: string }>('/Car/UpdateRentalLocation', {
+      method: 'PUT',
+      body: JSON.stringify({
+        carId,
+        newLocationId,
+      }),
+    }),
 };
 
 // Booking API

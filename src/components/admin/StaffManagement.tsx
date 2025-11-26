@@ -434,9 +434,42 @@ export default function StaffManagement({ mode = "list" }: StaffManagementProps)
       );
 
       if (response.success) {
+        // Lấy thông tin điểm thuê mới
+        const newLocation = locationMap[newLocationId];
+        const newLocationName = newLocation?.name || `Điểm thuê #${newLocationId}`;
+        
+        // Lưu thông báo điều phối cho staff
+        const transferNotification = {
+          id: Date.now(),
+          userId: staffToTransfer.id,
+          type: "transfer",
+          message: `Bạn đã được điều phối đến ${newLocationName}`,
+          newLocationId: newLocationId,
+          newLocationName: newLocationName,
+          transferredAt: new Date().toISOString(),
+          read: false,
+        };
+
+        // Lưu vào localStorage
+        try {
+          const existingNotifications = localStorage.getItem(`staffNotifications_${staffToTransfer.id}`);
+          const notifications = existingNotifications ? JSON.parse(existingNotifications) : [];
+          notifications.unshift(transferNotification); // Thêm vào đầu danh sách
+          // Giữ tối đa 10 thông báo gần nhất
+          const limitedNotifications = notifications.slice(0, 10);
+          localStorage.setItem(`staffNotifications_${staffToTransfer.id}`, JSON.stringify(limitedNotifications));
+          
+          // Dispatch event để staff layout có thể cập nhật ngay
+          window.dispatchEvent(new CustomEvent('staffNotificationUpdated', { 
+            detail: { userId: staffToTransfer.id } 
+          }));
+        } catch (error) {
+          console.error('Error saving staff notification:', error);
+        }
+
         api.success({
           message: "Điều phối thành công",
-          description: `Đã chuyển nhân viên ${staffToTransfer.fullName} đến điểm thuê mới`,
+          description: `Đã chuyển nhân viên ${staffToTransfer.fullName} đến ${newLocationName}. Thông báo đã được gửi đến nhân viên.`,
           placement: "topRight",
           icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
         });

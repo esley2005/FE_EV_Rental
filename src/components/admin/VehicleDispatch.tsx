@@ -118,8 +118,20 @@ export default function VehicleDispatch() {
       title: "Vị trí hiện tại",
       key: "locations",
       render: (_: any, car: Car) => {
+        // Ưu tiên kiểm tra rentalLocationId trực tiếp từ Car
+        if (car.rentalLocationId) {
+          const locationName = locationMap[car.rentalLocationId]?.name;
+          if (locationName) {
+            return <Tag color="blue">{locationName}</Tag>;
+          }
+          return <Tag color="blue">#{car.rentalLocationId}</Tag>;
+        }
+
+        // Fallback: Kiểm tra carRentalLocations (quan hệ)
         const rels = getCarRelations(car);
-        if (!rels || rels.length === 0) return <Tag color="red">Đang điều phối</Tag>;
+        if (!rels || rels.length === 0) {
+          return <Tag color="orange">Chưa có địa điểm</Tag>;
+        }
 
         const normalized = rels.map(r => {
           const id = r.rentalLocationId || r.RentalLocationId || r.locationId || r.LocationId || r.id || r.Id;
@@ -127,7 +139,9 @@ export default function VehicleDispatch() {
           return { id, name };
         }).filter(r => r.id);
 
-        if (normalized.length === 0) return <Tag color="orange">Không rõ</Tag>;
+        if (normalized.length === 0) {
+          return <Tag color="orange">Chưa có địa điểm</Tag>;
+        }
 
         // Loại trùng theo id
         const uniqueById: Record<string | number, { id: any; name: any }> = {};
@@ -174,27 +188,40 @@ export default function VehicleDispatch() {
 
   const handleDispatch = async (car: Car) => {
     const targetLocationId = selectedLocation[car.id];
-    if (!targetLocationId) return;
+    if (!targetLocationId) {
+      message.warning("Vui lòng chọn điểm thuê mới");
+      return;
+    }
+
+    // Kiểm tra xem xe đã ở điểm thuê này chưa
+    const rels = getCarRelations(car);
+    const currentLocationId = car.rentalLocationId || (rels.length > 0 ? (rels[0].rentalLocationId || rels[0].RentalLocationId || rels[0].locationId || rels[0].LocationId) : null);
+    
+    if (currentLocationId === targetLocationId) {
+      message.info(`Xe '${car.name}' đã ở điểm thuê này rồi`);
+      return;
+    }
+
     setDispatching((p) => ({ ...p, [car.id]: true }));
     try {
-      // Xóa tất cả quan hệ cũ trước (nếu có) để "di chuyển" xe
-      const rels = getCarRelations(car);
-      for (const r of rels) {
-        const relLocId = r.rentalLocationId || r.RentalLocationId;
-        const relId = r.id || r.Id;
-        if (relLocId !== targetLocationId && relId) {
-          await carRentalLocationApi.delete(relId);
-        }
+      console.log('[VehicleDispatch] Updating rental location:', { carId: car.id, newLocationId: targetLocationId });
+      
+      // Sử dụng API UpdateRentalLocation
+      const response = await carsApi.updateRentalLocation(car.id, targetLocationId);
+      
+      if (response.success) {
+        const newLocationName = locationMap[targetLocationId]?.name || `#${targetLocationId}`;
+        message.success(`Đã điều phối xe '${car.name}' đến ${newLocationName}`);
+        // Reset selection
+        setSelectedLocation((prev) => ({ ...prev, [car.id]: null }));
+        // Reload data để cập nhật UI
+        await loadData();
+      } else {
+        message.error(response.error || "Điều phối thất bại");
       }
-      // Tạo quan hệ mới (nếu chưa tồn tại)
-      const already = rels.find((r: any) => (r.rentalLocationId || r.RentalLocationId) === targetLocationId);
-      if (!already) {
-        await carRentalLocationApi.create({ carId: car.id, rentalLocationId: targetLocationId });
-      }
-      message.success(`Đã điều xe '${car.name}' đến điểm thuê mới`);
-      await loadData();
     } catch (e: any) {
-      message.error("Điều phối thất bại");
+      console.error('[VehicleDispatch] Dispatch error:', e);
+      message.error(e?.message || "Điều phối thất bại. Vui lòng thử lại!");
     } finally {
       setDispatching((p) => ({ ...p, [car.id]: false }));
     }

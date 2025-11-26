@@ -42,15 +42,7 @@ import { getPendingReportsCount } from "@/components/admin/CarIssueReports";
 
 const { Header, Sider, Content, Footer } = Layout;
 
-// Menu chính (navbar trên cùng)
-const mainMenu = [
-  { key: "cars", label: "Đội xe & Điểm thuê", icon: <Car /> },
-  { key: "customers", label: "Khách hàng", icon: <User /> },
-  { key: "staff", label: "Nhân viên", icon: <Users /> },
-  { key: "order-details", label: "Chi tiết đơn hàng", icon: <FileText /> },
-
-  { key: "reports", label: "Báo cáo & Phân tích", icon: <BarChart3 /> },
-];
+// Main menu sẽ được tạo động trong component để có thể sử dụng pendingReportsCount
 
 // Submenu sẽ được tạo động trong component để có thể sử dụng Badge với state
 
@@ -124,25 +116,35 @@ export default function AdminLayout() {
     };
   }, []);
 
+  // Main menu - tạo động để có thể sử dụng pendingReportsCount
+  const getMainMenu = () => [
+    { key: "cars", label: "Đội xe & Điểm thuê", icon: <Car /> },
+    { key: "customers", label: "Khách hàng", icon: <User /> },
+    { key: "staff", label: "Nhân viên", icon: <Users /> },
+    { key: "order-details", label: "Chi tiết đơn hàng", icon: <FileText /> },
+    { 
+      key: "issues", 
+      label: (
+        pendingReportsCount > 0 ? (
+          <Badge count={pendingReportsCount} size="small">
+            <span>Báo cáo sự cố từ Staff</span>
+          </Badge>
+        ) : (
+          <span>Báo cáo sự cố từ Staff</span>
+        )
+      ), 
+      icon: <FileText /> 
+    },
+    { key: "reports", label: "Báo cáo & Phân tích", icon: <BarChart3 /> },
+  ];
+
   // Submenu trái (sidebar) - tạo động với Badge
   const getSubMenus = (): Record<string, { key: string; label: React.ReactNode; icon: React.ReactNode }[]> => {
     return {
       cars: [
         { key: "1", label: "Danh sách xe", icon: <Car /> },
-        { key: "2", label: "Lịch sử giao nhận xe", icon: <History /> },
-        { 
-          key: "3", 
-          label: (
-            pendingReportsCount > 0 ? (
-              <Badge count={pendingReportsCount} size="small">
-                <span>Báo cáo sự cố từ staff</span>
-              </Badge>
-            ) : (
-              <span>Báo cáo sự cố từ staff</span>
-            )
-          ), 
-          icon: <FileText /> 
-        },
+        { key: "2", label: "Điều phối xe", icon: <MapPin /> },
+        { key: "3", label: "Lịch sử giao nhận xe", icon: <History /> },
       ],
       customers: [
         { key: "1", label: "Hồ sơ khách hàng", icon: <User /> },
@@ -168,14 +170,14 @@ export default function AdminLayout() {
           case "1":
             return <CarManagement />;
           case "2":
-            return <TransactionHistory />;
+            return <VehicleDispatch />;
           case "3":
-            return <CarIssueReports />;
-          // case "4":
-          //   return <VehicleDispatch />;
+            return <TransactionHistory />;
           default:
             return <p>Chưa có nội dung.</p>;
         }
+      case "issues":
+        return <CarIssueReports />;
 
       case "customers":
         switch (selectedSubMenu) {
@@ -263,8 +265,8 @@ export default function AdminLayout() {
           selectedKeys={[selectedSubMenu]}
           onClick={(e: { key: string }) => {
             setSelectedSubMenu(e.key);
-            // Cập nhật lại số lượng khi click vào menu
-            if (e.key === "3" && selectedModule === "cars") {
+            // Cập nhật lại số lượng khi click vào menu issues
+            if (selectedModule === "issues") {
               setTimeout(updatePendingReportsCount, 100);
             }
           }}
@@ -286,7 +288,7 @@ export default function AdminLayout() {
             theme="dark"
             mode="horizontal"
             selectedKeys={[selectedModule]}
-            items={mainMenu}
+            items={getMainMenu()}
             onClick={(e: { key: string }) => {
               setSelectedModule(e.key);
               // Chỉ set submenu nếu module có submenu
@@ -326,7 +328,7 @@ export default function AdminLayout() {
           <Breadcrumb
             style={{ marginBottom: 16 }}
             items={[
-              { title: mainMenu.find((m) => m.key === selectedModule)?.label || 'Admin' },
+              { title: getMainMenu().find((m) => m.key === selectedModule)?.label || 'Admin' },
               ...(getSubMenus()[selectedModule] && getSubMenus()[selectedModule].length > 0
                 ? [{ title: typeof getSubMenus()[selectedModule].find((s) => s.key === selectedSubMenu)?.label === 'string' 
                     ? getSubMenus()[selectedModule].find((s) => s.key === selectedSubMenu)?.label 
