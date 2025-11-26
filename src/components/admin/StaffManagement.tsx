@@ -558,16 +558,21 @@ export default function StaffManagement({ mode = "list" }: StaffManagementProps)
               <h2 style={{ margin: 0, fontSize: 20, fontWeight: "bold" }}>
                 Điều phối nhân viên qua điểm thuê khác
               </h2>
-              <Search
-                placeholder="Tìm kiếm theo tên, email, số điện thoại..."
-                allowClear
-                enterButton={<SearchOutlined />}
-                size="large"
-                style={{ width: 400 }}
-                value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
-                onSearch={(value) => setSearchText(value)}
-              />
+              <Space.Compact style={{ width: 400 }}>
+                <Input
+                  placeholder="Tìm kiếm theo tên, email, số điện thoại..."
+                  allowClear
+                  size="large"
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.target.value)}
+                  onPressEnter={(e) => setSearchText(e.currentTarget.value)}
+                />
+                <Button 
+                  icon={<SearchOutlined />} 
+                  size="large"
+                  onClick={() => setSearchText(searchText)}
+                />
+              </Space.Compact>
             </div>
             <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
               <span style={{ fontWeight: 500 }}>Lọc theo điểm thuê:</span>
@@ -629,16 +634,21 @@ export default function StaffManagement({ mode = "list" }: StaffManagementProps)
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: "bold" }}>
               Danh sách nhân viên tại các điểm
             </h2>
-            <Search
-              placeholder="Tìm kiếm theo tên, email, số điện thoại..."
-              allowClear
-              enterButton={<SearchOutlined />}
-              size="large"
-              style={{ width: 400 }}
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              onSearch={(value) => setSearchText(value)}
-            />
+            <Space.Compact style={{ width: 400 }}>
+              <Input
+                placeholder="Tìm kiếm theo tên, email, số điện thoại..."
+                allowClear
+                size="large"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                onPressEnter={(e) => setSearchText(e.currentTarget.value)}
+              />
+              <Button 
+                icon={<SearchOutlined />} 
+                size="large"
+                onClick={() => setSearchText(searchText)}
+              />
+            </Space.Compact>
           </div>
           <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
             <span style={{ fontWeight: 500 }}>Lọc theo điểm thuê:</span>

@@ -332,15 +332,21 @@ export default function RentalHistory() {
       <Card>
         <div className="mb-4 flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
-            <Search
-              placeholder="Tìm kiếm theo tên khách hàng, xe, mã đơn, SĐT..."
-              allowClear
-              enterButton={<SearchOutlined />}
-              size="large"
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              onSearch={(value) => setSearchText(value)}
-            />
+            <Space.Compact>
+              <Input
+                placeholder="Tìm kiếm theo tên khách hàng, xe, mã đơn, SĐT..."
+                allowClear
+                size="large"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                onPressEnter={(e) => setSearchText(e.currentTarget.value)}
+              />
+              <Button 
+                icon={<SearchOutlined />} 
+                size="large"
+                onClick={() => setSearchText(searchText)}
+              />
+            </Space.Compact>
           </div>
           <Select
             value={filterStatus}

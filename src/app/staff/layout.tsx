@@ -15,6 +15,7 @@ import {
   BellOutlined,
   CloseOutlined,
   ClockCircleOutlined,
+  ExclamationCircleOutlined,
 } from "@ant-design/icons";
 import { Hand } from "lucide-react";
 import {
@@ -43,6 +44,7 @@ import CarStatusManagement from "@/components/staff/CarStatusManagement";
 import RentalOrderManagement from "@/components/staff/RentalOrderManagement";
 import CustomerList from "@/components/staff/CustomerList";
 import DocumentManagement from "@/components/staff/DocumentManagement";
+import CarMaintenanceManagement from "@/components/staff/CarMaintenanceManagement";
 import { authUtils } from "@/utils/auth";
 import { carsApi, bookingsApi as bookingsApiWrapped, rentalOrderApi, authApi, type ApiResponse } from "@/services/api";
 import { useRouter } from "next/navigation"; // ✅ Đúng cho App Router
@@ -58,6 +60,7 @@ const mainMenu = [
   { key: "customers", label: "Xác thực khách hàng", icon: <TeamOutlined /> },
   { key: "payments", label: "Thanh toán tại điểm", icon: <DollarOutlined /> },
   { key: "vehicles", label: "Xe tại điểm", icon: <EnvironmentOutlined /> },
+  { key: "reports", label: "Gửi báo cáo cho Admin", icon: <ExclamationCircleOutlined /> },
 ];
 
 /* =========================================================
@@ -90,6 +93,11 @@ const subMenus: Record<string, { key: string; label: string; icon: React.ReactNo
     { key: "1", label: "Quản lý xe", icon: <TeamOutlined /> },
     { key: "2", label: "Trạng thái pin & kỹ thuật", icon: <TeamOutlined /> },
     { key: "3", label: "Báo cáo sự cố / hỏng hóc", icon: <FileOutlined /> },
+  ],
+
+  reports: [
+    { key: "1", label: "Báo cáo sự cố / hỏng hóc", icon: <ExclamationCircleOutlined /> },
+    { key: "2", label: "Trạng thái pin & kỹ thuật", icon: <TeamOutlined /> },
   ],
 };
 
@@ -584,11 +592,29 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             />
           )}
 
+          {/* Tabs cho submenu khi chọn "Gửi báo cáo cho Admin" */}
+          {selectedModule === "reports" && (
+            <Tabs
+              activeKey={selectedSubMenu}
+              onChange={(key) => setSelectedSubMenu(key)}
+              items={subMenus.reports.map((item) => ({
+                key: item.key,
+                label: (
+                  <Space>
+                    {item.icon}
+                    {item.label}
+                  </Space>
+                ),
+              }))}
+              style={{ marginBottom: 16 }}
+            />
+          )}
+
           {/* ElaAdmin-like top summary cards */}
           <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
             <Col xs={24} sm={12} md={6}>
               <Card 
-                bordered 
+                variant="outlined"
                 hoverable 
                 loading={metricsLoading}
                 onClick={() => {
@@ -601,12 +627,12 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               </Card>
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <Card bordered hoverable loading={metricsLoading}>
+              <Card variant="outlined" hoverable loading={metricsLoading}>
                 <Statistic title="Đơn hàng đã cọc" value={metrics.orders} />
               </Card>
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <Card bordered hoverable loading={metricsLoading}>
+              <Card variant="outlined" hoverable loading={metricsLoading}>
                 <div className="flex flex-col">
                   <div className="text-sm text-gray-500 mb-3">Số xe</div>
                   <div className="flex items-center gap-3">
@@ -626,7 +652,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Card 
-                bordered 
+                variant="outlined"
                 hoverable 
                 loading={metricsLoading}
                 onClick={() => {
@@ -674,10 +700,12 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               selectedSubMenu === "1" ? (
                 <CarManagement staffMode={true} />
               ) : selectedSubMenu === "2" ? (
-                <p>Trang theo dõi trạng thái pin & kỹ thuật</p>
+                <CarMaintenanceManagement selectedSubMenu="2" />
               ) : (
-                <p>Trang báo cáo sự cố / hỏng hóc</p>
+                <CarMaintenanceManagement selectedSubMenu="3" />
               )
+            ) : selectedModule === "reports" ? (
+              <CarMaintenanceManagement selectedSubMenu={selectedSubMenu} />
             ) : (
               children
             )}

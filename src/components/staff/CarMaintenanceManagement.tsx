@@ -566,16 +566,21 @@ export default function CarMaintenanceManagement({
                 ? "Cập nhật trạng thái pin & kỹ thuật"
                 : "Báo cáo sự cố / hỏng hóc"}
             </h2>
-            <Input.Search
-              placeholder="Tìm kiếm theo tên xe, model..."
-              allowClear
-              enterButton={<SearchOutlined />}
-              size="large"
-              style={{ width: 400 }}
-              value={searchText}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchText(e.target.value)}
-              onSearch={(value: string) => setSearchText(value)}
-            />
+            <Space.Compact style={{ width: 400 }}>
+              <Input
+                placeholder="Tìm kiếm theo tên xe, model..."
+                allowClear
+                size="large"
+                value={searchText}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchText(e.target.value)}
+                onPressEnter={(e) => setSearchText(e.currentTarget.value)}
+              />
+              <Button 
+                icon={<SearchOutlined />} 
+                size="large"
+                onClick={() => setSearchText(searchText)}
+              />
+            </Space.Compact>
           </div>
         </div>
 

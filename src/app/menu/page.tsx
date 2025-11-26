@@ -69,15 +69,21 @@ export default function MenuPage() {
       <div className="bg-white rounded-xl shadow p-4 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex-1">
-            <Input.Search
-              placeholder="Tìm kiếm theo tên hoặc loại xe (Sedan, SUV,...)"
-              allowClear
-              enterButton={<SearchOutlined />}
-              size="large"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onSearch={onSearch}
-            />
+            <Space.Compact style={{ width: "100%" }}>
+              <Input
+                placeholder="Tìm kiếm theo tên hoặc loại xe (Sedan, SUV,...)"
+                allowClear
+                size="large"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onPressEnter={(e) => onSearch(e.currentTarget.value)}
+              />
+              <Button 
+                icon={<SearchOutlined />} 
+                size="large"
+                onClick={() => onSearch(query)}
+              />
+            </Space.Compact>
           </div>
 
           <Space wrap>
