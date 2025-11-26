@@ -1098,21 +1098,49 @@ export const authApi = {
   // Đổi mật khẩu
   changePassword: async (data: ChangePasswordData) => {
     // Backend yêu cầu endpoint /User/UpdateCustomerPassword với userId, oldPassword, newPassword
-    // Lấy userId từ localStorage
-    let userId: number | undefined;
+    // Lấy userId từ data hoặc localStorage
+    let userId: number | undefined = data.userId;
     
-    try {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const userData = JSON.parse(userStr);
-        userId = userData.id;
+    // Nếu không có trong data, thử lấy từ localStorage với nhiều field name khác nhau
+    if (!userId) {
+      try {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const userData = JSON.parse(userStr);
+          // Thử nhiều field name khác nhau để tương thích với nhiều format
+          userId = userData.id || userData.userId || userData.Id || userData.UserId;
+          
+          // Nếu vẫn không có, thử convert sang number nếu là string
+          if (!userId && (userData.id || userData.userId || userData.Id || userData.UserId)) {
+            const idValue = userData.id || userData.userId || userData.Id || userData.UserId;
+            userId = typeof idValue === 'string' ? parseInt(idValue, 10) : idValue;
+            if (isNaN(userId as number)) {
+              userId = undefined;
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing user from localStorage:', e);
       }
-    } catch (e) {
-      console.error('Error parsing user from localStorage:', e);
     }
     
-    // Nếu không có userId, trả về lỗi
+    // Nếu vẫn không có userId, thử gọi API getProfile trực tiếp
     if (!userId) {
+      try {
+        const profileResponse = await apiCall<User>('/User/GetProfile', {
+          method: 'GET',
+        });
+        if (profileResponse.success && profileResponse.data) {
+          const profileData = profileResponse.data;
+          userId = profileData.id || (profileData as any).userId || (profileData as any).Id || (profileData as any).UserId;
+        }
+      } catch (e) {
+        console.error('Error getting userId from getProfile:', e);
+      }
+    }
+    
+    // Nếu vẫn không có userId, trả về lỗi
+    if (!userId || userId === 0) {
       return {
         success: false,
         error: 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.'
@@ -1121,7 +1149,7 @@ export const authApi = {
     
     // Format dữ liệu theo yêu cầu backend: { userId, oldPassword, newPassword }
     const requestData = {
-      userId: userId,
+      userId: Number(userId), // Đảm bảo là number
       oldPassword: data.oldPassword,
       newPassword: data.newPassword
     };

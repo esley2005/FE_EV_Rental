@@ -463,6 +463,7 @@ export default function MyBookingsPage() {
     // Check DepositPending first before generic pending
     if (statusLower.includes('depositpending') || statusLower.includes('chờ tiền cọc') || statusLower.includes('chờ đặt cọc')) return 'depositpending';
     if (statusLower.includes('documentssubmitted') || statusLower.includes('đã nộp giấy tờ')) return 'documentssubmitted';
+    if (statusLower.includes('orderdepositconfirmed') || statusLower.includes('depositconfirmed')) return 'orderdepositconfirmed';
     if (statusLower.includes('confirmed') || statusLower.includes('xác nhận')) return 'confirmed';
     if (statusLower.includes('renting') || statusLower.includes('đang thuê')) return 'renting';
     if (statusLower.includes('returned') || statusLower.includes('đã trả xe')) return 'returned';
@@ -480,6 +481,7 @@ export default function MyBookingsPage() {
       pending: { color: 'gold', text: 'Chờ xác nhận', icon: <ClockCircleOutlined /> },
       documentssubmitted: { color: 'orange', text: 'Đã nộp giấy tờ', icon: <IdcardOutlined /> },
       depositpending: { color: 'purple', text: 'Chờ thanh toán đặt cọc', icon: <DollarOutlined /> },
+      orderdepositconfirmed: { color: 'cyan', text: 'Đã Cọc Giữ Xe', icon: <CheckCircleOutlined /> },
       confirmed: { color: 'blue', text: 'Đã xác nhận', icon: <CheckCircleOutlined /> },
       renting: { color: 'green', text: 'Đang thuê', icon: <CarOutlined /> },
       returned: { color: 'cyan', text: 'Đã trả xe', icon: <CarOutlined /> },
