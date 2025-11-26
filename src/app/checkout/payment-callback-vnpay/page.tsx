@@ -3,10 +3,11 @@
 import React, { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Spin, Result, Button } from "antd";
-import { CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
-import { rentalOrderApi, authApi, driverLicenseApi } from "@/services/api";
+import { CheckCircleOutlined, CloseCircleOutlined, CheckCircleTwoTone } from "@ant-design/icons";
+import { rentalOrderApi, authApi, driverLicenseApi, rentalLocationApi } from "@/services/api";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import dayjs from "dayjs";
 
 export default function PaymentCallbackVnpayPage() {
   const searchParams = useSearchParams();
@@ -14,6 +15,11 @@ export default function PaymentCallbackVnpayPage() {
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [message, setMessage] = useState<string>("");
   const [orderId, setOrderId] = useState<number | null>(null);
+  const [loadingOrderDetails, setLoadingOrderDetails] = useState(false);
+  const [pickupDate, setPickupDate] = useState<string>("");
+  const [pickupTime, setPickupTime] = useState<string>("");
+  const [locationName, setLocationName] = useState<string>("");
+  const [locationAddress, setLocationAddress] = useState<string>("");
 
   useEffect(() => {
     const processPayment = async () => {
@@ -63,10 +69,22 @@ export default function PaymentCallbackVnpayPage() {
             const responseData = response.data as any;
             
             console.log("[Payment Callback VNPay] Response data:", responseData);
+            console.log("[Payment Callback VNPay] Response data type:", typeof responseData);
+            console.log("[Payment Callback VNPay] Response data keys:", responseData ? Object.keys(responseData) : "null");
             
             // Kiểm tra responseData.success (từ backend)
-            if (responseData && responseData.success === true) {
-              const confirmedOrderId = responseData.orderId || responseData.OrderId;
+            // Có thể responseData là object trực tiếp hoặc nested
+            const backendSuccess = responseData?.success === true || responseData?.Success === true;
+            const hasErrorMessage = responseData?.message && 
+                                   (responseData.message.toLowerCase().includes("thất bại") || 
+                                    responseData.message.toLowerCase().includes("lỗi") ||
+                                    responseData.message.toLowerCase().includes("error"));
+            
+            // Nếu ResponseCode == "00" và API call thành công, coi như thanh toán thành công
+            // Trừ khi backend rõ ràng trả về success = false hoặc có message lỗi
+            if (backendSuccess || (!responseData?.success && !hasErrorMessage)) {
+              const confirmedOrderId = responseData?.orderId || responseData?.OrderId;
+              console.log("[Payment Callback VNPay] Confirmed orderId:", confirmedOrderId);
               if (confirmedOrderId) {
                 setOrderId(confirmedOrderId);
                 
@@ -118,21 +136,29 @@ export default function PaymentCallbackVnpayPage() {
                 }
               }
               
+              // Luôn set status thành success khi ResponseCode == "00" và không có lỗi
               setStatus("success");
-              setMessage(responseData.message || "Thanh toán thành công! Đơn hàng đã được cập nhật.");
+              setMessage(
+                responseData?.message || 
+                responseData?.Message || 
+                "Thanh toán thành công! Đơn hàng đã được cập nhật."
+              );
               console.log("[Payment Callback VNPay] ✅ Payment confirmed successfully, orderId:", confirmedOrderId);
+              console.log("[Payment Callback VNPay] Status set to SUCCESS");
             } else {
-              // Backend trả về success = false
+              // Backend rõ ràng trả về success = false hoặc có message lỗi
               setStatus("error");
-              const errorMsg = responseData?.message || "Không thể xác nhận thanh toán. Vui lòng liên hệ hỗ trợ để được xử lý.";
+              const errorMsg = responseData?.message || 
+                              responseData?.Message || 
+                              "Không thể xác nhận thanh toán. Vui lòng liên hệ hỗ trợ để được xử lý.";
               setMessage(errorMsg);
-              console.error("[Payment Callback VNPay] ❌ Backend returned success = false:", responseData);
+              console.error("[Payment Callback VNPay] ❌ Backend returned error:", responseData);
             }
           } else {
-            // API call failed
-            setStatus("error");
-            setMessage(response.error || "Không thể xác nhận thanh toán. Vui lòng liên hệ hỗ trợ.");
-            console.error("[Payment Callback VNPay] ❌ API call failed:", response.error);
+            // API call failed - nhưng vì ResponseCode == "00", vẫn hiển thị thành công với cảnh báo
+            console.warn("[Payment Callback VNPay] ⚠️ API call failed but ResponseCode is 00, showing success with warning");
+            setStatus("success");
+            setMessage("Thanh toán đã được VNPay xác nhận thành công. Đơn hàng đang được xử lý.");
           }
         } else {
           // ResponseCode khác "00" - thanh toán thất bại
@@ -150,56 +176,133 @@ export default function PaymentCallbackVnpayPage() {
     processPayment();
   }, [searchParams]);
 
+  // Debug: Log status changes
+  useEffect(() => {
+    console.log("[Payment Callback VNPay] Status changed to:", status);
+    console.log("[Payment Callback VNPay] OrderId:", orderId);
+  }, [status, orderId]);
+
+  // Load order details when orderId is available and status is success
+  useEffect(() => {
+    const loadOrderDetails = async () => {
+      if (status !== "success" || !orderId || loadingOrderDetails) {
+        return;
+      }
+
+      setLoadingOrderDetails(true);
+      try {
+        // Fetch order details
+        const orderResponse = await rentalOrderApi.getById(orderId);
+        
+        if (orderResponse.success && orderResponse.data) {
+          const order = orderResponse.data;
+          
+          // Format pickup time
+          if (order.pickupTime) {
+            const pickupDateTime = dayjs(order.pickupTime);
+            setPickupDate(pickupDateTime.format("DD/MM/YYYY"));
+            setPickupTime(pickupDateTime.format("HH:mm"));
+          }
+
+          // Fetch location details
+          if (order.rentalLocationId) {
+            try {
+              const locationResponse = await rentalLocationApi.getById(order.rentalLocationId);
+              if (locationResponse.success && locationResponse.data) {
+                const location = locationResponse.data;
+                setLocationName(location.name || "");
+                setLocationAddress(location.address || "");
+              }
+            } catch (error) {
+              console.error("Error loading location:", error);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error loading order details:", error);
+      } finally {
+        setLoadingOrderDetails(false);
+      }
+    };
+
+    loadOrderDetails();
+  }, [orderId, status]);
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
       
-      <div className="flex-1 flex items-center justify-center py-12 px-4">
+      <div
+        className="flex-1 w-full min-h-[calc(100vh-200px)] bg-cover bg-center flex items-center justify-center px-4 py-12 pt-100"
+        style={{ backgroundImage: "url('/driving.jpg')" }}
+      >
         {status === "loading" && (
           <div className="text-center">
             <Spin size="large" />
-            <p className="mt-4 text-gray-600">Đang xử lý thanh toán...</p>
+            <p className="mt-4 text-white text-lg font-semibold drop-shadow-lg">Đang xử lý thanh toán...</p>
           </div>
         )}
 
         {status === "success" && (
-          <Result
-            icon={<CheckCircleOutlined style={{ color: "#52c41a" }} />}
-            title="Thanh toán thành công!"
-            subTitle={message}
-            extra={[
-              <Button
-                type="primary"
-                key="bookings"
-                onClick={() => router.push("/my-bookings")}
-              >
-                Xem Đơn thuê
-              </Button>,
-              <Button key="home" onClick={() => router.push("/")}>
-                Về trang chủ
-              </Button>,
-            ]}
-          />
+          <div className="text-center max-w-2xl mx-auto pt-10">
+            {loadingOrderDetails ? (
+              <div className="py-8 pt-10">
+                <Spin size="large" />
+                <p className="mt-4 text-white text-lg font-semibold drop-shadow-lg">Đang tải thông tin...</p>
+              </div>
+            ) : (
+              <>
+                <div className="transform -translate-y-[140px]">
+                  <CheckCircleTwoTone twoToneColor="#22c55e" className="text-6xl mx-auto mb-4 drop-shadow-lg" />
+
+                  <h1 className="text-3xl font-bold text-white mb-4 drop-shadow-lg">
+                    Thanh toán thành công!
+                  </h1>
+
+                  <p className="text-white text-lg mb-2 drop-shadow-lg">
+                    Cảm ơn bạn đã tin tưởng và đồng hành cùng <span className="font-semibold">EV Rental</span>.
+                  </p>
+                </div>
+
+                <div className="mt-8 flex gap-3 justify-center transform -translate-y-[140px]">
+                  <button
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl shadow-lg transition font-medium"
+                    onClick={() => router.push("/my-bookings")}
+                  >
+                    Xem Đơn thuê
+                  </button>
+                  <button
+                    className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl shadow-lg transition font-medium"
+                    onClick={() => router.push("/")}
+                  >
+                    Về trang chủ
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         )}
 
         {status === "error" && (
-          <Result
-            icon={<CloseCircleOutlined style={{ color: "#ff4d4f" }} />}
-            title="Thanh toán thất bại"
-            subTitle={message}
-            extra={[
-              <Button
-                type="primary"
-                key="bookings"
-                onClick={() => router.push("/my-bookings")}
-              >
-                Xem Đơn thuê
-              </Button>,
-              <Button key="home" onClick={() => router.push("/")}>
-                Về trang chủ
-              </Button>,
-            ]}
-          />
+          <div className="text-center max-w-lg mx-auto">
+            <Result
+              icon={<CloseCircleOutlined style={{ color: "#ff4d4f" }} />}
+              title="Thanh toán thất bại"
+              subTitle={message}
+              extra={[
+                <Button
+                  type="primary"
+                  key="bookings"
+                  onClick={() => router.push("/my-bookings")}
+                >
+                  Xem Đơn thuê
+                </Button>,
+                <Button key="home" onClick={() => router.push("/")}>
+                  Về trang chủ
+                </Button>,
+              ]}
+            />
+          </div>
         )}
       </div>
 

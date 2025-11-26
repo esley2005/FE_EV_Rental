@@ -182,7 +182,7 @@ export default function PaymentCallbackPage() {
         {status === "success" && (
           <Result
             icon={<CheckCircleOutlined style={{ color: "#52c41a" }} />}
-            title="Thanh toán thành công!"
+            title="Thanh toán thành cônggggg!"
             subTitle={message}
             extra={[
               <Button
