@@ -238,6 +238,9 @@ export default function BookingPage() {
   // Hỗ trợ cả pickupTime/returnTime và startDate/endDate
   const pickupTimeFromUrl = searchParams?.get('pickupTime') || searchParams?.get('startDate');
   const returnTimeFromUrl = searchParams?.get('returnTime') || searchParams?.get('endDate');
+  // Đọc lựa chọn có tài xế từ URL
+  const withDriverFromUrl = searchParams?.get('withDriver');
+  const [isDriverOptionLocked, setIsDriverOptionLocked] = useState<boolean>(false);
 
   useEffect(() => {
     if (!carId) return;
@@ -437,6 +440,14 @@ export default function BookingPage() {
         } catch (error) {
           console.error("Error loading booked dates:", error);
           // Không hiển thị lỗi cho user vì đây không phải tính năng critical
+        }
+
+        // Nếu có lựa chọn có tài xế từ URL, tự động set vào form và lock option
+        if (withDriverFromUrl !== null) {
+          const withDriverValue = withDriverFromUrl === 'true';
+          setWithDriver(withDriverValue);
+          setIsDriverOptionLocked(true);
+          form.setFieldsValue({ withDriver: withDriverValue });
         }
 
         // Nếu có ngày giờ từ URL, tự động set vào form
@@ -1178,12 +1189,15 @@ export default function BookingPage() {
               </div>
               <Form.Item
                 name="withDriver"
-                initialValue={false}
+                initialValue={withDriverFromUrl === 'true' ? true : withDriverFromUrl === 'false' ? false : false}
                 rules={[{ required: true, message: "Vui lòng chọn loại thuê xe" }]}
               >
                 <Radio.Group 
+                  disabled={isDriverOptionLocked}
                   onChange={(e) => {
-                    setWithDriver(e.target.value);
+                    if (!isDriverOptionLocked) {
+                      setWithDriver(e.target.value);
+                    }
                     // Force re-render để cập nhật giá
                   }}
                   className="w-full"
