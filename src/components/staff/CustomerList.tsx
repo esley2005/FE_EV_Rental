@@ -136,77 +136,101 @@ export default function CustomerList() {
 
       const documentsMap = new Map<number, { driverLicense?: DriverLicenseData; citizenId?: CitizenIdData }>();
 
+      // Helper function to normalize status
+      const normalizeStatus = (status: any): number | null => {
+        if (status === undefined || status === null) return null;
+        if (typeof status === 'number') return status;
+        if (status === '1' || status === 'approved' || status === 'Approved') return 1;
+        if (status === '2' || status === 'rejected' || status === 'Rejected') return 2;
+        if (status === '0' || status === 'pending' || status === 'Pending') return 0;
+        return null;
+      };
+
+      // Map driver licenses to users
       if (licenseRes.success && licenseRes.data) {
         const allLicenses = Array.isArray(licenseRes.data)
           ? licenseRes.data
           : (licenseRes.data as any)?.$values || [];
         
         allLicenses.forEach((license: DriverLicenseData) => {
+          // Try to find userId from rentalOrderId first
+          let targetUserId: number | null = null;
+          
           if (license.rentalOrderId) {
             for (const [userId, orderIds] of userIdToOrderIdsMap.entries()) {
               if (orderIds.includes(license.rentalOrderId)) {
-                const current = documentsMap.get(userId);
-                const currentLicense = current?.driverLicense;
-                
-                const licenseStatus = typeof license.status === 'number' 
-                  ? license.status 
-                  : (license.status === '1' || license.status === 'approved' ? 1 : 
-                     (license.status === '2' || license.status === 'rejected' ? 2 : 0));
-                const currentStatus = currentLicense 
-                  ? (typeof currentLicense.status === 'number' 
-                      ? currentLicense.status 
-                      : (currentLicense.status === '1' || currentLicense.status === 'approved' ? 1 : 
-                         (currentLicense.status === '2' || currentLicense.status === 'rejected' ? 2 : 0)))
-                  : 0;
-                
-                if (!currentLicense || 
-                    (licenseStatus === 1 && currentStatus !== 1) ||
-                    (licenseStatus === currentStatus && (license.id ?? 0) > (currentLicense.id ?? 0))) {
-                  documentsMap.set(userId, {
-                    driverLicense: license,
-                    citizenId: current?.citizenId,
-                  });
-                }
+                targetUserId = userId;
                 break;
               }
+            }
+          }
+          
+          // If not found via order, try to get from userId field if available
+          if (!targetUserId && (license as any).userId) {
+            targetUserId = (license as any).userId;
+          }
+          
+          if (targetUserId) {
+            const current = documentsMap.get(targetUserId);
+            const currentLicense = current?.driverLicense;
+            
+            const licenseStatus = normalizeStatus(license.status);
+            const currentStatus = currentLicense ? normalizeStatus(currentLicense.status) : null;
+            
+            // Priority: 1 (Approved) > current status > newer document (higher id)
+            if (!currentLicense || 
+                (licenseStatus === 1 && currentStatus !== 1) ||
+                (licenseStatus === currentStatus && (license.id ?? 0) > (currentLicense.id ?? 0)) ||
+                (licenseStatus !== null && currentStatus === null)) {
+              documentsMap.set(targetUserId, {
+                driverLicense: license,
+                citizenId: current?.citizenId,
+              });
             }
           }
         });
       }
 
+      // Map citizen IDs to users
       if (citizenRes.success && citizenRes.data) {
         const allCitizenIds = Array.isArray(citizenRes.data)
           ? citizenRes.data
           : (citizenRes.data as any)?.$values || [];
         
         allCitizenIds.forEach((citizenId: CitizenIdData) => {
+          // Try to find userId from rentalOrderId first
+          let targetUserId: number | null = null;
+          
           if (citizenId.rentalOrderId) {
             for (const [userId, orderIds] of userIdToOrderIdsMap.entries()) {
               if (orderIds.includes(citizenId.rentalOrderId)) {
-                const current = documentsMap.get(userId);
-                const currentCitizenId = current?.citizenId;
-                
-                const citizenIdStatus = typeof citizenId.status === 'number' 
-                  ? citizenId.status 
-                  : (citizenId.status === '1' || citizenId.status === 'approved' ? 1 : 
-                     (citizenId.status === '2' || citizenId.status === 'rejected' ? 2 : 0));
-                const currentStatus = currentCitizenId 
-                  ? (typeof currentCitizenId.status === 'number' 
-                      ? currentCitizenId.status 
-                      : (currentCitizenId.status === '1' || currentCitizenId.status === 'approved' ? 1 : 
-                         (currentCitizenId.status === '2' || currentCitizenId.status === 'rejected' ? 2 : 0)))
-                  : 0;
-                
-                if (!currentCitizenId || 
-                    (citizenIdStatus === 1 && currentStatus !== 1) ||
-                    (citizenIdStatus === currentStatus && (citizenId.id ?? 0) > (currentCitizenId.id ?? 0))) {
-                  documentsMap.set(userId, {
-                    driverLicense: current?.driverLicense,
-                    citizenId: citizenId,
-                  });
-                }
+                targetUserId = userId;
                 break;
               }
+            }
+          }
+          
+          // If not found via order, try to get from userId field if available
+          if (!targetUserId && (citizenId as any).userId) {
+            targetUserId = (citizenId as any).userId;
+          }
+          
+          if (targetUserId) {
+            const current = documentsMap.get(targetUserId);
+            const currentCitizenId = current?.citizenId;
+            
+            const citizenIdStatus = normalizeStatus(citizenId.status);
+            const currentStatus = currentCitizenId ? normalizeStatus(currentCitizenId.status) : null;
+            
+            // Priority: 1 (Approved) > current status > newer document (higher id)
+            if (!currentCitizenId || 
+                (citizenIdStatus === 1 && currentStatus !== 1) ||
+                (citizenIdStatus === currentStatus && (citizenId.id ?? 0) > (currentCitizenId.id ?? 0)) ||
+                (citizenIdStatus !== null && currentStatus === null)) {
+              documentsMap.set(targetUserId, {
+                driverLicense: current?.driverLicense,
+                citizenId: citizenId,
+              });
             }
           }
         });
@@ -493,32 +517,67 @@ export default function CustomerList() {
         const driverLicense = userDocs?.driverLicense;
         const citizenId = userDocs?.citizenId;
         
-        // GPLX status từ DB
-        const licenseStatus = driverLicense?.status !== undefined 
-          ? (typeof driverLicense.status === 'number' ? driverLicense.status : parseInt(String(driverLicense.status)))
-          : null;
+        // Helper function to normalize status
+        const normalizeStatus = (status: any): number | null => {
+          if (status === undefined || status === null) return null;
+          if (typeof status === 'number') return status;
+          if (status === '1' || status === 'approved' || status === 'Approved') return 1;
+          if (status === '2' || status === 'rejected' || status === 'Rejected') return 2;
+          if (status === '0' || status === 'pending' || status === 'Pending') return 0;
+          return null;
+        };
         
-        // CCCD status: ưu tiên kiểm tra citizenIdNumber, nếu không có thì dùng status từ DB
+        // GPLX status từ API
+        const licenseStatus = normalizeStatus(driverLicense?.status);
+        
+        // CCCD status từ API - ưu tiên check status từ document, nếu không có thì check citizenIdNumber
+        const citizenIdStatus = normalizeStatus(citizenId?.status);
         const hasCitizenIdNumber = (record as any).citizenIdNumber || (record as any).CitizenIdNumber;
-        const citizenIdStatusFromDb = citizenId?.status !== undefined 
-          ? (typeof citizenId.status === 'number' ? citizenId.status : parseInt(String(citizenId.status)))
-          : null;
+        
+        // Render GPLX status
+        const renderGPLXStatus = () => {
+          if (licenseStatus === 1) {
+            return <Tag color="success">GPLX: Đã xác thực</Tag>;
+          }
+          if (licenseStatus === 0) {
+            return <Tag color="warning">GPLX: Chờ xác thực</Tag>;
+          }
+          if (licenseStatus === 2) {
+            return <Tag color="error">GPLX: Bị từ chối</Tag>;
+          }
+          // licenseStatus === null
+          return <Tag color="default">GPLX: Chưa gửi</Tag>;
+        };
+        
+        // Render CCCD status
+        const renderCCCDStatus = () => {
+          // Nếu có status từ API, ưu tiên dùng status
+          if (citizenIdStatus !== null) {
+            if (citizenIdStatus === 1) {
+              return <Tag color="success">CCCD: Đã xác thực</Tag>;
+            }
+            if (citizenIdStatus === 0) {
+              return <Tag color="warning">CCCD: Chờ xác thực</Tag>;
+            }
+            if (citizenIdStatus === 2) {
+              return <Tag color="error">CCCD: Bị từ chối</Tag>;
+            }
+          }
+          
+          // Nếu không có status từ API nhưng có citizenIdNumber, coi như đã gửi
+          if (hasCitizenIdNumber) {
+            return <Tag color="warning">CCCD: Chờ xác thực</Tag>;
+          }
+          
+          // Không có cả status và citizenIdNumber - không hiển thị gì
+          return null;
+        };
         
         return (
           <Space direction="vertical" size="small">
-            <div className="flex gap-2">
-              {/* GPLX status tags - giống profile page */}
-              {licenseStatus === 1 && <Tag color="success">GPLX: Đã xác thực</Tag>}
-              {licenseStatus === 0 && <Tag color="warning">GPLX: Đã up</Tag>}
-              {licenseStatus === 2 && <Tag color="error">GPLX: Bị từ chối</Tag>}
-              {licenseStatus === null && <Tag color="default">GPLX: Chưa gửi</Tag>}
-              
-              {/* CCCD status tags - giống profile page */}
-              {hasCitizenIdNumber ? (
-                <Tag color="warning">CCCD: Đã gửi</Tag>
-              ) : (
-                <Tag color="default">CCCD: Chưa gửi</Tag>
-              )}
+            <div className="flex gap-2 flex-wrap">
+              {renderGPLXStatus()}
+              {renderCCCDStatus()}
             </div>
             <Button
               type="link"
@@ -671,96 +730,6 @@ export default function CustomerList() {
                                   <Image
                                     src={license.imageUrl2}
                                     alt="Mặt sau GPLX"
-                                    width="100%"
-                                    style={{ maxHeight: 300, objectFit: "contain" }}
-                                    fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23ddd' width='400' height='300'/%3E%3Ctext fill='%23999' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Image%3C/text%3E%3C/svg%3E"
-                                  />
-                                ) : (
-                                  <div className="flex items-center justify-center h-[300px] bg-gray-100 rounded">
-                                    <span className="text-gray-400">Chưa có ảnh</span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </Card>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ),
-              },
-              {
-                key: 'citizenId',
-                label: (
-                  <span>
-                    <IdcardOutlined /> Căn cước công dân ({citizenIds.length})
-                  </span>
-                ),
-                children: (
-                  <div>
-                    {citizenIds.length === 0 ? (
-                      <Empty description="Khách hàng chưa upload CCCD" />
-                    ) : (
-                      <div className="space-y-4">
-                        {citizenIds.map((citizenId, index) => (
-                          <Card key={citizenId.id || index} size="small" className="mb-4">
-                            <Descriptions column={2} bordered size="small" className="mb-4">
-                              <Descriptions.Item label="Họ tên">{citizenId.name}</Descriptions.Item>
-                              <Descriptions.Item label="Số CCCD">
-                                {citizenId.citizenIdNumber}
-                              </Descriptions.Item>
-                              <Descriptions.Item label="Ngày sinh">
-                                {citizenId.birthDate
-                                  ? dayjs(citizenId.birthDate).format("DD/MM/YYYY")
-                                  : "-"}
-                              </Descriptions.Item>
-                              <Descriptions.Item label="Trạng thái">
-                                {getStatusTag(citizenId.status)}
-                              </Descriptions.Item>
-                              <Descriptions.Item label="Ngày tạo">
-                                {citizenId.createdAt
-                                  ? dayjs(citizenId.createdAt).format("DD/MM/YYYY HH:mm")
-                                  : "-"}
-                              </Descriptions.Item>
-                            </Descriptions>
-                            {citizenId.id && (
-                              <div className="mt-4 flex gap-2">
-                                <Button
-                                  type="primary"
-                                  icon={<CheckCircleOutlined />}
-                                  onClick={() => handleVerifyCitizenId(citizenId.id!, 1)}
-                                  disabled={String(citizenId.status) === '1' || String(citizenId.status).toLowerCase() === 'approved'}
-                                  className="bg-green-600 hover:bg-green-700"
-                                >
-                                  Xác thực
-                                </Button>
-                                <Button
-                                  danger
-                                  icon={<CloseCircleOutlined />}
-                                  onClick={() => handleVerifyCitizenId(citizenId.id!, 2)}
-                                  disabled={String(citizenId.status) === '2' || String(citizenId.status).toLowerCase() === 'rejected'}
-                                >
-                                  Từ chối
-                                </Button>
-                              </div>
-                            )}
-                            <div className="grid grid-cols-2 gap-4 mt-4">
-                              <div>
-                                <Title level={5}>Mặt trước</Title>
-                                <Image
-                                  src={citizenId.imageUrl}
-                                  alt="Mặt trước CCCD"
-                                  width="100%"
-                                  style={{ maxHeight: 300, objectFit: "contain" }}
-                                  fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23ddd' width='400' height='300'/%3E%3Ctext fill='%23999' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Image%3C/text%3E%3C/svg%3E"
-                                />
-                              </div>
-                              <div>
-                                <Title level={5}>Mặt sau</Title>
-                                {citizenId.imageUrl2 ? (
-                                  <Image
-                                    src={citizenId.imageUrl2}
-                                    alt="Mặt sau CCCD"
                                     width="100%"
                                     style={{ maxHeight: 300, objectFit: "contain" }}
                                     fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23ddd' width='400' height='300'/%3E%3Ctext fill='%23999' x='50%25' y='50%25' text-anchor='middle' dy='.3em'%3ENo Image%3C/text%3E%3C/svg%3E"
