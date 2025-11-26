@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Card, Form, Input, Button, Rate, message, Spin, Empty, Space, Divider, Avatar, Popconfirm } from "antd";
-import { Star, MessageSquare, Send, Trash2 } from "lucide-react";
-import { feedbackApi, rentalOrderApi, type FeedbackData, type CreateFeedbackData } from "@/services/api";
+import { Card, Form, Input, Button, Rate, message, Spin, Empty, Space, Divider } from "antd";
+import { Star, MessageSquare, Send } from "lucide-react";
+import { feedbackApi, type FeedbackData, type CreateFeedbackData } from "@/services/api";
 import { authUtils } from "@/utils/auth";
 import dayjs from "dayjs";
 
@@ -21,9 +21,6 @@ export default function FeedbackSection({ rentalOrderId, carId }: FeedbackSectio
   const [form] = Form.useForm();
   const [user, setUser] = useState<any>(null);
   const [canSubmit, setCanSubmit] = useState(false);
-  const [showAllFeedbacks, setShowAllFeedbacks] = useState(false);
-  const [deletingFeedbackId, setDeletingFeedbackId] = useState<number | null>(null);
-  const [feedbackOwners, setFeedbackOwners] = useState<Map<number, number>>(new Map()); // feedbackId -> userId
 
   // Kiểm tra user đã đăng nhập chưa
   useEffect(() => {
@@ -42,63 +39,6 @@ export default function FeedbackSection({ rentalOrderId, carId }: FeedbackSectio
   useEffect(() => {
     loadFeedbacks();
   }, [rentalOrderId, carId]);
-
-  // Load userId của mỗi feedback từ rentalOrder
-  useEffect(() => {
-    if (feedbacks.length > 0 && !rentalOrderId && user) {
-      // Chỉ load khi ở trang car/[id] (không có rentalOrderId) và có user
-      loadFeedbackOwners();
-    }
-  }, [feedbacks, rentalOrderId, user]);
-
-  const loadFeedbackOwners = async () => {
-    const ownersMap = new Map<number, number>();
-    
-    for (const feedback of feedbacks) {
-      if (!feedback.id || !feedback.rentalOrderId) continue;
-      
-      try {
-        const orderResponse = await rentalOrderApi.getById(feedback.rentalOrderId);
-        if (orderResponse.success && orderResponse.data) {
-          const order = orderResponse.data as any;
-          const orderUserId = order.userId || order.UserId;
-          if (orderUserId) {
-            ownersMap.set(feedback.id, orderUserId);
-          }
-        }
-      } catch (error) {
-        console.error(`Error loading order ${feedback.rentalOrderId}:`, error);
-      }
-    }
-    
-    setFeedbackOwners(ownersMap);
-    
-    // Sau khi load owners, sắp xếp lại feedbacks để ưu tiên feedback của user
-    if (user && feedbacks.length > 0) {
-      const userAny = user as any;
-      const userId = userAny?.id || userAny?.userId;
-      
-      if (userId) {
-        const sortedFeedbacks = [...feedbacks].sort((a: FeedbackData, b: FeedbackData) => {
-          const aOwnerId = ownersMap.get(a.id!);
-          const bOwnerId = ownersMap.get(b.id!);
-          const aIsOwn = aOwnerId === userId;
-          const bIsOwn = bOwnerId === userId;
-          
-          // Feedback của user hiện tại lên đầu
-          if (aIsOwn && !bIsOwn) return -1;
-          if (!aIsOwn && bIsOwn) return 1;
-          
-          // Nếu cùng loại, sắp xếp theo ngày tạo (mới nhất trước)
-          const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return dateB - dateA;
-        });
-        
-        setFeedbacks(sortedFeedbacks);
-      }
-    }
-  };
 
   const loadFeedbacks = async () => {
     setLoading(true);
@@ -132,36 +72,6 @@ export default function FeedbackSection({ rentalOrderId, carId }: FeedbackSectio
           feedbacksData = feedbacksData.filter((fb: FeedbackData) => fb.rentalOrderId === rentalOrderId);
         }
         
-        // Sắp xếp: ưu tiên feedback của user hiện tại lên đầu
-        if (user && feedbacksData.length > 0) {
-          const userAny = user as any;
-          const userId = userAny?.id || userAny?.userId;
-          
-          feedbacksData.sort((a: FeedbackData, b: FeedbackData) => {
-            // Nếu có userId trong feedback, so sánh trực tiếp
-            const aIsOwn = (a as any).userId === userId || 
-                          (rentalOrderId && a.rentalOrderId === rentalOrderId);
-            const bIsOwn = (b as any).userId === userId || 
-                          (rentalOrderId && b.rentalOrderId === rentalOrderId);
-            
-            // Feedback của user hiện tại lên đầu
-            if (aIsOwn && !bIsOwn) return -1;
-            if (!aIsOwn && bIsOwn) return 1;
-            
-            // Nếu cùng loại, sắp xếp theo ngày tạo (mới nhất trước)
-            const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-            const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-            return dateB - dateA;
-          });
-        } else {
-          // Nếu không có user, sắp xếp theo ngày tạo (mới nhất trước)
-          feedbacksData.sort((a: FeedbackData, b: FeedbackData) => {
-            const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-            const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-            return dateB - dateA;
-          });
-        }
-        
         setFeedbacks(feedbacksData);
       } else {
         setFeedbacks([]);
@@ -188,18 +98,10 @@ export default function FeedbackSection({ rentalOrderId, carId }: FeedbackSectio
 
     setSubmitting(true);
     try {
-      // Get userId from user object
-      const userId = user?.id || user?.userId;
-      if (!userId || typeof userId !== 'number') {
-        message.error("Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại!");
-        return;
-      }
-
       const feedbackData: CreateFeedbackData = {
         title: values.title.trim(),
         content: values.content.trim(),
         rating: values.rating,
-        userId: userId,
         rentalOrderId: rentalOrderId,
       };
 
@@ -225,130 +127,9 @@ export default function FeedbackSection({ rentalOrderId, carId }: FeedbackSectio
   const formatDate = (dateString?: string) => {
     if (!dateString) return "";
     try {
-      const date = dayjs(dateString);
-      const now = dayjs();
-      const diffMinutes = now.diff(date, 'minute');
-      const diffHours = now.diff(date, 'hour');
-      const diffDays = now.diff(date, 'day');
-      const diffMonths = now.diff(date, 'month');
-      const diffYears = now.diff(date, 'year');
-
-      // Nếu quá 1 năm, hiển thị ngày/tháng/năm
-      if (diffYears > 0) {
-        return date.format("DD/MM/YYYY");
-      }
-
-      // Nếu quá 1 tháng, hiển thị ngày/tháng/năm
-      if (diffMonths > 0) {
-        return date.format("DD/MM/YYYY");
-      }
-
-      // Nếu quá 7 ngày, hiển thị ngày/tháng/năm
-      if (diffDays > 7) {
-        return date.format("DD/MM/YYYY");
-      }
-
-      // Nếu quá 1 ngày, hiển thị "X ngày trước"
-      if (diffDays > 0) {
-        return `${diffDays} ngày trước`;
-      }
-
-      // Nếu quá 1 giờ, hiển thị "X giờ Y phút trước" hoặc "X giờ trước"
-      if (diffHours > 0) {
-        const remainingMinutes = diffMinutes % 60;
-        if (remainingMinutes > 0) {
-          return `${diffHours} giờ ${remainingMinutes} phút trước`;
-        }
-        return `${diffHours} giờ trước`;
-      }
-
-      // Nếu dưới 1 giờ, hiển thị "X phút trước" hoặc "Vừa xong"
-      if (diffMinutes > 0) {
-        return `${diffMinutes} phút trước`;
-      }
-
-      return "Vừa xong";
+      return dayjs(dateString).format("DD/MM/YYYY HH:mm");
     } catch (e) {
       return dateString;
-    }
-  };
-
-  // Calculate average rating
-  const calculateAverageRating = (feedbacksList: FeedbackData[]): { average: number; count: number } => {
-    if (!feedbacksList || feedbacksList.length === 0) {
-      return { average: 0, count: 0 };
-    }
-    const sum = feedbacksList.reduce((acc, fb) => acc + (fb.rating || 0), 0);
-    return {
-      average: sum / feedbacksList.length,
-      count: feedbacksList.length
-    };
-  };
-
-  // Get avatar initial
-  const getAvatarInitial = (name?: string): string => {
-    if (!name) return 'U';
-    const parts = name.trim().split(' ');
-    if (parts.length > 0) {
-      return parts[parts.length - 1].charAt(0).toUpperCase();
-    }
-    return name.charAt(0).toUpperCase();
-  };
-
-  // Kiểm tra có thể xóa feedback không
-  const canDeleteFeedback = (feedback: FeedbackData): boolean => {
-    if (!user || !feedback.id) return false;
-    
-    // Admin và Staff có thể xóa bất kỳ feedback nào
-    if (authUtils.isAdmin() || authUtils.isStaff()) {
-      return true;
-    }
-    
-    // Customer chỉ có thể xóa feedback của chính mình
-    const userAny = user as any;
-    const userId = userAny?.id || userAny?.userId;
-    if (!userId) return false;
-    
-    // Nếu feedback có userId, so sánh trực tiếp
-    if ((feedback as any).userId) {
-      return (feedback as any).userId === userId;
-    }
-    
-    // Nếu có rentalOrderId trong props (trang đánh giá đơn hàng), chỉ xóa được feedback của đơn hàng đó
-    if (rentalOrderId && feedback.rentalOrderId === rentalOrderId) {
-      return true;
-    }
-    
-    // Nếu không có rentalOrderId trong props (trang car/[id]), kiểm tra userId từ rentalOrder
-    const feedbackOwnerId = feedbackOwners.get(feedback.id);
-    if (feedbackOwnerId) {
-      return feedbackOwnerId === userId;
-    }
-    
-    // Nếu chưa load được owner, tạm thời không cho phép (sẽ load sau)
-    return false;
-  };
-
-  // Xóa feedback
-  const handleDeleteFeedback = async (feedbackId: number) => {
-    if (!feedbackId) return;
-    
-    setDeletingFeedbackId(feedbackId);
-    try {
-      const response = await feedbackApi.delete(feedbackId);
-      
-      if (response.success) {
-        message.success('Đã xóa đánh giá thành công!');
-        // Reload feedbacks
-        await loadFeedbacks();
-      } else {
-        message.error(response.error || 'Không thể xóa đánh giá. Vui lòng thử lại!');
-      }
-    } catch (error) {
-      console.error('Error deleting feedback:', error);
-      message.error('Có lỗi xảy ra khi xóa đánh giá. Vui lòng thử lại!');
-    } finally {
-      setDeletingFeedbackId(null);
     }
   };
 
@@ -364,109 +145,9 @@ export default function FeedbackSection({ rentalOrderId, carId }: FeedbackSectio
       </div>
 
       <div className="p-5">
-        {/* Rating Summary */}
-        {feedbacks.length > 0 && (
-          <div className="flex items-center gap-2 pb-4 mb-4 border-b">
-            <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
-            <span className="text-lg font-semibold">
-              {calculateAverageRating(feedbacks).average.toFixed(1)} • {feedbacks.length} đánh giá
-            </span>
-          </div>
-        )}
-
-        {/* Danh sách feedbacks */}
-        <div>
-          {loading ? (
-            <div className="flex justify-center py-8">
-              <Spin size="large" />
-            </div>
-          ) : feedbacks.length === 0 ? (
-            <Empty
-              description="Chưa có đánh giá nào"
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              className="py-8"
-            />
-          ) : (
-            <div className="space-y-3">
-              {(showAllFeedbacks ? feedbacks : feedbacks.slice(0, 2)).map((feedback) => (
-                <div
-                  key={feedback.id}
-                  className="p-4 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition-shadow"
-                >
-                  <div className="flex items-start gap-3">
-                    <Avatar 
-                      size={40}
-                      style={{ backgroundColor: '#22c55e' }}
-                    >
-                      {getAvatarInitial(feedback.userFullName)}
-                    </Avatar>
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex-1">
-                          <div className="font-semibold text-gray-900 mb-1">
-                            {feedback.userFullName || 'Khách hàng'}
-                          </div>
-                          <Rate disabled value={feedback.rating} className="text-xs" style={{ fontSize: '14px' }} />
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {feedback.createdAt && (
-                            <span className="text-xs text-gray-500 whitespace-nowrap ml-2">
-                              {formatDate(feedback.createdAt)}
-                            </span>
-                          )}
-                          {canDeleteFeedback(feedback) && feedback.id && (
-                            <Popconfirm
-                              title="Xóa đánh giá"
-                              description="Bạn có chắc chắn muốn xóa đánh giá này không?"
-                              onConfirm={() => handleDeleteFeedback(feedback.id!)}
-                              okText="Xóa"
-                              cancelText="Hủy"
-                              okButtonProps={{ danger: true }}
-                            >
-                              <Button
-                                type="text"
-                                danger
-                                size="small"
-                                icon={<Trash2 className="w-4 h-4" />}
-                                loading={deletingFeedbackId === feedback.id}
-                                className="text-red-500 hover:text-red-700"
-                              />
-                            </Popconfirm>
-                          )}
-                        </div>
-                      </div>
-                      {feedback.title && (
-                        <h4 className="font-semibold text-gray-900 mb-1 text-sm">
-                          {feedback.title}
-                        </h4>
-                      )}
-                      {feedback.content && (
-                        <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap mt-1">
-                          {feedback.content}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {feedbacks.length > 2 && !showAllFeedbacks && (
-                <div className="flex justify-end pt-2">
-                  <Button
-                    type="default"
-                    onClick={() => setShowAllFeedbacks(true)}
-                    className="border-green-500 text-green-600 hover:bg-green-50"
-                  >
-                    Xem thêm
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
         {/* Form tạo feedback - chỉ hiển thị khi có user và rentalOrderId */}
         {user && rentalOrderId && (
-          <div className="mt-6 pt-6 border-t p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
             <div className="flex items-center gap-2 mb-3">
               <MessageSquare className="w-4 h-4 text-blue-600" />
               <h3 className="text-base font-semibold text-gray-900">Viết đánh giá của bạn</h3>
@@ -546,7 +227,65 @@ export default function FeedbackSection({ rentalOrderId, carId }: FeedbackSectio
               </Form.Item>
             </Form>
           </div>
-        )}
+        </div>
+
+        {/* Danh sách feedbacks */}
+        <div>
+          {loading ? (
+            <div className="flex justify-center py-8">
+              <Spin size="large" />
+            </div>
+          ) : feedbacks.length === 0 ? (
+            <Empty
+              description="Chưa có đánh giá nào"
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              className="py-8"
+            />
+          ) : (
+            <div className="space-y-3">
+              {feedbacks.map((feedback) => (
+                <div
+                  key={feedback.id}
+                  className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-sm transition-all bg-gray-50/50"
+                >
+                  {/* Header: User name và rating */}
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-gray-900 text-sm">
+                          {feedback.userFullName || "Khách hàng"}
+                        </span>
+                        <Rate
+                          disabled
+                          value={feedback.rating}
+                          className="text-xs"
+                          style={{ fontSize: '14px' }}
+                        />
+                      </div>
+                    </div>
+                    {feedback.createdAt && (
+                      <span className="text-xs text-gray-500 whitespace-nowrap ml-2">
+                        {formatDate(feedback.createdAt)}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Title */}
+                  {feedback.title && (
+                    <h4 className="font-semibold text-gray-900 text-sm mb-1.5">
+                      {feedback.title}
+                    </h4>
+                  )}
+
+                  {/* Content */}
+                  <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">
+                    {feedback.content}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
