@@ -14,6 +14,7 @@ import {
   IdcardOutlined,
   BellOutlined,
   CloseOutlined,
+  ClockCircleOutlined,
 } from "@ant-design/icons";
 import { Hand } from "lucide-react";
 import {
@@ -126,7 +127,11 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     id: number;
     message: string;
     newLocationName: string;
+    newLocationAddress: string;
     transferredAt: string;
+    transferHours?: number;
+    transferDisplay?: string;
+    deadline?: string;
   } | null>(null);
 
   const router = useRouter();
@@ -166,7 +171,11 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               id: unreadNotification.id,
               message: unreadNotification.message,
               newLocationName: unreadNotification.newLocationName,
+              newLocationAddress: unreadNotification.newLocationAddress || "",
               transferredAt: unreadNotification.transferredAt,
+              transferHours: unreadNotification.transferHours,
+              transferDisplay: unreadNotification.transferDisplay,
+              deadline: unreadNotification.deadline || unreadNotification.effectiveFrom, // Backward compatibility
             });
           }
         }
@@ -436,37 +445,93 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
         <Content style={{ margin: "16px" }}>
           {/* Thông báo điều phối */}
           {transferNotification && (
-            <Alert
-              message={
-                <Space>
-                  <BellOutlined />
-                  <span>
-                    <strong>Thông báo điều phối:</strong> {transferNotification.message}
-                  </span>
-                </Space>
-              }
-              description={
-                <div style={{ marginTop: 8 }}>
-                  <Space>
-                    <EnvironmentOutlined />
-                    <span>Điểm thuê mới: {transferNotification.newLocationName}</span>
-                  </Space>
-                  <div style={{ marginTop: 4, fontSize: "12px", color: "#666" }}>
-                    Thời gian: {new Date(transferNotification.transferredAt).toLocaleString("vi-VN")}
+            <Card
+              style={{
+                marginBottom: 16,
+                border: "2px solid #ff4d4f",
+                borderRadius: 8,
+                background: "linear-gradient(135deg, #fff1f0 0%, #fff2f0 100%)",
+              }}
+              bodyStyle={{ padding: "16px 20px" }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
+                    <BellOutlined style={{ fontSize: 20, color: "#ff4d4f", marginRight: 8 }} />
+                    <span style={{ fontSize: 16, fontWeight: "bold", color: "#ff4d4f" }}>
+                      🔔 Thông báo điều phối
+                    </span>
+                  </div>
+                  
+                  <div style={{ marginLeft: 28, marginBottom: 12 }}>
+                    <div style={{ fontSize: 15, fontWeight: 500, color: "#333", marginBottom: 8 }}>
+                      {transferNotification.message}
+                    </div>
+                    
+                    <div style={{ 
+                      background: "#fff", 
+                      padding: "12px 16px", 
+                      borderRadius: 6,
+                      border: "1px solid #d9d9d9",
+                      marginTop: 8
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+                        <EnvironmentOutlined style={{ color: "#52c41a", marginRight: 8, fontSize: 16 }} />
+                        <span style={{ fontWeight: 600, color: "#333" }}>Địa điểm mới:</span>
+                      </div>
+                      <div style={{ marginLeft: 24, marginTop: 4 }}>
+                        <div style={{ fontSize: 15, fontWeight: 500, color: "#ff4d4f", marginBottom: 4 }}>
+                          📍 {transferNotification.newLocationName}
+                        </div>
+                        {transferNotification.newLocationAddress && (
+                          <div style={{ fontSize: 13, color: "#666", marginTop: 2 }}>
+                            {transferNotification.newLocationAddress}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div style={{ marginTop: 10, fontSize: 12, color: "#8c8c8c" }}>
+                      <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
+                        <ClockCircleOutlined style={{ marginRight: 4 }} />
+                        <span>Thời gian thông báo: {new Date(transferNotification.transferredAt).toLocaleString("vi-VN", {
+                          year: "numeric",
+                          month: "2-digit",
+                          day: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}</span>
+                      </div>
+                      {transferNotification.deadline && (
+                        <div style={{ display: "flex", alignItems: "center", marginTop: 4, color: "#ff4d4f", fontWeight: 500 }}>
+                          <ClockCircleOutlined style={{ marginRight: 4 }} />
+                          <span>
+                            ⏰ Hết hiệu lực vào: {new Date(transferNotification.deadline).toLocaleString("vi-VN", {
+                              year: "numeric",
+                              month: "2-digit",
+                              day: "2-digit",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })} 
+                            {transferNotification.transferDisplay && `  (Sau ${transferNotification.transferDisplay})`}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              }
-              type="info"
-              showIcon
-              closable
-              onClose={markNotificationAsRead}
-              style={{ marginBottom: 16 }}
-              action={
-                <Button size="small" type="text" onClick={markNotificationAsRead}>
-                  <CloseOutlined /> Đã hiểu
+                
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<CloseOutlined />}
+                  onClick={markNotificationAsRead}
+                  style={{ marginLeft: 16 }}
+                >
+                  Đã hiểu
                 </Button>
-              }
-            />
+              </div>
+            </Card>
           )}
 
           <Breadcrumb

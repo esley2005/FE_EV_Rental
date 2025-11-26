@@ -50,6 +50,7 @@ export default function StaffManagement({ mode = "list" }: StaffManagementProps)
   const [selectedNewLocation, setSelectedNewLocation] = useState<Record<number, number | undefined>>({});
   const [transferModalVisible, setTransferModalVisible] = useState(false);
   const [staffToTransfer, setStaffToTransfer] = useState<User | null>(null);
+  const [transferDays, setTransferDays] = useState<number>(3); // Thời gian điều phối: 3 giờ, 7 giờ, 12 giờ, 3 ngày (lưu dưới dạng giờ)
 
   useEffect(() => {
     loadLocations();
@@ -248,14 +249,31 @@ export default function StaffManagement({ mode = "list" }: StaffManagementProps)
       title: "Avatar",
       key: "avatar",
       width: 80,
-      render: (_: any, record: User) => (
-        <Avatar
-          size={48}
-          src={record.avatar}
-          icon={<UserOutlined />}
-          className="border"
-        />
-      ),
+      render: (_: any, record: User) => {
+        // Lấy chữ cái đầu của mỗi từ trong tên
+        const getInitials = (name: string) => {
+          if (!name) return "";
+          return name
+            .split(" ")
+            .filter((word) => word.length > 0)
+            .map((word) => word.charAt(0).toUpperCase())
+            .join("")
+            .substring(0, 2); // Giới hạn tối đa 2 chữ cái
+        };
+        
+        const initials = getInitials(record.fullName || "");
+        
+        return (
+          <Avatar
+            size={48}
+            src={record.avatar}
+            style={{ backgroundColor: "#1890ff" }}
+            className="border"
+          >
+            {initials || <UserOutlined />}
+          </Avatar>
+        );
+      },
     },
     {
       title: "Họ và tên",
@@ -434,19 +452,34 @@ export default function StaffManagement({ mode = "list" }: StaffManagementProps)
       );
 
       if (response.success) {
-        // Lấy thông tin điểm thuê mới
+        // Lấy thông tin địa điểm mới
         const newLocation = locationMap[newLocationId];
-        const newLocationName = newLocation?.name || `Điểm thuê #${newLocationId}`;
+        const newLocationName = newLocation?.name || `Địa điểm #${newLocationId}`;
+        const newLocationAddress = newLocation?.address || "";
+        
+        // Tính toán thời gian hết hiệu lực điều phối (transferDays lưu dưới dạng giờ)
+        const deadlineDate = new Date();
+        deadlineDate.setHours(deadlineDate.getHours() + transferDays);
+        const deadlineDateStr = deadlineDate.toISOString();
+        
+        // Xác định đơn vị hiển thị (giờ hoặc ngày)
+        const isDays = transferDays >= 24;
+        const displayValue = isDays ? transferDays / 24 : transferDays;
+        const displayUnit = isDays ? "ngày" : "giờ";
         
         // Lưu thông báo điều phối cho staff
         const transferNotification = {
           id: Date.now(),
           userId: staffToTransfer.id,
           type: "transfer",
-          message: `Bạn đã được điều phối đến ${newLocationName}`,
+          message: `Bạn đã được điều phối đến địa điểm mới`,
           newLocationId: newLocationId,
           newLocationName: newLocationName,
+          newLocationAddress: newLocationAddress,
           transferredAt: new Date().toISOString(),
+          transferHours: transferDays, // Lưu số giờ
+          transferDisplay: `${displayValue} ${displayUnit}`, // Hiển thị: "3 giờ", "7 giờ", "12 giờ", "3 ngày"
+          deadline: deadlineDateStr, // Thời gian hết hiệu lực (phải đến trước thời gian này)
           read: false,
         };
 
@@ -469,7 +502,7 @@ export default function StaffManagement({ mode = "list" }: StaffManagementProps)
 
         api.success({
           message: "Điều phối thành công",
-          description: `Đã chuyển nhân viên ${staffToTransfer.fullName} đến ${newLocationName}. Thông báo đã được gửi đến nhân viên.`,
+          description: `Đã chuyển nhân viên ${staffToTransfer.fullName} đến địa điểm mới: ${newLocationName}${newLocationAddress ? ` - ${newLocationAddress}` : ""}. Thông báo đã được gửi đến nhân viên.`,
           placement: "topRight",
           icon: <CheckCircleOutlined style={{ color: "#52c41a" }} />,
         });
@@ -480,6 +513,7 @@ export default function StaffManagement({ mode = "list" }: StaffManagementProps)
           delete updated[staffToTransfer.id];
           return updated;
         });
+        setTransferDays(3); // Reset về mặc định (3 giờ)
 
         // Reload staff list
         if (selectedLocationId !== undefined) {
@@ -672,6 +706,7 @@ export default function StaffManagement({ mode = "list" }: StaffManagementProps)
         onCancel={() => {
           setTransferModalVisible(false);
           setStaffToTransfer(null);
+          setTransferDays(3); // Reset về mặc định (3 giờ)
         }}
         okText="Xác nhận"
         cancelText="Hủy"
@@ -683,17 +718,50 @@ export default function StaffManagement({ mode = "list" }: StaffManagementProps)
           <div>
             <p>
               Bạn có chắc chắn muốn điều phối nhân viên{" "}
-              <strong>{staffToTransfer.fullName}</strong> đến điểm thuê mới?
+              <strong>{staffToTransfer.fullName}</strong> đến địa điểm mới?
             </p>
-            <Space direction="vertical" style={{ width: "100%" }}>
+            <Space direction="vertical" style={{ width: "100%" }} size="middle">
               <div>
-                <strong>Điểm thuê hiện tại:</strong>{" "}
+                <strong>Địa điểm hiện tại:</strong>{" "}
                 {locationMap[staffToTransfer.rentalLocationId || staffToTransfer.locationId || 0]
                   ?.name || "Chưa phân công"}
               </div>
               <div>
-                <strong>Điểm thuê mới:</strong>{" "}
+                <strong>Địa điểm mới:</strong>{" "}
                 {locationMap[selectedNewLocation[staffToTransfer.id] || 0]?.name || "N/A"}
+              </div>
+              <div>
+                <strong>Thời gian điều phối:</strong>
+                <Select
+                  value={transferDays}
+                  onChange={setTransferDays}
+                  style={{ width: "100%", marginTop: 8 }}
+                  options={[
+                    { label: "3 giờ", value: 3 },
+                    { label: "7 giờ", value: 7 },
+                    { label: "12 giờ", value: 12 },
+                    { label: "3 ngày", value: 72 }, // 3 ngày = 72 giờ
+                  ]}
+                />
+                {transferDays && (
+                  <div style={{ marginTop: 8, padding: "8px 12px", background: "#fff7e6", borderRadius: 4, fontSize: 13, border: "1px solid #ffd591" }}>
+                    <strong>⏰ Thời gian hết hiệu lực:</strong>{" "}
+                    {(() => {
+                      const deadlineDate = new Date();
+                      deadlineDate.setHours(deadlineDate.getHours() + transferDays);
+                      const isDays = transferDays >= 24;
+                      const displayValue = isDays ? transferDays / 24 : transferDays;
+                      const displayUnit = isDays ? "ngày" : "giờ";
+                      return `${deadlineDate.toLocaleString("vi-VN", {
+                        year: "numeric",
+                        month: "2-digit",
+                        day: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })} (sau ${displayValue} ${displayUnit})`;
+                    })()}
+                  </div>
+                )}
               </div>
             </Space>
           </div>
