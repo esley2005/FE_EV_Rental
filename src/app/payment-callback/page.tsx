@@ -63,11 +63,8 @@ export default function PaymentCallbackPage() {
             const responseData = response.data as any;
             
             console.log("[Payment Callback] Response data:", responseData);
-            console.log("[Payment Callback] Response data type:", typeof responseData);
-            console.log("[Payment Callback] Response data keys:", responseData ? Object.keys(responseData) : "null");
             
             // Kiểm tra responseData.success (từ backend)
-            // Có thể responseData là object trực tiếp hoặc nested
             const backendSuccess = responseData?.success === true || responseData?.Success === true;
             const hasErrorMessage = responseData?.message && 
                                    (responseData.message.toLowerCase().includes("thất bại") || 
@@ -75,7 +72,6 @@ export default function PaymentCallbackPage() {
                                     responseData.message.toLowerCase().includes("error"));
             
             // Nếu ResponseCode == "00" và API call thành công, coi như thanh toán thành công
-            // Trừ khi backend rõ ràng trả về success = false hoặc có message lỗi
             if (backendSuccess || (!responseData?.success && !hasErrorMessage)) {
               const confirmedOrderId = responseData?.orderId || responseData?.OrderId;
               if (confirmedOrderId) {

@@ -1520,7 +1520,7 @@ export const rentalOrderApi = {
       skipAuth: true, // Cho phép user không đăng nhập cũng gọi được
     }),
 
-  // Tạo đơn hàng mới
+  // Tạo đơn hàng mới (deprecated - dùng createWithMomo thay thế)
   create: (orderData: CreateRentalOrderData) => {
     // Luôn thêm OrderDate với ngày giờ hiện tại nếu không có
     const orderDate = orderData.orderDate || new Date().toISOString();
@@ -1540,6 +1540,31 @@ export const rentalOrderApi = {
     console.log('[RentalOrder API] Full request body:', requestBody);
     
     return apiCall<RentalOrderData>('/RentalOrder/Create', {
+      method: 'POST',
+      body: JSON.stringify(requestBody),
+    });
+  },
+
+  // Tạo đơn hàng mới với MoMo
+  createWithMomo: (orderData: CreateRentalOrderData) => {
+    // Luôn thêm OrderDate với ngày giờ hiện tại nếu không có
+    const orderDate = orderData.orderDate || new Date().toISOString();
+    
+    const requestBody = {
+      PhoneNumber: orderData.phoneNumber,
+      PickupTime: orderData.pickupTime,
+      ExpectedReturnTime: orderData.expectedReturnTime,
+      WithDriver: orderData.withDriver,
+      UserId: orderData.userId,
+      CarId: orderData.carId,
+      RentalLocationId: orderData.rentalLocationId,
+      OrderDate: orderDate, // Luôn gửi OrderDate
+    };
+    
+    console.log('[RentalOrder API] Creating order with MoMo, OrderDate:', orderDate);
+    console.log('[RentalOrder API] Full request body:', requestBody);
+    
+    return apiCall<RentalOrderData>('/RentalOrder/CreateWithMomo', {
       method: 'POST',
       body: JSON.stringify(requestBody),
     });
@@ -1672,6 +1697,19 @@ export const rentalOrderApi = {
         ResponseCode: responseCode,
       }),
       skipAuth: true, // VNPay callback không có token
+    });
+  },
+
+  // Xác nhận thanh toán OrderDeposit thủ công từ MoMo callback
+  confirmOrderDepositMomoManual: (requestId: string, resultCode: string) => {
+    // Backend route: [Route("api/[controller]")] + [HttpPost("api/payment/confirm-orderdeposit-momo-manual")]
+    // Full path: /api/RentalOrder/api/payment/confirm-orderdeposit-momo-manual
+    return apiCall<{ success: boolean; message?: string; orderId?: number }>('/RentalOrder/api/payment/confirm-orderdeposit-momo-manual', {
+      method: 'POST',
+      body: JSON.stringify({
+        requestId: requestId,
+        ResultCode: resultCode,
+      }),
     });
   },
 
