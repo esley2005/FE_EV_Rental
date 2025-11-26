@@ -597,36 +597,123 @@ export default function RentalOrderManagement() {
   };
 
   // Xác nhận thế chấp (từ CheckedIn) - mở modal upload hình trước
-  const handleConfirmDepositCollateral = (order: OrderWithDetails) => {
-    // Kiểm tra xem giấy tờ đã được xác thực chưa
-    const driverLicense = order.driverLicense;
-    const citizenIdDoc = order.citizenIdDoc;
+  const handleConfirmDepositCollateral = async (order: OrderWithDetails) => {
+    console.log('[handleConfirmDepositCollateral] Called with order:', {
+      orderId: order.id,
+      userId: order.userId,
+      status: order.status,
+      hasDriverLicense: !!order.driverLicense,
+      driverLicense: order.driverLicense
+    });
     
-    const isLicenseApproved = driverLicense && (
-
-      String(driverLicense.status) === '1' || 
-      String(driverLicense.status).toLowerCase() === 'approved'
-    );
+    // Luôn tìm lại từ orders state để đảm bảo có dữ liệu mới nhất
+    const fullOrder = orders.find(o => o.id === order.id);
+    let driverLicense = fullOrder?.driverLicense || order.driverLicense;
     
-    const isCitizenIdApproved = citizenIdDoc && (
-     
-      String(citizenIdDoc.status) === '1' || 
-      String(citizenIdDoc.status).toLowerCase() === 'approved'
-    );
+    // Nếu vẫn không tìm thấy, thử load lại từ API
+    if (!driverLicense && order.userId) {
+      console.log('[handleConfirmDepositCollateral] Driver license not found in state, trying to load from API...');
+      try {
+        const licensesResponse = await driverLicenseApi.getAll();
+        if (licensesResponse.success && licensesResponse.data) {
+          const allLicenses = Array.isArray(licensesResponse.data) 
+            ? licensesResponse.data 
+            : (licensesResponse.data as any)?.$values || [];
+          
+          // Tìm theo rentalOrderId trước
+          let foundLicense = allLicenses.find((l: any) => l.rentalOrderId != null && l.rentalOrderId === order.id);
+          
+          // Nếu không tìm thấy theo rentalOrderId, thử tìm theo userId (license mới nhất của user)
+          if (!foundLicense) {
+            const userLicenses = allLicenses.filter((l: any) => l.userId === order.userId);
+            if (userLicenses.length > 0) {
+              // Lấy license mới nhất (theo id hoặc createdAt)
+              foundLicense = userLicenses.sort((a: any, b: any) => (b.id || 0) - (a.id || 0))[0];
+              console.log('[handleConfirmDepositCollateral] Found license by userId:', {
+                userId: order.userId,
+                licenseId: foundLicense.id,
+                rentalOrderId: foundLicense.rentalOrderId,
+                status: foundLicense.status
+              });
+            }
+          } else {
+            console.log('[handleConfirmDepositCollateral] Found license by rentalOrderId:', {
+              orderId: order.id,
+              licenseId: foundLicense.id,
+              status: foundLicense.status
+            });
+          }
+          
+          driverLicense = foundLicense;
+        }
+      } catch (error) {
+        console.error('[handleConfirmDepositCollateral] Error loading licenses:', error);
+      }
+    }
     
-    // Nếu chưa xác thực giấy tờ, hiển thị thông báo
-    if (!isLicenseApproved || !isCitizenIdApproved) {
-      const missingDocs = [];
-      if (!isLicenseApproved) missingDocs.push('Giấy phép lái xe');
-      if (!isCitizenIdApproved) missingDocs.push('Căn cước công dân');
+    console.log('[handleConfirmDepositCollateral] Driver license data:', {
+      fromOrder: order.driverLicense ? { id: order.driverLicense.id, status: order.driverLicense.status, statusType: typeof order.driverLicense.status } : null,
+      fromState: fullOrder?.driverLicense ? { id: fullOrder.driverLicense.id, status: fullOrder.driverLicense.status, statusType: typeof fullOrder.driverLicense.status } : null,
+      final: driverLicense ? { id: driverLicense.id, status: driverLicense.status, statusType: typeof driverLicense.status } : null
+    });
+    
+    // Kiểm tra status với nhiều format: 1, '1', 'Approved', 'approved', etc.
+    const checkStatusApproved = (status: any): boolean => {
+      if (status === null || status === undefined) {
+        console.log('[handleConfirmDepositCollateral] Status is null/undefined');
+        return false;
+      }
       
-      const errorMessage = `Bạn chưa xác thực cho khách hàng này. Vui lòng xác thực ${missingDocs.join(' và ')} trước khi xác nhận thế chấp.`;
-      console.log('Chưa xác thực giấy tờ:', { isLicenseApproved, isCitizenIdApproved, missingDocs, errorMessage });
+      // Nếu là số, kiểm tra trực tiếp
+      if (typeof status === 'number') {
+        const result = status === 1;
+        console.log('[handleConfirmDepositCollateral] Status is number:', status, 'Result:', result);
+        return result;
+      }
+      
+      // Nếu là string, convert và kiểm tra
+      const statusStr = String(status).toLowerCase().trim();
+      const result = statusStr === '1' || statusStr === 'approved';
+      console.log('[handleConfirmDepositCollateral] Status is string:', status, 'Normalized:', statusStr, 'Result:', result);
+      return result;
+    };
+    
+    if (!driverLicense) {
+      console.error('[handleConfirmDepositCollateral] No driver license found after all attempts', {
+        orderId: order.id,
+        userId: order.userId,
+        ordersInState: orders.length,
+        orderInState: fullOrder ? 'found' : 'not found'
+      });
+      message.error('Không tìm thấy giấy phép lái xe cho đơn hàng này. Vui lòng kiểm tra lại hoặc yêu cầu khách hàng upload giấy phép lái xe.');
+      return;
+    }
+    
+    const isLicenseApproved = checkStatusApproved(driverLicense.status);
+    
+    console.log('[handleConfirmDepositCollateral] Final approval check:', {
+      isLicenseApproved,
+      licenseStatus: driverLicense.status,
+      licenseStatusType: typeof driverLicense.status,
+      driverLicense: { id: driverLicense.id, status: driverLicense.status }
+    });
+    
+    // Nếu chưa xác thực giấy phép lái xe, hiển thị thông báo
+    if (!isLicenseApproved) {
+      const errorMessage = `Bạn chưa xác thực giấy phép lái xe cho khách hàng này. Vui lòng xác thực giấy phép lái xe trước khi xác nhận thế chấp.`;
+      console.error('[handleConfirmDepositCollateral] Chưa xác thực giấy phép lái xe:', { 
+        isLicenseApproved, 
+        errorMessage,
+        driverLicenseStatus: driverLicense.status,
+        driverLicenseStatusType: typeof driverLicense.status,
+        driverLicenseId: driverLicense.id
+      });
       message.error(errorMessage);
       return;
     }
     
-    setSelectedOrderForAction(order);
+    console.log('[handleConfirmDepositCollateral] Driver license approved, opening modal');
+    setSelectedOrderForAction(fullOrder || order);
     setPaymentMethod('cash'); // Reset về tiền mặt mặc định
     setDepositReceiptImageFileList([]); // Reset file list
     setDepositReceiptModalVisible(true);
