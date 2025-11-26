@@ -27,6 +27,38 @@ import type { RentalOrderData, RentalLocationData, PaymentData } from "@/service
 import dayjs from "dayjs";
 import { MapPin } from "lucide-react";
 
+// Status enum mapping - giống như trong RentalOrderManagement
+const RentalOrderStatus = {
+  Pending: 0,
+  OrderDepositConfirmed: 1,
+  CheckedIn: 2,
+  Renting: 3,
+  Returned: 4,
+  PaymentPending: 5,
+  RefundDepositCar: 6,
+  Cancelled: 7,
+  RefundDepositOrder: 8,
+  Completed: 9,
+} as const;
+
+// Helper function để convert status string sang number - giống như trong RentalOrderManagement
+const getStatusNumber = (status: string | number | undefined): number => {
+  if (typeof status === 'number') return status;
+  if (!status) return RentalOrderStatus.Pending;
+  const statusLower = String(status).toLowerCase();
+  if (statusLower.includes('pending') && !statusLower.includes('deposit') && !statusLower.includes('payment')) return RentalOrderStatus.Pending;
+  if (statusLower.includes('orderdepositconfirmed') || statusLower.includes('đã xác nhận cọc đơn')) return RentalOrderStatus.OrderDepositConfirmed;
+  if (statusLower.includes('checkedin') || statusLower.includes('đã check-in') || statusLower.includes('check-in')) return RentalOrderStatus.CheckedIn;
+  if (statusLower.includes('renting') || statusLower.includes('đang thuê')) return RentalOrderStatus.Renting;
+  if (statusLower.includes('returned') || statusLower.includes('đã trả xe')) return RentalOrderStatus.Returned;
+  if (statusLower.includes('paymentpending') || statusLower.includes('chờ thanh toán')) return RentalOrderStatus.PaymentPending;
+  if (statusLower.includes('refunddepositcar') || statusLower.includes('hoàn tiền cọc xe')) return RentalOrderStatus.RefundDepositCar;
+  if (statusLower.includes('cancelled') || statusLower.includes('hủy')) return RentalOrderStatus.Cancelled;
+  if (statusLower.includes('refunddepositorder') || statusLower.includes('hoàn tiền cọc đơn')) return RentalOrderStatus.RefundDepositOrder;
+  if (statusLower.includes('completed') || statusLower.includes('hoàn thành')) return RentalOrderStatus.Completed;
+  return RentalOrderStatus.Pending;
+};
+
 interface CarWithStatus extends Car {
   status: "available" | "booked" | "renting" | "maintenance";
   originalStatus?: number; // Lưu car.status gốc từ database
@@ -80,8 +112,30 @@ export default function CarStatusManagement() {
 
       // Load thông tin user cho các đơn hàng
       const usersRes = await authApi.getAllUsers();
-      const users = usersRes.success && usersRes.data ? usersRes.data : [];
-      const userMap = new Map(users.map((u: any) => [u.id || u.userId, u]));
+      const users = usersRes.success && usersRes.data
+        ? (Array.isArray(usersRes.data) 
+            ? usersRes.data 
+            : (usersRes.data as any)?.$values || [])
+        : [];
+      
+      // Debug: Log để kiểm tra dữ liệu users
+      console.log('[CarStatusManagement] Loaded users:', {
+        count: users.length,
+        sample: users.slice(0, 3).map((u: any) => ({ id: u.id, userId: u.userId, email: u.email, fullName: u.fullName }))
+      });
+      
+      // Tạo userMap với cả id và userId để đảm bảo tìm được user
+      const userMap = new Map();
+      users.forEach((u: any) => {
+        const userId = u.id || u.userId;
+        if (userId) {
+          userMap.set(userId, u);
+          // Nếu có cả id và userId khác nhau, map cả hai
+          if (u.id && u.userId && u.id !== u.userId) {
+            userMap.set(u.userId, u);
+          }
+        }
+      });
 
       // Load tất cả payments
       const paymentsRes = await paymentApi.getAll();
@@ -136,53 +190,115 @@ export default function CarStatusManagement() {
 
           // Chỉ kiểm tra đơn hàng nếu xe không bị disabled
           if (isActive) {
-            // Kiểm tra đơn hàng đang thuê (status = 4: Renting)
+            // Debug: Log tất cả orders liên quan đến xe này
+            if (relatedOrders.length > 0) {
+              console.log(`[CarStatusManagement] Car ${car.id} has ${relatedOrders.length} related orders:`, 
+                relatedOrders.map((o: RentalOrderData) => ({
+                  orderId: o.id,
+                  userId: o.userId,
+                  status: o.status,
+                  statusNum: getStatusNumber(o.status)
+                }))
+              );
+            }
+            
+            // Ưu tiên 1: Kiểm tra đơn hàng đang thuê (status = 3: Renting)
             const rentingOrder = relatedOrders.find(
               (order: RentalOrderData) => {
-                const statusNum = typeof order.status === "number"
-                  ? order.status
-                  : parseInt(String(order.status || "0"), 10);
-                return statusNum === 4; // Renting
+                const statusNum = getStatusNumber(order.status);
+                return statusNum === RentalOrderStatus.Renting; // Renting = 3
               }
             );
 
             if (rentingOrder) {
               status = "renting";
               const user = userMap.get(rentingOrder.userId);
+              
+              // Debug: Log để kiểm tra user không tìm thấy
+              if (!user && rentingOrder.userId) {
+                console.warn(`[CarStatusManagement] Car ${car.id}: User not found for order ${rentingOrder.id}, userId: ${rentingOrder.userId}`, {
+                  availableUserIds: Array.from(userMap.keys()),
+                  orderUserId: rentingOrder.userId,
+                  orderStatus: rentingOrder.status
+                });
+              }
+              
               currentOrder = {
                 ...rentingOrder,
                 user: user
                   ? {
-                      fullName: user.fullName || user.name,
-                      email: user.email,
-                      phone: user.phone || user.phoneNumber,
+                      fullName: user.fullName || user.name || user.FullName,
+                      email: user.email || user.Email,
+                      phone: user.phone || user.phoneNumber || user.PhoneNumber,
                     }
                   : undefined,
               };
             } else {
-              // Kiểm tra đơn hàng đã đặt trước (status = 0, 1, 2, 3: Pending, DocumentsSubmitted, DepositPending, Confirmed)
-              const bookedOrder = relatedOrders.find(
+              // Ưu tiên 2: Kiểm tra OrderDepositConfirmed (1) - đã xác nhận cọc đơn, sẵn sàng thuê
+              const orderDepositConfirmedOrder = relatedOrders.find(
                 (order: RentalOrderData) => {
-                  const statusNum = typeof order.status === "number"
-                    ? order.status
-                    : parseInt(String(order.status || "0"), 10);
-                  return statusNum >= 0 && statusNum <= 3;
+                  const statusNum = getStatusNumber(order.status);
+                  return statusNum === RentalOrderStatus.OrderDepositConfirmed; // OrderDepositConfirmed = 1
                 }
               );
 
-              if (bookedOrder) {
+              if (orderDepositConfirmedOrder) {
                 status = "booked";
-                const user = userMap.get(bookedOrder.userId);
+                const user = userMap.get(orderDepositConfirmedOrder.userId);
+                
+                // Debug: Log để kiểm tra user không tìm thấy
+                if (!user && orderDepositConfirmedOrder.userId) {
+                  console.warn(`[CarStatusManagement] Car ${car.id}: User not found for order ${orderDepositConfirmedOrder.id}, userId: ${orderDepositConfirmedOrder.userId}`, {
+                    availableUserIds: Array.from(userMap.keys()),
+                    orderUserId: orderDepositConfirmedOrder.userId,
+                    orderStatus: orderDepositConfirmedOrder.status
+                  });
+                }
+                
                 currentOrder = {
-                  ...bookedOrder,
+                  ...orderDepositConfirmedOrder,
                   user: user
                     ? {
-                        fullName: user.fullName || user.name,
-                        email: user.email,
-                        phone: user.phone || user.phoneNumber,
+                        fullName: user.fullName || user.name || user.FullName,
+                        email: user.email || user.Email,
+                        phone: user.phone || user.phoneNumber || user.PhoneNumber,
                       }
                     : undefined,
                 };
+              } else {
+                // Ưu tiên 3: Kiểm tra các đơn hàng đã đặt trước khác (status = 0, 2: Pending, CheckedIn)
+                const bookedOrder = relatedOrders.find(
+                  (order: RentalOrderData) => {
+                    const statusNum = getStatusNumber(order.status);
+                    // Booked = Pending (0), CheckedIn (2) - không bao gồm OrderDepositConfirmed (1) vì đã check ở trên
+                    return statusNum === RentalOrderStatus.Pending || statusNum === RentalOrderStatus.CheckedIn;
+                  }
+                );
+
+                if (bookedOrder) {
+                  status = "booked";
+                  const user = userMap.get(bookedOrder.userId);
+                  
+                  // Debug: Log để kiểm tra user không tìm thấy
+                  if (!user && bookedOrder.userId) {
+                    console.warn(`[CarStatusManagement] Car ${car.id}: User not found for order ${bookedOrder.id}, userId: ${bookedOrder.userId}`, {
+                      availableUserIds: Array.from(userMap.keys()),
+                      orderUserId: bookedOrder.userId,
+                      orderStatus: bookedOrder.status
+                    });
+                  }
+                  
+                  currentOrder = {
+                    ...bookedOrder,
+                    user: user
+                      ? {
+                          fullName: user.fullName || user.name || user.FullName,
+                          email: user.email || user.Email,
+                          phone: user.phone || user.phoneNumber || user.PhoneNumber,
+                        }
+                      : undefined,
+                  };
+                }
               }
             }
           }
@@ -310,23 +426,28 @@ export default function CarStatusManagement() {
     {
       title: activeTab === "available" ? "Thông tin" : "Khách hàng",
       key: "customer",
+      width: 180,
       render: (_: any, record: CarWithStatus) => {
         if (record.status === "available") {
           return <span className="text-gray-400">Chưa có đơn</span>;
         }
         if (record.currentOrder?.user) {
           return (
-            <Space>
-              <UserOutlined />
-              <div>
-                <div className="font-medium">
-                  {record.currentOrder.user.fullName || "N/A"}
-                </div>
-                <div className="text-xs text-gray-500">
-                  {record.currentOrder.user.email || record.currentOrder.user.phone || ""}
-                </div>
+            <div>
+              <div className="font-medium text-sm">
+                {record.currentOrder.user.fullName || record.currentOrder.user.email || "N/A"}
               </div>
-            </Space>
+              {record.currentOrder.user.email && (
+                <div className="text-xs text-gray-500">
+                  {record.currentOrder.user.email}
+                </div>
+              )}
+              {record.currentOrder.user.phone && (
+                <div className="text-xs text-gray-500">
+                  {record.currentOrder.user.phone}
+                </div>
+              )}
+            </div>
           );
         }
         return <span className="text-gray-400">Chưa có đơn</span>;
@@ -338,7 +459,14 @@ export default function CarStatusManagement() {
       render: (_: any, record: CarWithStatus) => {
         if (!record.currentOrder) return <span className="text-gray-400">Chưa cập nhật</span>;
         
-        if (record.status === "booked") {
+        // Lấy status number của order
+        const orderStatusNum = getStatusNumber(record.currentOrder.status);
+        
+        // Nếu là OrderDepositConfirmed (1), Renting (3), hoặc booked - hiển thị thời gian thuê
+        if (orderStatusNum === RentalOrderStatus.OrderDepositConfirmed || 
+            orderStatusNum === RentalOrderStatus.Renting || 
+            record.status === "booked" || 
+            record.status === "renting") {
           return (
             <div>
               <div className="text-xs text-gray-500">Nhận xe:</div>
@@ -347,26 +475,18 @@ export default function CarStatusManagement() {
                   ? dayjs(record.currentOrder.pickupTime).format("DD/MM/YYYY HH:mm")
                   : "Chưa cập nhật"}
               </div>
-            </div>
-          );
-        } else if (record.status === "renting") {
-          return (
-            <div>
-              <div className="text-xs text-gray-500">Nhận xe:</div>
-              <div className="text-sm">
-                {record.currentOrder.pickupTime
-                  ? dayjs(record.currentOrder.pickupTime).format("DD/MM/YYYY HH:mm")
-                  : "Chưa cập nhật"}
-              </div>
-              <div className="text-xs text-gray-500 mt-1">Trả dự kiến:</div>
-              <div className="text-sm">
-                {record.currentOrder.expectedReturnTime
-                  ? dayjs(record.currentOrder.expectedReturnTime).format("DD/MM/YYYY HH:mm")
-                  : "Chưa cập nhật"}
-              </div>
+              {record.currentOrder.expectedReturnTime && (
+                <>
+                  <div className="text-xs text-gray-500 mt-1">Trả dự kiến:</div>
+                  <div className="text-sm">
+                    {dayjs(record.currentOrder.expectedReturnTime).format("DD/MM/YYYY HH:mm")}
+                  </div>
+                </>
+              )}
             </div>
           );
         }
+        
         return <span className="text-gray-400">Chưa cập nhật</span>;
       },
     },

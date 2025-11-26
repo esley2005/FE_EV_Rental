@@ -661,7 +661,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
                 }}
                 style={{ cursor: "pointer" }}
               >
-                <Statistic title="Số khách hàng" value={metrics.clients} suffix="người" />
+                <Statistic title="Tài Khoản Khách Hàng" value={metrics.clients} suffix="người" />
               </Card>
             </Col>
           </Row>
