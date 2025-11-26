@@ -21,10 +21,59 @@ export default function PaymentCallbackPage() {
       <Header />
       
       <div className="flex-1 flex items-center justify-center py-12 px-4">
+<<<<<<< HEAD
         <div className="text-center">
           <Spin size="large" />
           <p className="mt-4 text-gray-600">Đang chuyển hướng đến trang thanh toán...</p>
         </div>
+=======
+        {status === "loading" && (
+          <div className="text-center">
+            <Spin size="large" />
+            <p className="mt-4 text-gray-600">Đang xử lý thanh toán...</p>
+          </div>
+        )}
+
+        {status === "success" && (
+          <Result
+            icon={<CheckCircleOutlined style={{ color: "#52c41a" }} />}
+            title="Thanh toán thành công!"
+            subTitle={message}
+            extra={[
+              <Button
+                type="primary"
+                key="bookings"
+                onClick={() => router.push("/my-bookings")}
+              >
+                Xem Đơn thuê
+              </Button>,
+              <Button key="home" onClick={() => router.push("/")}>
+                Về trang chủ
+              </Button>,
+            ]}
+          />
+        )}
+
+        {status === "error" && (
+          <Result
+            icon={<CloseCircleOutlined style={{ color: "#ff4d4f" }} />}
+            title="Thanh toán thất bại"
+            subTitle={message}
+            extra={[
+              <Button
+                type="primary"
+                key="bookings"
+                onClick={() => router.push("/my-bookings")}
+              >
+                Xem Đơn thuê
+              </Button>,
+              <Button key="home" onClick={() => router.push("/")}>
+                Về trang chủ
+              </Button>,
+            ]}
+          />
+        )}
+>>>>>>> parent of 6b5be52 (Merge branch 'tiger_v9')
       </div>
 
       <Footer />
