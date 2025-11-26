@@ -1664,12 +1664,14 @@ export const rentalOrderApi = {
   confirmOrderDepositManual: (txnRef: string, responseCode: string) => {
     // Backend route: [Route("api/[controller]")] + [HttpPost("api/payment/confirm-orderdeposit-manual")]
     // Full path: /api/RentalOrder/api/payment/confirm-orderdeposit-manual
+    // Endpoint này có [AllowAnonymous] nên không cần auth token
     return apiCall<{ success: boolean; message?: string; orderId?: number }>('/RentalOrder/api/payment/confirm-orderdeposit-manual', {
       method: 'POST',
       body: JSON.stringify({
         TxnRef: txnRef,
         ResponseCode: responseCode,
       }),
+      skipAuth: true, // VNPay callback không có token
     });
   },
 
