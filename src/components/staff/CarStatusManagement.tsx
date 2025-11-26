@@ -12,6 +12,11 @@ import {
   Empty,
   Tabs,
   Button,
+  Modal,
+  Badge,
+  Descriptions,
+  Form,
+  message,
 } from "antd";
 import {
   CarOutlined,
@@ -20,6 +25,8 @@ import {
   ClockCircleOutlined,
   UserOutlined,
   CloseCircleOutlined,
+  CalendarOutlined,
+  ExclamationCircleOutlined,
 } from "@ant-design/icons";
 import { carsApi, rentalOrderApi, authApi, rentalLocationApi, paymentApi } from "@/services/api";
 import type { Car } from "@/types/car";
@@ -65,6 +72,9 @@ interface CarWithStatus extends Car {
   currentOrder?: RentalOrderData & {
     user?: { fullName?: string; email?: string; phone?: string };
   };
+  allOrders?: (RentalOrderData & {
+    user?: { fullName?: string; email?: string; phone?: string };
+  })[];
 }
 
 export default function CarStatusManagement() {
@@ -74,6 +84,11 @@ export default function CarStatusManagement() {
   const [activeTab, setActiveTab] = useState<string>("all");
   const [rentalLocations, setRentalLocations] = useState<RentalLocationData[]>([]);
   const [payments, setPayments] = useState<PaymentData[]>([]);
+  const [calendarModalVisible, setCalendarModalVisible] = useState(false);
+  const [selectedCar, setSelectedCar] = useState<CarWithStatus | null>(null);
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [selectedCarForReport, setSelectedCarForReport] = useState<CarWithStatus | null>(null);
+  const [reportForm] = Form.useForm();
 
   useEffect(() => {
     loadData();
@@ -303,11 +318,39 @@ export default function CarStatusManagement() {
             }
           }
 
+          // Lấy tất cả đơn hàng của xe này (không bị hủy) và thêm thông tin user
+          const allOrdersWithUsers = relatedOrders
+            .filter((order: RentalOrderData) => {
+              const statusNum = getStatusNumber(order.status);
+              // Loại bỏ các đơn hàng đã hủy
+              return statusNum !== RentalOrderStatus.Cancelled;
+            })
+            .map((order: RentalOrderData) => {
+              const user = userMap.get(order.userId);
+              return {
+                ...order,
+                user: user
+                  ? {
+                      fullName: user.fullName || user.name || user.FullName,
+                      email: user.email || user.Email,
+                      phone: user.phone || user.phoneNumber || user.PhoneNumber,
+                    }
+                  : undefined,
+              };
+            })
+            .sort((a: RentalOrderData & { user?: any }, b: RentalOrderData & { user?: any }) => {
+              // Sắp xếp theo pickupTime
+              const timeA = a.pickupTime ? dayjs(a.pickupTime).valueOf() : 0;
+              const timeB = b.pickupTime ? dayjs(b.pickupTime).valueOf() : 0;
+              return timeA - timeB;
+            });
+
           return {
             ...car,
             status,
             originalStatus: isActive ? 1 : 0, // Lưu isActive dưới dạng số (1 = true, 0 = false) để backward compatibility
             currentOrder,
+            allOrders: allOrdersWithUsers,
           };
         });
 
@@ -344,6 +387,7 @@ export default function CarStatusManagement() {
 
     return filtered;
   }, [cars, activeTab, searchText]);
+
 
   const columns = [
     {
@@ -453,41 +497,32 @@ export default function CarStatusManagement() {
         return <span className="text-gray-400">Chưa có đơn</span>;
       },
     },
+   
     {
-      title: "Thời gian thuê",
-      key: "time",
+      title: "Lịch đặt",
+      key: "calendar",
+      width: 120,
       render: (_: any, record: CarWithStatus) => {
-        if (!record.currentOrder) return <span className="text-gray-400">Chưa cập nhật</span>;
-        
-        // Lấy status number của order
-        const orderStatusNum = getStatusNumber(record.currentOrder.status);
-        
-        // Nếu là OrderDepositConfirmed (1), Renting (3), hoặc booked - hiển thị thời gian thuê
-        if (orderStatusNum === RentalOrderStatus.OrderDepositConfirmed || 
-            orderStatusNum === RentalOrderStatus.Renting || 
-            record.status === "booked" || 
-            record.status === "renting") {
-          return (
-            <div>
-              <div className="text-xs text-gray-500">Nhận xe:</div>
-              <div className="text-sm">
-                {record.currentOrder.pickupTime
-                  ? dayjs(record.currentOrder.pickupTime).format("DD/MM/YYYY HH:mm")
-                  : "Chưa cập nhật"}
-              </div>
-              {record.currentOrder.expectedReturnTime && (
-                <>
-                  <div className="text-xs text-gray-500 mt-1">Trả dự kiến:</div>
-                  <div className="text-sm">
-                    {dayjs(record.currentOrder.expectedReturnTime).format("DD/MM/YYYY HH:mm")}
-                  </div>
-                </>
-              )}
-            </div>
-          );
+        const orderCount = record.allOrders?.length || 0;
+        if (orderCount === 0) {
+          return <span className="text-gray-400">Chưa có đơn</span>;
         }
-        
-        return <span className="text-gray-400">Chưa cập nhật</span>;
+        return (
+          <Space>
+            <Badge count={orderCount} showZero={false}>
+              <Button
+                type="link"
+                icon={<CalendarOutlined />}
+                onClick={() => {
+                  setSelectedCar(record);
+                  setCalendarModalVisible(true);
+                }}
+              >
+                Xem lịch
+              </Button>
+            </Badge>
+          </Space>
+        );
       },
     },
     {
@@ -633,7 +668,53 @@ export default function CarStatusManagement() {
         );
       },
     },
+    {
+      title: "Thao tác",
+      key: "actions",
+      width: 150,
+      fixed: "right" as const,
+      render: (_: any, record: CarWithStatus) => (
+        <Space>
+          <Button
+            type="primary"
+            danger
+            size="small"
+            icon={<ExclamationCircleOutlined />}
+            onClick={() => {
+              setSelectedCarForReport(record);
+              reportForm.resetFields();
+              setReportModalVisible(true);
+            }}
+          >
+            Báo cáo sự cố
+          </Button>
+        </Space>
+      ),
+    },
   ];
+
+  // Handler gửi báo cáo sự cố
+  const handleReportCar = async (values: { reportNote: string }) => {
+    if (!selectedCarForReport) return;
+
+    try {
+      setLoading(true);
+      const response = await carsApi.reportCar(selectedCarForReport.id, values.reportNote);
+      if (response.success) {
+        message.success('Báo cáo sự cố đã được gửi đến Admin thành công!');
+        setReportModalVisible(false);
+        reportForm.resetFields();
+        setSelectedCarForReport(null);
+      } else {
+        message.error(response.error || 'Gửi báo cáo sự cố thất bại');
+      }
+    } catch (error) {
+      console.error('Report car error:', error);
+      message.error('Có lỗi xảy ra khi gửi báo cáo sự cố');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <Card>
@@ -655,8 +736,8 @@ export default function CarStatusManagement() {
               allowClear
               size="large"
               value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              onPressEnter={(e) => setSearchText(e.currentTarget.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchText(e.target.value)}
+              onPressEnter={(e: React.KeyboardEvent<HTMLInputElement>) => setSearchText(e.currentTarget.value)}
             />
             <Button 
               icon={<SearchOutlined />} 
@@ -717,6 +798,189 @@ export default function CarStatusManagement() {
           />
         )}
       </Spin>
+
+      {/* Modal hiển thị lịch đặt xe */}
+      <Modal
+        title={
+          <Space>
+            <CalendarOutlined />
+            <span>Lịch đặt xe - {selectedCar?.name}</span>
+          </Space>
+        }
+        open={calendarModalVisible}
+        onCancel={() => {
+          setCalendarModalVisible(false);
+          setSelectedCar(null);
+        }}
+        footer={[
+          <Button key="close" onClick={() => {
+            setCalendarModalVisible(false);
+            setSelectedCar(null);
+          }}>
+            Đóng
+          </Button>,
+        ]}
+        width={900}
+      >
+        {selectedCar && (
+          <div>
+            <Descriptions bordered size="small" column={2} style={{ marginBottom: 16 }}>
+              <Descriptions.Item label="Tên xe">{selectedCar.name}</Descriptions.Item>
+              <Descriptions.Item label="Model">{selectedCar.model}</Descriptions.Item>
+              <Descriptions.Item label="Tổng số đơn hàng">
+                <Badge count={selectedCar.allOrders?.length || 0} showZero={false}>
+                  <span>{selectedCar.allOrders?.length || 0} đơn</span>
+                </Badge>
+              </Descriptions.Item>
+              <Descriptions.Item label="Trạng thái">
+                <Tag color={selectedCar.status === "available" ? "green" : selectedCar.status === "renting" ? "blue" : "orange"}>
+                  {selectedCar.status === "available" ? "Có sẵn" : selectedCar.status === "renting" ? "Đang thuê" : selectedCar.status === "booked" ? "Đã đặt" : "Bảo trì"}
+                </Tag>
+              </Descriptions.Item>
+            </Descriptions>
+
+            {/* Danh sách chi tiết các đơn hàng */}
+            {selectedCar.allOrders && selectedCar.allOrders.length > 0 && (
+              <Card
+                title="Chi tiết đơn hàng"
+                size="small"
+                style={{ marginTop: 16 }}
+              >
+                <div className="space-y-3">
+                  {selectedCar.allOrders.map((order) => {
+                    const statusNum = getStatusNumber(order.status);
+                    let statusColor = "blue";
+                    let statusText = "Đã đặt";
+                    
+                    if (statusNum === RentalOrderStatus.Renting) {
+                      statusColor = "green";
+                      statusText = "Đang thuê";
+                    } else if (statusNum === RentalOrderStatus.OrderDepositConfirmed) {
+                      statusColor = "orange";
+                      statusText = "Đã xác nhận";
+                    } else if (statusNum === RentalOrderStatus.CheckedIn) {
+                      statusColor = "cyan";
+                      statusText = "Đã check-in";
+                    } else if (statusNum === RentalOrderStatus.Returned) {
+                      statusColor = "purple";
+                      statusText = "Đã trả xe";
+                    } else if (statusNum === RentalOrderStatus.Completed) {
+                      statusColor = "success";
+                      statusText = "Hoàn thành";
+                    }
+
+                    return (
+                      <Card
+                        key={order.id}
+                        size="small"
+                        style={{ marginBottom: 8 }}
+                      >
+                        <Descriptions column={2} size="small">
+                          <Descriptions.Item label="Mã đơn">
+                            #{order.id}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="Trạng thái">
+                            <Tag color={statusColor}>{statusText}</Tag>
+                          </Descriptions.Item>
+                          <Descriptions.Item label="Khách hàng">
+                            {order.user?.fullName || order.user?.email || "N/A"}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="SĐT">
+                            {order.user?.phone || order.phoneNumber || "N/A"}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="Nhận xe">
+                            {order.pickupTime
+                              ? dayjs(order.pickupTime).format("DD/MM/YYYY HH:mm")
+                              : "Chưa cập nhật"}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="Trả dự kiến">
+                            {order.expectedReturnTime
+                              ? dayjs(order.expectedReturnTime).format("DD/MM/YYYY HH:mm")
+                              : "Chưa cập nhật"}
+                          </Descriptions.Item>
+                          {order.actualReturnTime && (
+                            <Descriptions.Item label="Trả thực tế">
+                              {dayjs(order.actualReturnTime).format("DD/MM/YYYY HH:mm")}
+                            </Descriptions.Item>
+                          )}
+                          <Descriptions.Item label="Tổng tiền">
+                            <span className="font-semibold text-blue-600">
+                              {(order.total || order.subTotal || 0).toLocaleString("vi-VN")} đ
+                            </span>
+                          </Descriptions.Item>
+                        </Descriptions>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </Card>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal Báo cáo sự cố */}
+      <Modal
+        title={
+          <Space>
+            <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />
+            <span>Báo cáo sự cố - {selectedCarForReport?.name}</span>
+          </Space>
+        }
+        open={reportModalVisible}
+        onCancel={() => {
+          setReportModalVisible(false);
+          reportForm.resetFields();
+          setSelectedCarForReport(null);
+        }}
+        footer={null}
+        width={600}
+      >
+        <Form
+          form={reportForm}
+          layout="vertical"
+          onFinish={handleReportCar}
+        >
+          <Form.Item
+            label="Mô tả sự cố"
+            name="reportNote"
+            rules={[
+              { required: true, message: 'Vui lòng nhập mô tả sự cố' },
+              { min: 10, message: 'Mô tả sự cố phải có ít nhất 10 ký tự' },
+            ]}
+          >
+            <Input.TextArea
+              rows={6}
+              placeholder="Nhập mô tả chi tiết về sự cố của xe..."
+              showCount
+              maxLength={500}
+            />
+          </Form.Item>
+
+          <Form.Item>
+            <Space>
+              <Button
+                type="primary"
+                danger
+                htmlType="submit"
+                loading={loading}
+                icon={<ExclamationCircleOutlined />}
+              >
+                Gửi báo cáo đến Admin
+              </Button>
+              <Button
+                onClick={() => {
+                  setReportModalVisible(false);
+                  reportForm.resetFields();
+                  setSelectedCarForReport(null);
+                }}
+              >
+                Hủy
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
     </Card>
   );
 }

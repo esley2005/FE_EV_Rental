@@ -9,6 +9,7 @@ import {
   Table, 
   Tag, 
   message, 
+  notification,
   Image, 
   Descriptions, 
   Card, 
@@ -348,11 +349,14 @@ export default function RentalOrderManagement() {
       return;
     }
 
-    // Nếu chọn "Hủy đơn" (Cancelled), gọi API CancelOrder
+    // Nếu chọn "Hủy đơn" (Cancelled), gọi API CancelOrderForStaff
     if (newStatus === RentalOrderStatus.Cancelled) {
       try {
         setLoading(true);
-        const response = await rentalOrderApi.cancelOrder(orderId);
+        console.log('Đang gọi API CancelOrderForStaff với orderId:', orderId, 'type:', typeof orderId);
+        const response = await rentalOrderApi.cancelOrderForStaff(orderId);
+        console.log('Response từ CancelOrderForStaff:', response);
+        console.log('Order details:', order);
         if (response.success) {
           message.success('Hủy đơn hàng thành công!');
           await loadOrders();
@@ -478,9 +482,7 @@ export default function RentalOrderManagement() {
           await loadOrders();
         } else {
           const errorMsg = response.error || (response as any).message || 'Giao xe thất bại';
-          console.error('[ERROR] CarDeliveryHistory response:', response);
-          console.error('[ERROR] Request data was:', requestData);
-          message.error(`Giao xe thất bại: ${errorMsg}`);
+       
         }
       } else {
         // Response không có format đúng, nhưng không có error property
@@ -596,6 +598,34 @@ export default function RentalOrderManagement() {
 
   // Xác nhận thế chấp (từ CheckedIn) - mở modal upload hình trước
   const handleConfirmDepositCollateral = (order: OrderWithDetails) => {
+    // Kiểm tra xem giấy tờ đã được xác thực chưa
+    const driverLicense = order.driverLicense;
+    const citizenIdDoc = order.citizenIdDoc;
+    
+    const isLicenseApproved = driverLicense && (
+
+      String(driverLicense.status) === '1' || 
+      String(driverLicense.status).toLowerCase() === 'approved'
+    );
+    
+    const isCitizenIdApproved = citizenIdDoc && (
+     
+      String(citizenIdDoc.status) === '1' || 
+      String(citizenIdDoc.status).toLowerCase() === 'approved'
+    );
+    
+    // Nếu chưa xác thực giấy tờ, hiển thị thông báo
+    if (!isLicenseApproved || !isCitizenIdApproved) {
+      const missingDocs = [];
+      if (!isLicenseApproved) missingDocs.push('Giấy phép lái xe');
+      if (!isCitizenIdApproved) missingDocs.push('Căn cước công dân');
+      
+      const errorMessage = `Bạn chưa xác thực cho khách hàng này. Vui lòng xác thực ${missingDocs.join(' và ')} trước khi xác nhận thế chấp.`;
+      console.log('Chưa xác thực giấy tờ:', { isLicenseApproved, isCitizenIdApproved, missingDocs, errorMessage });
+      message.error(errorMessage);
+      return;
+    }
+    
     setSelectedOrderForAction(order);
     setPaymentMethod('cash'); // Reset về tiền mặt mặc định
     setDepositReceiptImageFileList([]); // Reset file list
@@ -1303,7 +1333,7 @@ export default function RentalOrderManagement() {
 
   return (
     <div>
-      <Space style={{ marginBottom: 12 }}>
+        <Space style={{ marginBottom: 12 }}>
         <Input
           placeholder="Tìm theo mã đơn, tên xe, người dùng, địa điểm..."
           allowClear

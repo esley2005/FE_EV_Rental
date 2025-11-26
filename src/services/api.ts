@@ -542,6 +542,16 @@ export const carsApi = {
         newLocationId,
       }),
     }),
+
+  // Báo cáo sự cố xe (Staff gửi đến Admin)
+  reportCar: (carId: number, reportNote: string) =>
+    apiCall<{ success: boolean; message?: string }>('/Car/ReportCar', {
+      method: 'POST',
+      body: JSON.stringify({
+        carId,
+        reportNote,
+      }),
+    }),
 };
 
 // Booking API
@@ -1697,6 +1707,26 @@ export const rentalOrderApi = {
     formData.append('orderId', orderId.toString());
     
     return apiCall<RentalOrderData>(`/RentalOrder/CancelOrder`, {
+      method: 'DELETE',
+      body: formData.toString(),
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    });
+  },
+
+  // Hủy đơn hàng cho Staff
+  cancelOrderForStaff: (orderId: number) => {
+    // Backend có thể yêu cầu format khác, thử nhiều format
+    // Format 1: Query parameter với orderId (camelCase)
+    // Format 2: Query parameter với OrderId (PascalCase) 
+    // Format 3: Form-urlencoded body (giống cancelOrder)
+    
+    // Thử format form-urlencoded body trước (giống cancelOrder)
+    const formData = new URLSearchParams();
+    formData.append('orderId', orderId.toString());
+    
+    return apiCall<RentalOrderData>(`/RentalOrder/CancelOrderForStaff`, {
       method: 'DELETE',
       body: formData.toString(),
       headers: {
