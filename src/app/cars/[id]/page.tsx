@@ -1793,6 +1793,28 @@ export default function CarDetailPage({ params }: CarDetailPageProps) {
                 </div>
               </div>
             </div>
+
+            {/* Phí hoàn trả */}
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-blue-600 mb-2">
+                Phí hoàn trả
+              </h2>
+              <div className="h-1.5 w-12 bg-blue-500 rounded-full mb-3"></div>
+              <div className="bg-green-50 border border-green-200 rounded-lg p-5">
+                <div className="flex items-start gap-3">
+                  <CheckCircle className="text-green-600 text-xl mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-gray-900 font-semibold mb-2">
+                      Chính sách hoàn trả
+                    </p>
+                    <p className="text-gray-700 text-sm">
+                      Hủy đơn trong vòng <strong className="text-green-700">1 giờ</strong> sẽ hoàn <strong className="text-green-700">100%</strong> phí giữ chỗ.
+                    </p>
+                  
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Phần booking panel - Chiếm 1/3 cột */}
