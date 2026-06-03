@@ -16,6 +16,7 @@ import {
   CloseOutlined,
   ClockCircleOutlined,
   ExclamationCircleOutlined,
+  AppstoreOutlined,
 } from "@ant-design/icons";
 import { Hand } from "lucide-react";
 import {
@@ -55,6 +56,7 @@ const { Header, Sider, Content, Footer } = Layout;
  🧱 PHẦN 1: MENU CHÍNH (HEADER MENU)
  ========================================================= */
 const mainMenu = [
+  { key: "dashboard", label: "Bảng điều khiển", icon: <AppstoreOutlined /> },
   { key: "orders", label: "Quản lý đơn thuê xe", icon: <FileOutlined /> },
   { key: "tasks", label: "Giao / Nhận xe", icon: <Hand size={16} /> },
   { key: "customers", label: "Xác thực khách hàng", icon: <TeamOutlined /> },
@@ -106,7 +108,7 @@ const subMenus: Record<string, { key: string; label: string; icon: React.ReactNo
  ========================================================= */
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
-  const [selectedModule, setSelectedModule] = useState("orders");
+  const [selectedModule, setSelectedModule] = useState("dashboard");
   const [selectedSubMenu, setSelectedSubMenu] = useState("1");
 
   const [showDelivery, setShowDelivery] = useState(false);
@@ -414,6 +416,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           onClick={(e) => {
             setSelectedModule(e.key);
             setSelectedSubMenu(subMenus[e.key]?.[0]?.key || "1");
+            if (e.key === "dashboard") router.push("/staff");
           }}
           style={{
             borderRight: "none",
@@ -564,15 +567,17 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             </Card>
           )}
 
-          <Breadcrumb
-            style={{ marginBottom: 16 }}
-            items={[
-              { title: mainMenu.find((m) => m.key === selectedModule)?.label || "" },
-              {
-                title: subMenus[selectedModule]?.find((s) => s.key === selectedSubMenu)?.label || "",
-              },
-            ]}
-          />
+          {selectedModule !== "dashboard" && (
+            <Breadcrumb
+              style={{ marginBottom: 16 }}
+              items={[
+                { title: mainMenu.find((m) => m.key === selectedModule)?.label || "" },
+                {
+                  title: subMenus[selectedModule]?.find((s) => s.key === selectedSubMenu)?.label || "",
+                },
+              ]}
+            />
+          )}
 
           {/* Tabs cho submenu khi chọn "Quản lý đơn thuê xe" */}
           {selectedModule === "orders" && (
@@ -611,6 +616,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           )}
 
           {/* ElaAdmin-like top summary cards */}
+          {selectedModule !== "dashboard" && (
           <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
             <Col xs={24} sm={12} md={6}>
               <Card 
@@ -665,6 +671,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
               </Card>
             </Col>
           </Row>
+          )}
 
           {/* Đã bỏ các khối Lưu lượng và Chỉ số theo yêu cầu */}
 
