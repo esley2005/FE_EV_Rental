@@ -59,29 +59,67 @@ const formatTime = (iso?: string) =>
       })
     : "-";
 
+/* ---------- Ô nhập + nút quét biển số (dùng chung) ---------- */
+function PlateScanInput({
+  emptyWarning,
+  buttonText = "Quét",
+  onScan,
+}: {
+  emptyWarning: string;
+  buttonText?: string;
+  onScan: (plate: string) => void;
+}) {
+  const [plate, setPlate] = useState("");
+  const [scanning, setScanning] = useState(false);
+
+  const handleScan = () => {
+    const value = normalizePlate(plate);
+    if (!value) {
+      message.warning(emptyWarning);
+      return;
+    }
+    setScanning(true);
+    window.setTimeout(() => {
+      setScanning(false);
+      onScan(value);
+    }, 600);
+  };
+
+  return (
+    <Space.Compact style={{ width: "100%", maxWidth: 420 }}>
+      <Input
+        size="large"
+        placeholder="VD: 51K-123.45"
+        value={plate}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPlate(e.target.value)}
+        onPressEnter={handleScan}
+        allowClear
+      />
+      <Button
+        type="primary"
+        size="large"
+        icon={<ScanOutlined />}
+        loading={scanning}
+        onClick={handleScan}
+      >
+        {buttonText}
+      </Button>
+    </Space.Compact>
+  );
+}
+
 /* ---------- Quét biển số xe vào ---------- */
 function ScanInPanel({
   onRecognized,
 }: {
   onRecognized: (plate: string) => void;
 }) {
-  const [plate, setPlate] = useState("");
   const [recognized, setRecognized] = useState<string | null>(null);
-  const [scanning, setScanning] = useState(false);
 
-  const handleScan = () => {
-    const value = normalizePlate(plate);
-    if (!value) {
-      message.warning("Nhập biển số rồi bấm Quét, hoặc nhập trực tiếp từ camera.");
-      return;
-    }
-    setScanning(true);
-    window.setTimeout(() => {
-      setRecognized(value);
-      onRecognized(value);
-      setScanning(false);
-      message.success(`Đã nhận diện biển số: ${value}`);
-    }, 600);
+  const handleScan = (value: string) => {
+    setRecognized(value);
+    onRecognized(value);
+    message.success(`Đã nhận diện biển số: ${value}`);
   };
 
   return (
@@ -90,25 +128,10 @@ function ScanInPanel({
         Nhập hoặc nhận biển số từ camera tại cổng, sau đó nhận diện để chuyển sang
         bước tạo lượt.
       </Paragraph>
-      <Space.Compact style={{ width: "100%", maxWidth: 420 }}>
-        <Input
-          size="large"
-          placeholder="VD: 51K-123.45"
-          value={plate}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPlate(e.target.value)}
-          onPressEnter={handleScan}
-          allowClear
-        />
-        <Button
-          type="primary"
-          size="large"
-          icon={<ScanOutlined />}
-          loading={scanning}
-          onClick={handleScan}
-        >
-          Quét
-        </Button>
-      </Space.Compact>
+      <PlateScanInput
+        emptyWarning="Nhập biển số rồi bấm Quét, hoặc nhập trực tiếp từ camera."
+        onScan={handleScan}
+      />
 
       {recognized && (
         <Alert
@@ -212,29 +235,19 @@ function CreateSessionPanel({ initialPlate }: { initialPlate: string }) {
 
 /* ---------- Quét xe ra ---------- */
 function ScanOutPanel() {
-  const [plate, setPlate] = useState("");
-  const [scanning, setScanning] = useState(false);
   const [searched, setSearched] = useState(false);
   const [session, setSession] = useState<GateSession | undefined>(undefined);
+  const [scanKey, setScanKey] = useState(0);
 
-  const handleScan = () => {
-    const value = normalizePlate(plate);
-    if (!value) {
-      message.warning("Nhập biển số xe ra.");
-      return;
+  const handleScan = (value: string) => {
+    const found = getActiveSession(value);
+    setSession(found);
+    setSearched(true);
+    if (found) {
+      message.success(`Tìm thấy lượt ${found.id} đang mở.`);
+    } else {
+      message.warning("Không tìm thấy lượt đang mở cho biển số này.");
     }
-    setScanning(true);
-    window.setTimeout(() => {
-      const found = getActiveSession(value);
-      setSession(found);
-      setSearched(true);
-      setScanning(false);
-      if (found) {
-        message.success(`Tìm thấy lượt ${found.id} đang mở.`);
-      } else {
-        message.warning("Không tìm thấy lượt đang mở cho biển số này.");
-      }
-    }, 600);
   };
 
   const handleCheckout = () => {
@@ -246,7 +259,7 @@ function ScanOutPanel() {
       );
       setSession(undefined);
       setSearched(false);
-      setPlate("");
+      setScanKey((k) => k + 1);
     }
   };
 
@@ -255,25 +268,11 @@ function ScanOutPanel() {
       <Paragraph type="secondary">
         Quét biển số xe ra để đối chiếu lượt đang mở và xác nhận cho xe rời bãi.
       </Paragraph>
-      <Space.Compact style={{ width: "100%", maxWidth: 420 }}>
-        <Input
-          size="large"
-          placeholder="VD: 51K-123.45"
-          value={plate}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPlate(e.target.value)}
-          onPressEnter={handleScan}
-          allowClear
-        />
-        <Button
-          type="primary"
-          size="large"
-          icon={<ScanOutlined />}
-          loading={scanning}
-          onClick={handleScan}
-        >
-          Quét
-        </Button>
-      </Space.Compact>
+      <PlateScanInput
+        key={scanKey}
+        emptyWarning="Nhập biển số xe ra."
+        onScan={handleScan}
+      />
 
       {searched && session && (
         <div style={{ marginTop: 20, maxWidth: 460 }}>
